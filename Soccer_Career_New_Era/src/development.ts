@@ -73,6 +73,11 @@ function rivalryBonus(c:Career,rival:boolean){
  const [self,other]=rival?[theirs,mine]:[mine,theirs];
  return other>0&&other>self?mult:undefined;
 }
+/**
+ * Legacy whole-week runner (0.3). The game UI no longer uses it — every week is played with
+ * playToday — but it stays for old saves paused mid-week and as the reference the daily
+ * schedule is tested against.
+ */
 export function prepareWeek(c:Career,plan:Daily[]){
  ensureDevelopment(c);if(c.development.active?.mode==='daily')throw Error('이번 주는 오늘의 일정으로 진행 중입니다. 커리어 홈에서 하루씩 이어서 진행하세요.');if(c.match||c.development.active)throw Error('진행 중인 주간 일정이 있습니다.');if(c.world.phase==='retired')throw Error('은퇴한 커리어입니다.');
  if(plan.length!==7||plan.some(x=>!DAILY[x]))throw Error('7일 일정을 모두 선택해 주세요.');
@@ -122,7 +127,8 @@ const hasMatchesThisWeek=(c:Career)=>!['offseason','retired'].includes(c.world.p
 export function isMatchToday(c:Career){const a=c.development.active;return todayIndex(c)===5&&!a?.matchDone&&hasMatchesThisWeek(c);}
 function beginDailyWeek(c:Career){
  const d=c.development;
- if(d.active&&d.active.mode!=='daily')throw Error('진행 중인 주간 일정이 있습니다. 주간 일정 화면에서 마무리해 주세요.');
+ // Weeks are always played day by day; a week started by an older weekly plan simply continues daily.
+ if(d.active&&d.active.mode!=='daily')d.active.mode='daily';
  d.active??={startDay:c.day,cursor:0,before:{...c.player.a},rivalBefore:{...d.rival.player.a},entries:[],matchDone:false,user:{drive:rivalryBonus(c,false)},rival:{drive:rivalryBonus(c,true)},mode:'daily'};
  return d.active;
 }

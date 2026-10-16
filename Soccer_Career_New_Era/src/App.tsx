@@ -1,4 +1,4 @@
-import {WeekPlanner,GrowthNotes,RivalPanel} from './WeeklyPanels';
+import {GrowthNotes,RivalPanel} from './WeeklyPanels';
 import {TraitList} from './TraitBadges';
 import {ScoutPanel} from './ScoutPanel';
 import {PlayerSlots} from './PlayerSlots';
@@ -183,7 +183,7 @@ export default function App() {
   const nav = [
     { id: "home", label: "커리어 홈", icon: Home },
     { id: "player", label: "내 선수", icon: User },
-    { id: "training", label: "주간 일정", icon: Dumbbell },
+    { id: "training", label: "오늘의 일정", icon: Dumbbell },
     { id: "records", label: "경기 기록", icon: ChartNoAxesCombined },
     { id: "rival", label: "라이벌", icon: User },
     { id: "team", label: "팀 · 주전 경쟁", icon: Shield },
@@ -746,7 +746,6 @@ export default function App() {
                     last={today}
                     onTrain={(t) => update((n) => setToday(playToday(n, t)))}
                     onMatch={() => { setToday(null); update(startTodayMatch); }}
-                    onWeekly={() => go("training")}
                   />
                   <div className="metrics">
                     {[
@@ -817,8 +816,8 @@ export default function App() {
                           <small>AWAY</small>
                         </div>
                       </div>
-                      <button className="primary full" onClick={()=>go(c.world.phase==='offseason'?'season':c.world.phase==='retired'?'career':'training')}>{c.world.phase==='offseason'?'시즌 결산 · 다음 시즌':c.world.phase==='retired'?'은퇴 기록 보기':'주간 일정에서 경기 준비'}</button>
-                      <small className="center muted">경기는 매주 토요일입니다. 커리어 홈의 오늘의 일정이나 주간 일정으로 진행하세요.</small>
+                      <button className="primary full" onClick={()=>go(c.world.phase==='offseason'?'season':c.world.phase==='retired'?'career':'training')}>{c.world.phase==='offseason'?'시즌 결산 · 다음 시즌':c.world.phase==='retired'?'은퇴 기록 보기':'오늘의 일정으로 이동'}</button>
+                      <small className="center muted">경기는 매주 토요일입니다. 오늘의 일정에서 하루씩 진행하세요.</small>
                     </section>
                     <GrowthNotes c={c}/>
                   </div>
@@ -836,7 +835,18 @@ export default function App() {
                   </section>
                 </>
               ) : null}
-              {tab === "training" && c && <WeekPlanner c={c} update={update}/>}
+              {tab === "training" && c && !m && (
+                <>
+                  <Heading eyebrow="DAILY ROUTINE" title="오늘의 일정" text="하루에 한 가지를 고르면 하루가 지나고 바로 반영됩니다. 토요일은 경기일입니다." />
+                  <TodayPanel
+                    c={c}
+                    last={today}
+                    onTrain={(t) => update((n) => setToday(playToday(n, t)))}
+                    onMatch={() => { setToday(null); update(startTodayMatch); }}
+                  />
+                  <GrowthNotes c={c} />
+                </>
+              )}
               {tab === "rival" && c && <RivalPanel c={c}/>}
               {tab === "player" && c && (
                 <>

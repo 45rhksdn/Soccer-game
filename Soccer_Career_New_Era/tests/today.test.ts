@@ -61,11 +61,20 @@ it('daily weeks and weekly plans do not mix; a daily week survives save/load mid
   const w=career(8);prepareWeek(w,[...plan]);expect(()=>playToday(w,'rest')).toThrow('진행 중인 경기');
 });
 
-it('offseason: seven training days with no match; next season waits for the week to finish',()=>{
+it('offseason: daily training with no match; next season starts even mid-week and closes that week',()=>{
   const c=career(9);c.world.phase='offseason';
-  for(let i=0;i<6;i++){expect(isMatchToday(c)).toBe(false);playToday(c,'passing');}
-  expect(()=>nextSeason(c)).toThrow('오늘의 일정');
-  const r=playToday(c,'rest');expect(r.weekDone).toBe(true);expect(c.week).toBe(1);
+  for(let i=0;i<4;i++){expect(isMatchToday(c)).toBe(false);playToday(c,'passing');}
+  const week=c.week,notes=c.development.notes.length;
+  nextSeason(c);
+  expect(c.development.active).toBeUndefined();expect(c.development.notes.length).toBe(notes+1);expect(c.development.notes[0].entries).toHaveLength(4);
+  expect(c.week).toBeGreaterThan(week);expect(c.world.phase).toBe('league');expect(c.player.age).toBe(17);
+  playToday(c,'rest');expect(todayIndex(c)).toBe(1);
+});
+
+it('a week left by the old weekly planner simply continues day by day',()=>{
+  const c=career(12);playToday(c,'passing');delete c.development.active!.mode;
+  const restored=decode(encode(c));playToday(restored,'running');
+  expect(restored.development.active!.mode).toBe('daily');expect(todayIndex(restored)).toBe(2);
 });
 
 it('vacation without money is refused before the day passes',()=>{

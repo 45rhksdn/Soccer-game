@@ -1,4 +1,4 @@
-import {ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledMatch,announceOffers,ageRival,news,syncRival,type Development} from './development';
+import {ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledMatch,announceOffers,ageRival,news,syncRival,finishWeek,type Development} from './development';
 import {ROLE_KEYS,roleAbility} from './roles';
 import {newWorld,clubOf,nextOpponent,chooseLineup,selectionScore,advanceLeague,startPostseason,advanceCup,sortedTable,LEAGUES,advanceWorldYear,type World,type RosterPlayer} from './world';
 import {createMatch,userPerformance} from './engine';
@@ -346,7 +346,9 @@ function completeSeason(c:Career){
  c.feed.unshift(`${w.year} 시즌 종료 · ${rank}위 · 평균 ${mean.toFixed(2)}`);
 }
 export function nextSeason(c:Career){
- ensureDevelopment(c);if(c.development.active)throw Error(c.development.active.mode==='daily'?'이번 주 남은 오늘의 일정을 마친 뒤 다음 시즌을 시작하세요.':'진행 중인 주간 일정을 완료하세요.');const w=c.world;if(w.phase!=='offseason')throw Error('시즌 종료 후 가능합니다.');
+ ensureDevelopment(c);if(c.match)throw Error('진행 중인 경기를 완료하세요.');
+ // Days are the unit of play: an unfinished week is closed (recorded in the growth notes) instead of blocking the new season.
+ if(c.development.active)finishWeek(c);const w=c.world;if(w.phase!=='offseason')throw Error('시즌 종료 후 가능합니다.');
  if(c.player.age>=18&&clubOf(w).league===0)throw Error('졸업 예정입니다. 이적 시장에서 프로 계약을 선택해 주세요.');
  if(clubOf(w).league>0&&w.contract.years===0)throw Error('계약이 만료되었습니다. 재계약 또는 이적을 선택해 주세요.');
  c.player.age++;ageRival(c);if(c.player.age>=36){w.year++;retire(c);return;}
