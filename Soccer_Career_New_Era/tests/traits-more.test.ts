@@ -77,7 +77,7 @@ it('슈퍼 조커: bench entry attributes ×1.15 (capped at 100), with a notice'
   expect(superSubMultiplier(['슈퍼 조커'])).toBe(1.15);
   const c=career();c.player.a=attributes(60);c.development.traits=['슈퍼 조커'];
   const m=createMatch(4,{name:'조커',pos:'CM',a:attributes(60),energy:100});m.userOnPitch=false;m.benchEntry={minute:60,name:'조커',a:{...c.player.a},energy:100,number:10};
-  configureTrait(c,m);expect(m.benchEntry!.a.passing).toBeCloseTo(69,8);expect(m.traitNotes).toContain('슈퍼 조커 · 교체 투입 시 능력치 ×1.15');
+  configureTrait(c,m);expect(m.benchEntry!.a.passing).toBeCloseTo(69,8);expect(m.traitNotes).toContain('슈퍼 조커 · 교체 투입에 강한 선수');
   c.player.a=attributes(95);const n=createMatch(4,{name:'조커',pos:'CM',a:attributes(95),energy:100});n.userOnPitch=false;n.benchEntry={minute:60,name:'조커',a:{...c.player.a},energy:100,number:10};
   configureTrait(c,n);expect(n.benchEntry!.a.passing).toBe(100);
 });
