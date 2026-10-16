@@ -46,3 +46,20 @@ jobs:
         with:
           name: playwright-reports
           path: Soccer_Career_New_Era/reports/
+
+  webkit:
+    # Safari engine with an iPhone 13 profile. Informational: real iPhone Safari is still untested.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Soccer_Career_New_Era/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - name: Browser tests on WebKit (iPhone 13 profile)
+        run: WEBKIT=1 npx playwright test --project=iphone-webkit
