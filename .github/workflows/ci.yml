@@ -24,6 +24,10 @@ jobs:
         run: npm run build
       - name: Unit, regression and balance tests
         run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-build
+          path: Soccer_Career_New_Era/dist/
 
   browser:
     runs-on: ubuntu-latest
