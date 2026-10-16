@@ -5,7 +5,7 @@ import {prepareWeek} from '../src/development';
 import {finishMatch} from '../src/engine';
 import {settle,teamName} from '../src/career';
 import {encode,decode} from '../src/storage';
-import {TRAIT_LIMIT} from '../src/traits';
+import {TRAIT_LIMIT,TRAIT_DEFS} from '../src/traits';
 
 it('school catalogue: unique stable ids, every 시·도 covered, every school has a 2026 source',()=>{
   expect(new Set(SCHOOLS_KR.map(s=>s.id)).size).toBe(SCHOOLS_KR.length);
@@ -37,7 +37,7 @@ it('candidates are complete fictional profiles with honest potential estimates',
     expect(Object.values(c.a).every(v=>v>=20&&v<=85)).toBe(true);
     expect(c.name).toHaveLength(3);expect(c.height).toBeGreaterThan(160);expect(c.height).toBeLessThan(200);
   }
-  expect(withTraits/total).toBeGreaterThan(.35);expect(withTraits/total).toBeLessThan(.6);
+  const expectedAny=1-TRAIT_DEFS.reduce((n,d)=>n*(1-d.chance),1);expect(withTraits/total).toBeGreaterThan(expectedAny-.05);expect(withTraits/total).toBeLessThan(expectedAny+.05);
 });
 
 it('rerolling is persisted state: list numbers advance per school without mutating the old state',()=>{

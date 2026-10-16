@@ -75,7 +75,7 @@ it('NPCs: every generated player has a deterministic trait list that follows the
   const all=w.clubs.flatMap(c=>c.roster);
   expect(all.every(p=>Array.isArray(p.traits)&&p.traits.length<=TRAIT_LIMIT)).toBe(true);
   expect(all.map(p=>p.traits)).toEqual(again.clubs.flatMap(c=>c.roster).map(p=>p.traits));
-  const withAny=all.filter(p=>p.traits!.length).length/all.length;expect(withAny).toBeGreaterThan(.3);expect(withAny).toBeLessThan(.6);
+  const withAny=all.filter(p=>p.traits!.length).length/all.length,expectedAny=1-TRAIT_DEFS.reduce((n,d)=>n*(1-d.chance),1);expect(withAny).toBeGreaterThan(expectedAny-.08);expect(withAny).toBeLessThan(expectedAny+.08);
   advanceWorldYear(w);expect(w.clubs.flatMap(c=>c.roster).every(p=>Array.isArray(p.traits))).toBe(true);
 });
 

@@ -2,7 +2,7 @@ import {ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledM
 import {ROLE_KEYS,roleAbility} from './roles';
 import {newWorld,clubOf,nextOpponent,chooseLineup,selectionScore,advanceLeague,startPostseason,advanceCup,sortedTable,LEAGUES,advanceWorldYear,type World,type RosterPlayer} from './world';
 import {createMatch,userPerformance} from './engine';
-import {injuryChanceMultiplier,injuryWeeks,agingDecline} from './traits';
+import {injuryChanceMultiplier,injuryWeeks,agingDecline,matchFx} from './traits';
 import {
   ATTRS,
   attributes,
@@ -325,7 +325,7 @@ export function startCareerMatch(c:Career){
  if(!m.userOnPitch&&plan.role==='교체 대기')m.benchEntry={minute:60,name:c.player.name,a:{...c.player.a},energy:c.player.energy,number:10};
  if(m.userOnPitch&&c.player.energy<70){
    const replacement=own.roster.filter(r=>!lineup.some(x=>x.id===r.id)).sort((a,b)=>selectionScore(b.a,b.pos,c.player.pos,b.age,b.energy,b.form,own.coach)-selectionScore(a.a,a.pos,c.player.pos,a.age,a.energy,a.form,own.coach))[0];
-   if(replacement){m.userExitMinute=65;m.exitReplacement={name:replacement.name,a:{...replacement.a},energy:replacement.energy,number:19,rosterId:replacement.id};}
+   if(replacement){m.userExitMinute=65;m.exitReplacement={name:replacement.name,a:{...replacement.a},energy:replacement.energy,number:19,rosterId:replacement.id,fx:matchFx(replacement.traits)};}
  }
  if(m.userOnPitch&&m.userId!==9)m.players[9].number=m.userId+1;
  if(m.ball.owner!==null){m.ball.x=m.players[m.ball.owner].x;m.ball.y=m.players[m.ball.owner].y;}

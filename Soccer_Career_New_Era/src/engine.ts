@@ -58,6 +58,17 @@ export type Stat = {
   progressivePasses?: number;
   keyPasses?: number;
   expectedAssists?: number;
+  /** Balls won back by the same player shortly after losing them (집념). */
+  grit?: number;
+};
+/** Engine-side trait effects for one player. Absent = no effect and no extra state. */
+export type MatchFx = {
+  /** Next action of the teammate receiving my completed pass: success ×(1+value). Not stackable. */
+  playmaker?: number;
+  /** After my goal or assist: team stamina drain ×drain for `seconds`; ends when the team concedes. */
+  momentum?: { seconds: number; drain: number };
+  /** Winning the ball back within `window` seconds of losing it: +energy and a rating bonus. */
+  grit?: { energy: number; window: number };
 };
 export const emptyStats = (): Stat => ({
   minutes: 0,
@@ -93,6 +104,7 @@ export type Footballer = {
   red: boolean;
   injured: boolean;
   mode: "shape" | "press" | "support" | "attack" | "recover";
+  fx?: MatchFx;
 };
 export type Ball = {
   x: number;
@@ -118,6 +130,13 @@ export type Match = {
   insight?:Insight;
   rivalInsight?:Insight & {playerId:number};
   traitBoost?:boolean;
+  /** 플레이메이커: pending boost for the next action of one receiver. */
+  assistBoost?: { to: number; mult: number } | null;
+  /** 분위기 메이커: per team, clock until which stamina drain is reduced, and the drain factor. */
+  momentum?: [number, number];
+  momentumDrain?: [number, number];
+  /** 집념: clock of each tracked player's last ball loss. */
+  lostBall?: Record<number, number>;
   seed: number;
   clock: number;
   half: 1 | 2;
@@ -138,12 +157,12 @@ export type Match = {
   subs: [number, number];
   nextAI: number;
   userOnPitch?: boolean;
-  benchEntry?: {minute:number,name:string,a:Attributes,energy:number,number:number};
+  benchEntry?: {minute:number,name:string,a:Attributes,energy:number,number:number,fx?:MatchFx};
   userExitMinute?: number;
   userFinalStats?: Stat;
   userFinalEnergy?: number;
   replacedPlayers?: {rosterId:string,player:Footballer}[];
-  exitReplacement?: {name:string,a:Attributes,energy:number,number:number,rosterId:string};
+  exitReplacement?: {name:string,a:Attributes,energy:number,number:number,rosterId:string,fx?:MatchFx};
   rosterIds?: string[];
   competition?: string;
   tactics?: [string,string];
@@ -303,10 +322,23 @@ function kickoff(m: Match, team: 0 | 1) {
 }
 function own(m: Match, p: Footballer) {
   if (m.lastPass && m.players[m.lastPass.from].team !== p.team) m.lastPass = null;
+  if (m.assistBoost && m.assistBoost.to !== p.id) m.assistBoost = null;
   m.ball = { x: p.x, y: p.y, owner: p.id, flight: null };
   m.decision = p.id === m.userId && m.userOnPitch !== false;
   m.nextAI = shotQuality(m,p)>=.22 ? .5 : 1.8;
 }
+/** 집념 bookkeeping for a turnover from `loser` to `winner`. No state unless a player has the effect. */
+export function turnover(m: Match, loser: Footballer, winner: Footballer) {
+  if (loser.fx?.grit) (m.lostBall ??= {})[loser.id] = m.clock;
+  const lost = m.lostBall?.[winner.id], g = winner.fx?.grit;
+  if (g && lost !== undefined && m.clock - lost <= g.window) {
+    winner.energy = Math.min(100, winner.energy + g.energy);
+    winner.stats.grit = (winner.stats.grit ?? 0) + 1;
+    delete m.lostBall![winner.id];
+    event(m, `${winner.name} · 집념! 잃은 공을 되찾음`);
+  }
+}
+const boostFor = (m: Match, p: Footballer) => (m.assistBoost?.to === p.id ? m.assistBoost.mult : 1);
 export function pressure(m: Match, p: Footballer) {
   return m.players
     .filter((q) => q.team !== p.team && active(q))
@@ -377,15 +409,15 @@ function targets(m: Match, p: Footballer, act: Action) {
 export function actionChance(m: Match, action: Action) {
   const p = m.players.find((p) => p.id === m.ball.owner);
   if (!p) return 0;
-  const pr = pressure(m, p);
-  if (action === "shoot") return shotQuality(m, p);
+  const pr = pressure(m, p), b = boostFor(m, p);
+  if (action === "shoot") return b === 1 ? shotQuality(m, p) : Math.min(0.95, shotQuality(m, p) * b);
   if (action === "dribble")
-    return clamp(0.44 + p.a.dribbling / 180 - pr * 0.14, 0.12, 0.92);
+    return Math.min(0.97, clamp(0.44 + p.a.dribbling / 180 - pr * 0.14, 0.12, 0.92) * b);
   if (action === "hold")
-    return clamp(0.65 + p.a.strength / 260 - pr * 0.15, 0.15, 0.95);
+    return Math.min(0.97, clamp(0.65 + p.a.strength / 260 - pr * 0.15, 0.15, 0.95) * b);
   const q = targets(m, p, action)[0]?.p;
   if (!q) return 0;
-  return clamp(
+  return Math.min(0.99, b * clamp(
     0.76 +
       p.a.passing / 330 -
       dist(p, q) * 0.003 -
@@ -394,7 +426,7 @@ export function actionChance(m: Match, action: Action) {
       (action === "through" ? 0.12 : 0),
     0.15,
     0.97,
-  );
+  ));
 }
 export function availableActions(m: Match): Action[] {
   const p = m.players.find((p) => p.id === m.ball.owner);
@@ -440,14 +472,16 @@ export function act(m: Match, action: Action) {
     return;
   const p = m.players[m.ball.owner],
     d = direction(m, p.team),
-    chance = actionChance(m, action);
+    chance = actionChance(m, action),
+    boost = boostFor(m, p);
+  if (m.assistBoost?.to === p.id) m.assistBoost = null; // one action only, never stacks
   insightAttempt(m,p,action==='shoot'?['shooting','composure']:action==='dribble'?['dribbling']:action==='hold'?['strength']:['passing']);
   m.decision = false;
   m.nextAI = 2.5;
   if (action === "shoot") {
     p.stats.shots++;
     m.shots[p.team]++;
-    const xg = shotQuality(m, p);
+    const xg = boost === 1 ? shotQuality(m, p) : Math.min(0.95, shotQuality(m, p) * boost);
     m.xg[p.team] += xg;
     // Credit the creator at the shot, independent of the finisher's outcome.
     if (m.lastPass?.to === p.id && m.clock - m.lastPass.time < 90) {
@@ -494,6 +528,7 @@ export function act(m: Match, action: Action) {
       p.stats.losses++;
       q.stats.tackles++;
       own(m, q);
+      turnover(m, p, q);
       event(m, `${q.name} · 볼 탈취`);
     }
     m.nextAI = 3;
@@ -562,7 +597,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
     (m.replacedPlayers??=[]).push({rosterId:m.rosterIds?.[m.userId]??'unknown',player:structuredClone(slot)});
     if(m.rosterIds)m.rosterIds[m.userId]='hero';
     slot.name = incoming.name; slot.a = {...incoming.a}; slot.energy = incoming.energy;
-    slot.number = incoming.number; slot.stats = emptyStats(); slot.yellow = 0;
+    slot.number = incoming.number; slot.stats = emptyStats(); slot.yellow = 0; slot.fx = incoming.fx;
     m.userOnPitch = true; m.benchEntry = undefined;
     if (m.ball.owner === slot.id) own(m, slot);
     event(m, `${slot.name} 교체 투입 · 감독의 출전 결정`);
@@ -571,7 +606,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
     const slot=m.players[m.userId]; m.userFinalStats={...slot.stats};m.userFinalEnergy=slot.energy;
     (m.replacedPlayers??=[]).push({rosterId:'hero',player:structuredClone(slot)});
     const replacement=m.exitReplacement;
-    slot.name=replacement?.name??'교체 선수';slot.a=replacement?.a??slot.a;slot.stats=emptyStats();slot.energy=replacement?.energy??100;slot.number=replacement?.number??19;
+    slot.name=replacement?.name??'교체 선수';slot.a=replacement?.a??slot.a;slot.stats=emptyStats();slot.energy=replacement?.energy??100;slot.number=replacement?.number??19;slot.fx=replacement?.fx;
     if(m.rosterIds)m.rosterIds[m.userId]=replacement?.rosterId??'unknown';
     m.userOnPitch=false;m.decision=false;event(m,'감독 교체 지시 · 오늘의 출전 종료');
   }
@@ -582,7 +617,8 @@ export function step(m: Match, dt = 0.5, auto = false) {
   for (const p of m.players) {
     if (!active(p)) continue;
     p.stats.minutes += dt / 10;
-    p.energy = Math.max(8, p.energy - dt * (p.a.stamina > 65 ? 0.027 : 0.035));
+    const drain = m.momentum && m.momentum[p.team] > m.clock ? m.momentumDrain![p.team] : 1;
+    p.energy = Math.max(8, p.energy - dt * (p.a.stamina > 65 ? 0.027 : 0.035) * drain);
     const d = direction(m, p.team);
     let tx = d > 0 ? p.homeX : 105 - p.homeX,
       ty = p.homeY;
@@ -681,8 +717,16 @@ export function step(m: Match, dt = 0.5, auto = false) {
           m.score[from.team]++;
           for (const defender of m.players) if(defender.team!==from.team && active(defender)) defender.stats.goalsConceded=(defender.stats.goalsConceded??0)+1;
           from.stats.goals++;
-          if (m.lastPass?.to === from.id && m.clock - m.lastPass.time < 90)
-            m.players[m.lastPass.from].stats.assists++;
+          const assister = m.lastPass?.to === from.id && m.clock - m.lastPass.time < 90 ? m.players[m.lastPass.from] : null;
+          if (assister) assister.stats.assists++;
+          // 분위기 메이커: the conceding team's momentum ends; a scorer/assister with the effect starts it.
+          if (m.momentum) m.momentum[1 - from.team] = 0;
+          const mood = from.fx?.momentum ?? (assister?.team === from.team ? assister.fx?.momentum : undefined);
+          if (mood) {
+            (m.momentum ??= [0, 0])[from.team] = m.clock + mood.seconds;
+            (m.momentumDrain ??= [1, 1])[from.team] = mood.drain;
+            event(m, "분위기 메이커! 팀의 체력 소모가 줄어듭니다");
+          }
           event(m, `GOAL! ${from.name} · ${m.score[0]} : ${m.score[1]}`);
           kickoff(m, (1 - from.team) as 0 | 1);
         } else {
@@ -705,6 +749,8 @@ export function step(m: Match, dt = 0.5, auto = false) {
           target.x = f.x;
           target.y = f.y;
           own(m, target);
+          if (from.fx?.playmaker && target.team === from.team && target.id !== from.id)
+            m.assistBoost = { to: target.id, mult: 1 + from.fx.playmaker };
         } else {
           const o = m.players
             .filter((p) => p.team !== from.team && active(p))
@@ -712,6 +758,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
           o.stats.interceptions++;
           from.stats.losses++;
           own(m, o);
+          turnover(m, from, o);
           m.lastPass = null;
         }
       }
@@ -746,6 +793,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
           near.stats.tackles++;
           owner.stats.losses++;
           own(m, near);
+          turnover(m, owner, near);
           m.cooldown = 1;
         }
       }
@@ -779,6 +827,7 @@ export function rating(p: Footballer) {
     accuracy + distribution + progression + creation +
     Math.min(.8, (s.tackles + s.interceptions) * (["CB", "LB", "RB"].includes(p.pos) ? .075 : midfielder ? .04 : .012)) +
     Math.min(1.3, s.saves * .13) +
+    Math.min(.45, (s.grit ?? 0) * .15) +
     ((p.pos==='GK'||['CB','LB','RB'].includes(p.pos)) && s.minutes>=60 && s.goalsConceded===0 ? .45 : 0) -
     (['GK','CB','LB','RB'].includes(p.pos) ? (s.goalsConceded??0)*.06 : 0) - turnovers - p.yellow * .15 - (p.red ? .7 : 0),
     3, 10,

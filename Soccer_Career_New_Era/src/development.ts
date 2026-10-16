@@ -1,7 +1,8 @@
 import {ATTRS,LABELS,clamp,random,overall,createMatch,finishMatch,rating,type Attributes,type Attr,type Match} from './engine';
 import {grow,startCareerMatch,type Career,type Player} from './career';
 import {clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,nextOpponent,type Offer} from './world';
-import {TRAIT_IDS,TRAIT_TEXT,rollTraits,trainingGrowthMultiplier,trainingFatigueMultiplier,injuryChanceMultiplier,injuryWeeks,luckChance,matchAttributes,agingDecline,traitDef,seedFrom,type TraitId,type TraitInput} from './traits';
+import {TRAIT_IDS,TRAIT_TEXT,rollTraits,trainingGrowthMultiplier,trainingFatigueMultiplier,injuryChanceMultiplier,injuryWeeks,luckChance,matchAttributes,agingDecline,traitDef,seedFrom,restRecoveryMultiplier,rivalryDrive,focusBonus,lateBloom,matchFx,type TraitId,type TraitInput} from './traits';
+import {ROLE_KEYS} from './roles';
 /** @deprecated use TRAIT_IDS / traits.ts. Kept so older imports keep compiling. */
 export const TRAITS=TRAIT_IDS;
 export type Trait=TraitId;
@@ -12,7 +13,10 @@ export const DAILY={shooting:{label:'슈팅훈련',keys:['shooting','composure',
 export type Daily=keyof typeof DAILY;
 export type News={day:number,text:string,kind:'rating'|'lucky'|'insight'|'interest'|'offer'|'career'};
 export type WeekNote={week:number,startDay:number,before:Attributes,after:Attributes,rivalBefore:Attributes,rivalAfter:Attributes,entries:string[]};
-export type Development={traits:string[],wallet:number,plan:Daily[],active?:{startDay:number,cursor:number,before:Attributes,rivalBefore:Attributes,entries:string[],matchDone:boolean},notes:WeekNote[],news:News[],rival:{id:string,player:Player,school:number,clubId:string,traits:string[],retired:boolean,trainedWeek:number,lastPlayedWeek:number,history:{week:number,rating:number,goals:number,club:string}[],interests:string[],offers:Offer[]},interestIds:string[]};
+/** Per-week trait state (라이벌 의식 multiplier waiting for the first training, 독학파 counters). */
+export type WeekBonus={drive?:number,focus?:Record<string,number>,focusDone?:boolean};
+export type WeekState={startDay:number,cursor:number,before:Attributes,rivalBefore:Attributes,entries:string[],matchDone:boolean,user?:WeekBonus,rival?:WeekBonus};
+export type Development={traits:string[],experienceBank?:number,wallet:number,plan:Daily[],active?:WeekState,notes:WeekNote[],news:News[],rival:{id:string,player:Player,school:number,clubId:string,traits:string[],experienceBank?:number,retired:boolean,trainedWeek:number,lastPlayedWeek:number,history:{week:number,rating:number,goals:number,club:string}[],interests:string[],offers:Offer[]},interestIds:string[]};
 export function news(c:Career,text:string,kind:News['kind']='career'){c.development.news.unshift({day:c.day,text,kind});c.development.news=c.development.news.slice(0,150);c.feed.unshift(text);c.feed=c.feed.slice(0,40);}
 export function ensureDevelopment(c:Career,opts:{traits?:string[]}={}){
  if(c.development)return;
@@ -33,24 +37,45 @@ export function syncRival(c:Career){
  const data={id:r.id,traits:[...r.traits],name:r.player.name,pos:r.player.pos,age:r.player.age,a:{...r.player.a},potential:r.player.potential,energy:r.player.energy,form:r.history[0]?.rating??6.5,goals:prior?.goals??0,appearances:prior?.appearances??0,years:2};
  if(prior)Object.assign(prior,data);else{const index=club.roster.findIndex(p=>p.pos===r.player.pos);if(index>=0){const removed=club.roster.splice(index,1,data)[0];if(oldClub)oldClub.roster.push(removed);}else club.roster.push(data);}
 }
-export function applyDaily(c:Career,p:Player,type:Daily,trait:TraitInput,rival=false){
+export const isTrainingDay=(p:Player,type:Daily)=>type!=='rest'&&type!=='vacation'&&!p.injuryWeeks&&p.energy>=20;
+export const trainingEnvironment=(c:Career,rival:boolean)=>rival?(c.world.clubs.find(x=>x.id===c.development.rival.clubId)?.development??1):clubOf(c.world).development;
+export function applyDaily(c:Career,p:Player,type:Daily,trait:TraitInput,rival=false,bonus=1){
  const d=c.development,name=rival?p.name:c.player.name,rest=type==='rest'||type==='vacation';
  if(type==='vacation'&&!rival){if(d.wallet<5)throw Error('휴양 비용 5만원이 부족합니다. 휴식을 선택해 주세요.');d.wallet-=5;}
- if(rest){p.energy=clamp(p.energy+(type==='vacation'?65:30),0,100);p.fatigue=clamp(p.fatigue-(type==='vacation'?60:25),0,100);return `${name} · ${DAILY[type].label}`;}
+ if(rest){p.energy=clamp(p.energy+(type==='vacation'?65:30),0,100);p.fatigue=clamp(p.fatigue-(type==='vacation'?60:25)*restRecoveryMultiplier(trait),0,100);return `${name} · ${DAILY[type].label}`;}
  if(p.injuryWeeks||p.energy<20){p.energy=clamp(p.energy+30,0,100);p.fatigue=Math.max(0,p.fatigue-25);return `${name} · 컨디션 부족으로 휴식 전환`;}
  const lucky=random(c)<luckChance(trait),efficiency=clamp(1-p.fatigue*.008,.2,1),environment=rival?(c.world.clubs.find(x=>x.id===d.rival.clubId)?.development??1):clubOf(c.world).development;
- const before=overall(p.a);grow(p,DAILY[type].keys,.24*environment*efficiency*trainingGrowthMultiplier(trait)*(lucky?10:1));
+ const before=overall(p.a),gained=grow(p,DAILY[type].keys,.24*environment*efficiency*trainingGrowthMultiplier(trait)*(lucky?10:1)*bonus);
+ const bloom=lateBloom(trait);if(bloom&&p.age<bloom.startAge){const holder=rival?d.rival:d;holder.experienceBank=Math.min(bloom.cap,(holder.experienceBank??0)+gained*bloom.bankRate);}
  p.energy=clamp(p.energy-12,0,100);p.fatigue=clamp(p.fatigue+12*trainingFatigueMultiplier(trait),0,100);p.trust=clamp(p.trust+.2,0,100);
  let hurt=false;if(p.fatigue>=TRAINING_INJURY_FATIGUE&&random(c)<TRAINING_INJURY_CHANCE*injuryChanceMultiplier(trait)){p.injuryWeeks=injuryWeeks(trait,1);hurt=true;}
  const text=`${name} · ${lucky?'럭키! ×10 · ':''}${DAILY[type].label} · OVR +${(overall(p.a)-before).toFixed(2)}${hurt?` · 훈련 중 부상 (${p.injuryWeeks}주)`:''}`;
  if(lucky)news(c,text,'lucky');if(hurt)news(c,`${name} · 훈련 중 부상 · ${p.injuryWeeks}주 회복 필요`);return text;
+}
+/** One schedule day for the user or the rival, including 라이벌 의식 and 독학파. */
+function trainDay(c:Career,rival:boolean,type:Daily,state:WeekBonus){
+ const d=c.development,p=rival?d.rival.player:c.player,traits=rival?d.rival.traits:d.traits,name=p.name;
+ const trains=isTrainingDay(p,type);
+ let bonus=1;if(trains&&state.drive&&state.drive>1){bonus=state.drive;state.drive=undefined;news(c,`${name} · 라이벌 의식! 이번 주 첫 훈련 성장 ×${bonus}`);}
+ let text=applyDaily(c,p,type,traits,rival,bonus);if(bonus>1)text+=` · 라이벌 의식 ×${bonus}`;
+ const f=focusBonus(traits);
+ if(trains&&f&&!state.focusDone){const counts=state.focus??={};counts[type]=(counts[type]??0)+1;
+  if(counts[type]>=f.times){state.focusDone=true;const before=overall(p.a);grow(p,DAILY[type].keys,.24*trainingEnvironment(c,rival)*trainingGrowthMultiplier(traits)*f.extra);text+=` · 독학파 집중 보너스 OVR +${(overall(p.a)-before).toFixed(2)}`;news(c,`${name} · 독학파! ${DAILY[type].label} 주 ${f.times}회 완료 · 추가 성장`);}}
+ return text;
+}
+/** 라이벌 의식: multiplier for the week's first training when the other player out-rated this one last week. */
+function rivalryBonus(c:Career,rival:boolean){
+ const d=c.development,mult=rivalryDrive(rival?d.rival.traits:d.traits);if(mult<=1)return undefined;
+ const prev=c.week-1,mine=c.history[0]?.id===prev?c.history[0].rating:0,theirs=d.rival.history[0]?.week===prev?d.rival.history[0].rating:0;
+ const [self,other]=rival?[theirs,mine]:[mine,theirs];
+ return other>0&&other>self?mult:undefined;
 }
 export function prepareWeek(c:Career,plan:Daily[]){
  ensureDevelopment(c);if(c.match||c.development.active)throw Error('진행 중인 주간 일정이 있습니다.');if(c.world.phase==='retired')throw Error('은퇴한 커리어입니다.');
  if(plan.length!==7||plan.some(x=>!DAILY[x]))throw Error('7일 일정을 모두 선택해 주세요.');
  const matchDay=!['offseason','retired'].includes(c.world.phase);
  if(plan.filter((x,i)=>x==='vacation'&&(!matchDay||i!==5)).length*5>c.development.wallet)throw Error('예정된 휴양 비용이 잔액보다 많습니다.');
- c.development.plan=[...plan];c.development.active={startDay:c.day,cursor:0,before:{...c.player.a},rivalBefore:{...c.development.rival.player.a},entries:[],matchDone:false};
+ c.development.plan=[...plan];c.development.active={startDay:c.day,cursor:0,before:{...c.player.a},rivalBefore:{...c.development.rival.player.a},entries:[],matchDone:false,user:{drive:rivalryBonus(c,false)},rival:{drive:rivalryBonus(c,true)}};
  advanceSchedule(c);
 }
 export function advanceSchedule(c:Career){
@@ -58,8 +83,8 @@ export function advanceSchedule(c:Career){
  while(a.cursor<7){
   c.day=a.startDay+a.cursor;c.world.currentDay=c.day;expireOffers(c.world);
   if(a.cursor===5&&!a.matchDone&&!['offseason','retired'].includes(c.world.phase)){startCareerMatch(c);return;}
-  a.entries.push(applyDaily(c,c.player,d.plan[a.cursor],d.traits));
-  if(!d.rival.retired)applyDaily(c,d.rival.player,d.plan[a.cursor],d.rival.traits,true);
+  a.entries.push(trainDay(c,false,d.plan[a.cursor],a.user??={}));
+  if(!d.rival.retired)trainDay(c,true,d.plan[a.cursor],a.rival??={});
   a.cursor++;
  }
  d.rival.trainedWeek=c.week;finishWeek(c);
@@ -67,16 +92,29 @@ export function advanceSchedule(c:Career){
 export function finishWeek(c:Career){
  const d=c.development,a=d.active;
  if(a&&!a.matchDone&&c.player.injuryWeeks)c.player.injuryWeeks--;
+ const released=releaseExperience(c,false);if(released&&a)a.entries.push(`대기만성 · 쌓아 둔 경험이 성장으로 전환 (+${released.toFixed(2)})`);
+ if(!d.rival.retired)releaseExperience(c,true);
  if(d.rival.player.injuryWeeks)d.rival.player.injuryWeeks--;
  if(a){d.notes.unshift({week:c.week,startDay:a.startDay,before:a.before,after:{...c.player.a},rivalBefore:a.rivalBefore,rivalAfter:{...d.rival.player.a},entries:a.entries});d.notes=d.notes.slice(0,60);c.day=a.startDay+7;d.active=undefined;}
  else c.day=Math.max(c.day+1,(c.week+1)*7);
  c.week++;c.trainingCount=0;d.wallet+=clubOf(c.world).league===0?2:0;c.world.currentDay=c.day;expireOffers(c.world);scoutInterest(c);syncRival(c);
  c.growth.push({week:c.week,overall:overall(c.player.a)});
 }
+/** 대기만성: from startAge, convert part of the banked experience into role-attribute growth each week. */
+export function releaseExperience(c:Career,rival:boolean){
+ const d=c.development,holder=rival?d.rival:d,p=rival?d.rival.player:c.player,bloom=lateBloom(rival?d.rival.traits:d.traits);
+ if(!bloom||p.age<bloom.startAge||!(holder.experienceBank??0))return 0;
+ const amount=Math.min(holder.experienceBank!,Math.max(bloom.minWeekly,holder.experienceBank!*bloom.weeklyRate)),keys=ROLE_KEYS[p.pos];
+ for(const k of keys){p.a[k]=Math.min(100,p.a[k]+amount/keys.length);p.potential=Math.max(p.potential,p.a[k]);}
+ holder.experienceBank=Math.max(0,holder.experienceBank!-amount);return amount;
+}
 export function afterScheduledMatch(c:Career){const a=c.development.active;if(a){a.entries.push(`경기 · 평점 ${c.history[0].rating.toFixed(2)}`);a.matchDone=true;a.cursor=6;advanceSchedule(c);}else finishWeek(c);}
 const hasMatchEffect=(t:TraitInput)=>(typeof t==='string'?[t]:t??[]).some(id=>{const e=traitDef(id)?.effects;return !!(e?.matchBoost||e?.matchAttributes);});
 export function configureTrait(c:Career,m:Match){
  const d=c.development;m.insight={chance:luckChance(d.traits),gains:{},events:[]};
+ // Engine-side trait effects (플레이메이커 · 분위기 메이커 · 집념) for every player in this match.
+ m.rosterIds?.forEach((id,i)=>{if(id==='hero')return;const rp=id===d.rival.id?{traits:d.rival.traits}:c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===id);const fx=matchFx(rp?.traits);if(fx)m.players[i].fx=fx;});
+ const userFx=matchFx(d.traits);if(userFx){if(m.userOnPitch!==false)m.players[m.userId].fx=userFx;if(m.benchEntry)m.benchEntry.fx=userFx;}
  const rivalSlot=m.rosterIds?.indexOf(d.rival.id)??-1;if(rivalSlot>=0){m.rivalInsight={playerId:rivalSlot,chance:luckChance(d.rival.traits),gains:{},events:[]};if(hasMatchEffect(d.rival.traits))m.players[rivalSlot].a=matchAttributes(d.rival.traits,m.players[rivalSlot].a,()=>random(c)).a;}
  // NPC traits use a per-player hashed RNG so they never shift the career's own random stream.
  m.rosterIds?.forEach((id,i)=>{if(i===rivalSlot||id==='hero'||(i===m.userId&&m.userOnPitch!==false))return;const rp=c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===id);if(!rp||!hasMatchEffect(rp.traits))return;const rng={seed:seedFrom((c.seed^c.week)>>>0,'match:'+id)};m.players[i].a=matchAttributes(rp.traits,m.players[i].a,()=>random(rng)).a;});
@@ -89,7 +127,7 @@ export function configureTrait(c:Career,m:Match){
 export function applyInsights(c:Career,m:Match){if(!m.insight)return;for(const k of ATTRS){const gain=m.insight.gains[k]??0;if(!gain)continue;c.player.a[k]=Math.min(100,c.player.a[k]+gain);c.player.potential=Math.max(c.player.potential,c.player.a[k]);news(c,`깨달음! ${LABELS[k]} +${gain}`,'insight');}}
 export function playRival(c:Career,main:Match){
  const r=c.development.rival;if(r.retired||r.lastPlayedWeek===c.week)return undefined;
- if(!c.development.active&&r.trainedWeek!==c.week){for(let i=0;i<7;i++)applyDaily(c,r.player,c.development.plan[i],r.traits,true);r.trainedWeek=c.week;syncRival(c);}
+ if(!c.development.active&&r.trainedWeek!==c.week){const state:WeekBonus={drive:rivalryBonus(c,true)};for(let i=0;i<7;i++)trainDay(c,true,c.development.plan[i],state);r.trainedWeek=c.week;syncRival(c);}
  const actual=main.rosterIds?.indexOf(r.id)??-1;const prior=main.replacedPlayers?.find(x=>x.rosterId===r.id)?.player;if(actual<0&&!prior&&(r.clubId===c.world.clubId||nextOpponent(c.world).club?.id===r.clubId)){r.lastPlayedWeek=c.week;return;}let rp,score:[number,number]|undefined;
  if(actual>=0||prior){rp=prior??main.players[actual];for(const k of ATTRS){const n=main.rivalInsight?.gains[k]??0;if(n){r.player.a[k]=Math.min(100,r.player.a[k]+n);r.player.potential=Math.max(r.player.potential,r.player.a[k]);news(c,`${r.player.name} · 깨달음! ${LABELS[k]} +${n}`,'insight');}}}
  else if(c.world.phase==='league'){
@@ -100,7 +138,7 @@ export function playRival(c:Career,main:Match){
   const teams=[chooseLineup(ownClub),chooseLineup(other)];
   rm.tactics=[ownClub.coach.style,other.coach.style];
   const rivalIndex=teams[0].findIndex(p=>p.id===r.id);
-  for(let t=0;t<2;t++)for(let i=0;i<11;i++){const source=teams[t][i],slot=rm.players[t*11+i];slot.name=source.name;slot.a={...source.a};slot.pos=source.slotPos;slot.energy=source.energy;
+  for(let t=0;t<2;t++)for(let i=0;i<11;i++){const source=teams[t][i],slot=rm.players[t*11+i];slot.name=source.name;slot.a={...source.a};slot.pos=source.slotPos;slot.energy=source.energy;slot.fx=matchFx(source.traits);
    if((t?other:ownClub).coach.formation==='4-4-2'){const anchors=[[5,34],[25,10],[21,26],[21,42],[25,58],[46,9],[40,25],[40,43],[46,59],[67,25],[67,43]];slot.homeX=anchors[i][0];slot.homeY=anchors[i][1];slot.x=t?105-slot.homeX:slot.homeX;slot.y=slot.homeY;}}
   rm.userOnPitch=rivalIndex>=0;if(rivalIndex>=0)rm.userId=rivalIndex;
   rm.decision=rm.userOnPitch&&rm.ball.owner===rm.userId;
