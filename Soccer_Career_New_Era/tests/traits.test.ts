@@ -62,12 +62,13 @@ it('match-only effects: 강심장/새가슴 change the match copy, never permane
   finishMatch(c.match!);settle(c);expect(c.player.a.composure).toBeGreaterThanOrEqual(60);
 });
 
-it('injury weeks and aging: 회복력 shortens, 조기 노화 starts 3 years early at ×1.5',()=>{
+it('injury weeks and aging: 회복력 shortens; the 0.5 age model declines from 33, 조기 노화 3 years early at ×1.5',()=>{
   expect(injuryWeeks([],2)).toBe(2);expect(injuryWeeks(['회복력'],2)).toBe(1);expect(injuryWeeks(['회복력'],1)).toBe(1);
   expect(agingDecline([],29,29,.8)).toBe(0);expect(agingDecline([],30,29,.8)).toBeCloseTo(.8,8);
   expect(agingDecline(['조기 노화'],27,29,.8)).toBeCloseTo(1.2,8);expect(agingDecline(['조기 노화'],26,29,.8)).toBe(0);
-  const make=(t:string[])=>{const c=career(5);c.player.age=26;c.development.rival.player.age=26;c.player.a=attributes(70);c.world.phase='offseason';c.world.clubId=c.world.clubs.find(x=>x.league===1)!.id;c.world.contract={salary:100,years:2};c.development.traits=t;nextSeason(c);return c.player.a.speed;};
-  expect(make([])).toBe(70);expect(make(['조기 노화'])).toBeCloseTo(68.8,8);
+  const make=(t:string[],age=29)=>{const c=career(5);c.player.age=age;c.development.rival.player.age=age;c.player.a=attributes(70);c.world.phase='offseason';c.world.clubId=c.world.clubs.find(x=>x.league===1)!.id;c.world.contract={salary:100,years:2};c.development.traits=t;nextSeason(c);return c.player.a.speed;};
+  expect(make([])).toBe(70);expect(make(['조기 노화'])).toBeCloseTo(70-1.2*1.5,8); // turning 30
+  expect(make([],31)).toBe(70);expect(make([],32)).toBeCloseTo(70-1.2,8); // peak 32, first decline at 33
 });
 
 it('NPCs: every generated player has a deterministic trait list that follows the same rules',()=>{
@@ -88,12 +89,12 @@ it('user, rival and NPC traits survive save/load unchanged; rival traits sync in
   expect(n.world.clubs.flatMap(x=>x.roster).map(p=>p.traits)).toEqual(c.world.clubs.flatMap(x=>x.roster).map(p=>p.traits));
 });
 
-for(const file of ['v4-weeks.json','v4-live-match.json'])it(`real v4 save (${file}) migrates to v5 without losing the existing trait or progress`,()=>{
+for(const file of ['v4-weeks.json','v4-live-match.json'])it(`real v4 save (${file}) migrates to the current version without losing the existing trait or progress`,()=>{
   const text=readFileSync(new URL('./fixtures/'+file,import.meta.url),'utf8');
   const old=JSON.parse(JSON.parse(text).payload);
   expect(old.version).toBe(4);
   const n=decode(text);
-  expect(n.version).toBe(5);
+  expect(n.version).toBe(6);
   expect(n.development.traits).toEqual([old.development.trait]);
   expect(n.development.rival.traits).toEqual([old.development.rival.trait]);
   expect('trait' in n.development).toBe(false);
@@ -103,5 +104,5 @@ for(const file of ['v4-weeks.json','v4-live-match.json'])it(`real v4 save (${fil
   expect(decode(text)).toEqual(n);expect(decode(encode(n))).toEqual(n);
   // The migrated career keeps playing.
   if(n.match){finishMatch(n.match);settle(n);}
-  expect(validate(n).version).toBe(5);
+  expect(validate(n).version).toBe(6);
 });

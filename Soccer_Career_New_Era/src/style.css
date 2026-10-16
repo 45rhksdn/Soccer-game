@@ -1942,3 +1942,18 @@ td strong {
 .growth-popup.insight{border:2px solid #4b7fcb}.growth-popup.insight h3{color:#2a5aa8}
 .growth-popup .primary{margin-top:6px;justify-content:center}
 @media (prefers-reduced-motion:reduce){.growth-popup{animation:none}}
+/* 장비 */
+.equipment{margin-top:18px}
+.equip-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.equip-slot{border:1px solid #dfe5dc;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.equip-slot small{color:#667366}
+.equip-shop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.equip-shop li{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid #eef1ec;padding-top:8px}
+.equip-shop button{white-space:nowrap}
+.bar{position:relative}
+.bar i.gear{position:absolute;top:0;bottom:0;background:#e0a24b;border-radius:0 6px 6px 0}
+.gear-bonus{color:#b5751e;font-weight:700}
+.tag.fictional{background:#efe9fb;color:#5b3fa0;margin-left:6px;font-size:11px}
+.fictional-note{margin:6px 0 10px}
+.legacy{margin-bottom:14px}.legacy p{margin:4px 0 0}
+.text-button.danger{color:#b23a2a}

@@ -1,8 +1,10 @@
 import {ATTRS,LABELS,clamp,random,overall,createMatch,finishMatch,rating,type Attributes,type Attr,type Match} from './engine';
 import {grow,startCareerMatch,type Career,type Player} from './career';
-import {clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,nextOpponent,type Offer} from './world';
-import {TRAIT_IDS,TRAIT_TEXT,rollTraits,trainingGrowthMultiplier,trainingFatigueMultiplier,injuryChanceMultiplier,injuryWeeks,insightChance,trainingLuckChance,matchAttributes,agingDecline,traitDef,seedFrom,restRecoveryMultiplier,rivalryDrive,focusBonus,lateBloom,matchFx,hasMatchEffect,trustGainMultiplier,abroadGrowthMultiplier,superSubMultiplier,type TraitId,type TraitInput} from './traits';
+import {npcInjuryWeek,matchInjury,clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,nextOpponent,type Offer} from './world';
+import {TRAIT_IDS,TRAIT_TEXT,rollTraits,trainingGrowthMultiplier,trainingFatigueMultiplier,injuryChanceMultiplier,injuryWeeks,insightChance,trainingLuckChance,matchAttributes,traitDef,seedFrom,restRecoveryMultiplier,rivalryDrive,focusBonus,lateBloom,matchFx,hasMatchEffect,trustGainMultiplier,abroadGrowthMultiplier,superSubMultiplier,type TraitId,type TraitInput} from './traits';
 import {ROLE_KEYS} from './roles';
+import {applyAging} from './aging';
+import {matchAttributesOf,type EquipmentState} from './equipment';
 /** @deprecated use TRAIT_IDS / traits.ts. Kept so older imports keep compiling. */
 export const TRAITS=TRAIT_IDS;
 export type Trait=TraitId;
@@ -20,7 +22,9 @@ export type WeekBonus={drive?:number,focus?:Record<string,number>,focusDone?:boo
 export type WeekState={startDay:number,cursor:number,before:Attributes,rivalBefore:Attributes,entries:string[],matchDone:boolean,user?:WeekBonus,rival?:WeekBonus,
  /** 'daily' = played one day at a time from the home screen (오늘의 일정); absent = whole-week plan. */
  mode?:'daily'};
-export type Development={traits:string[],experienceBank?:number,wallet:number,plan:Daily[],active?:WeekState,notes:WeekNote[],news:News[],rival:{id:string,player:Player,school:number,clubId:string,traits:string[],experienceBank?:number,retired:boolean,trainedWeek:number,lastPlayedWeek:number,history:{week:number,rating:number,goals:number,club:string}[],interests:string[],offers:Offer[]},interestIds:string[]};
+export type Development={traits:string[],experienceBank?:number,wallet:number,
+ /** Bought / equipped items (equipment.ts). Absent in saves older than 0.5. */
+ equipment?:EquipmentState,plan:Daily[],active?:WeekState,notes:WeekNote[],news:News[],rival:{id:string,player:Player,school:number,clubId:string,traits:string[],experienceBank?:number,retired:boolean,trainedWeek:number,lastPlayedWeek:number,history:{week:number,rating:number,goals:number,club:string}[],interests:string[],offers:Offer[]},interestIds:string[]};
 export function news(c:Career,text:string,kind:News['kind']='career'){c.development.news.unshift({day:c.day,text,kind});c.development.news=c.development.news.slice(0,150);c.feed.unshift(text);c.feed=c.feed.slice(0,40);}
 export function ensureDevelopment(c:Career,opts:{traits?:string[]}={}){
  if(c.development)return;
@@ -38,7 +42,7 @@ export function syncRival(c:Career){
  const oldClub=c.world.clubs.find(x=>x.id!==club.id&&x.roster.some(p=>p.id===r.id));
  if(oldClub)oldClub.roster=oldClub.roster.filter(p=>p.id!==r.id);
  const prior=club.roster.find(p=>p.id===r.id);
- const data={id:r.id,traits:[...r.traits],name:r.player.name,pos:r.player.pos,age:r.player.age,a:{...r.player.a},potential:r.player.potential,energy:r.player.energy,form:r.history[0]?.rating??6.5,goals:prior?.goals??0,appearances:prior?.appearances??0,years:2};
+ const data={id:r.id,traits:[...r.traits],injuryWeeks:r.player.injuryWeeks||undefined,name:r.player.name,pos:r.player.pos,age:r.player.age,a:{...r.player.a},potential:r.player.potential,energy:r.player.energy,form:r.history[0]?.rating??6.5,goals:prior?.goals??0,appearances:prior?.appearances??0,years:2};
  if(prior)Object.assign(prior,data);else{const index=club.roster.findIndex(p=>p.pos===r.player.pos);if(index>=0){const removed=club.roster.splice(index,1,data)[0];if(oldClub)oldClub.roster.push(removed);}else club.roster.push(data);}
 }
 export const isTrainingDay=(p:Player,type:Daily)=>type!=='rest'&&type!=='vacation'&&!p.injuryWeeks&&p.energy>=20;
@@ -108,6 +112,7 @@ export function finishWeek(c:Career){
  if(d.rival.player.injuryWeeks)d.rival.player.injuryWeeks--;
  if(a){d.notes.unshift({week:c.week,startDay:a.startDay,before:a.before,after:{...c.player.a},rivalBefore:a.rivalBefore,rivalAfter:{...d.rival.player.a},entries:a.entries});d.notes=d.notes.slice(0,60);c.day=a.startDay+7;d.active=undefined;}
  else c.day=Math.max(c.day+1,(c.week+1)*7);
+ if(!['offseason','retired'].includes(c.world.phase))npcInjuryWeek(c.world,c.week,[d.rival.id]);
  c.week++;c.trainingCount=0;d.wallet+=clubOf(c.world).league===0?2:0;c.world.currentDay=c.day;expireOffers(c.world);scoutInterest(c);syncRival(c);
  c.growth.push({week:c.week,overall:overall(c.player.a)});
 }
@@ -174,7 +179,8 @@ export function configureTrait(c:Career,m:Match){
  m.rosterIds?.forEach((id,i)=>{if(i===rivalSlot||id==='hero'||(i===m.userId&&m.userOnPitch!==false))return;const rp=c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===id);if(!rp||!hasMatchEffect(rp.traits,big))return;const rng={seed:seedFrom((c.seed^c.week)>>>0,'match:'+id)};m.players[i].a=matchAttributes(rp.traits,m.players[i].a,()=>random(rng),{bigMatch:big}).a;});
  const sub=superSubMultiplier(d.traits),effect=hasMatchEffect(d.traits,big);
  if(!effect&&sub===1){m.traitBoost=false;return;}
- const r=effect?matchAttributes(d.traits,c.player.a,()=>random(c),{bigMatch:big}):{a:{...c.player.a},boosted:false,news:[] as string[]};
+ const gear=matchAttributesOf(c); // base + equipment; 깨달음 still checks the base (m.insight.base)
+ const r=effect?matchAttributes(d.traits,gear,()=>random(c),{bigMatch:big}):{a:gear,boosted:false,news:[] as string[]};
  m.traitBoost=r.boosted;m.traitNotes=[...r.news];
  if(effect&&m.userOnPitch!==false)m.players[m.userId].a=r.a;
  if(m.benchEntry){m.benchEntry.a=sub===1?{...r.a}:Object.fromEntries(ATTRS.map(k=>[k,Math.min(100,r.a[k]*sub)])) as Attributes;if(sub>1)m.traitNotes.push(`슈퍼 조커 · 교체 투입 시 능력치 ×${sub}`);}
@@ -216,7 +222,9 @@ export function playRival(c:Career,main:Match){
   finishMatch(rm);rp=rm.userOnPitch?rm.players[rm.userId]:undefined;score=rm.score;r.lastPlayedWeek=c.week;
   applyRivalInsights(c,rm.insight.gains);
  }
- if(rp){const v=rating(rp);r.history.unshift({week:c.week,rating:v,goals:rp.stats.goals,club:r.clubId});r.history=r.history.slice(0,200);r.lastPlayedWeek=c.week;r.player.energy=Math.min(100,rp.energy+30);grow(r.player,['passing','shooting','positioning'],.18);if(v>=7.5)news(c,`라이벌 ${r.player.name} · 평점 ${v.toFixed(2)}의 활약!`,'rating');}
+ if(rp){const v=rating(rp);r.history.unshift({week:c.week,rating:v,goals:rp.stats.goals,club:r.clubId});r.history=r.history.slice(0,200);r.lastPlayedWeek=c.week;r.player.energy=Math.min(100,rp.energy+30);grow(r.player,['passing','shooting','positioning'],.18);
+  // Same match-injury rule as the user and NPCs; an injured rival is left out of lineups until recovered.
+  if(rp.stats.minutes>0&&!r.player.injuryWeeks){const weeks=matchInjury(c.seed^c.week,r.id,rp.energy,r.traits);if(weeks){r.player.injuryWeeks=weeks;news(c,`라이벌 ${r.player.name} · 경기 중 부상 · ${weeks}주 회복 필요`);}}if(v>=7.5)news(c,`라이벌 ${r.player.name} · 평점 ${v.toFixed(2)}의 활약!`,'rating');}
  syncRival(c);return score?{clubId:r.clubId,score}:undefined;
 }
 export function scoutInterest(c:Career){
@@ -233,7 +241,7 @@ export function announceOffers(c:Career){const d=c.development;c.world.currentDa
  if(d.rival.player.age>=18){const rw=structuredClone(c.world);rw.clubId=d.rival.clubId;rw.contract={salary:0,years:0};rw.interestedClubIds=d.rival.interests;generateOffers(rw,{...d.rival.player,age:d.rival.player.age+1},d.rival.history[0]?.rating??6.5);d.rival.offers=rw.offers;for(const o of rw.offers.filter(o=>d.rival.interests.includes(o.clubId)))news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 라이벌 ${d.rival.player.name}에게 정식 제안`,'offer');}
 }
 export function renewSearch(c:Career){if(c.world.phase!=='offseason'||c.match)throw Error('시즌 종료 후 구직할 수 있습니다.');expireOffers(c.world);if(c.world.offers.length)throw Error('아직 유효한 제안이 있습니다.');announceOffers(c);}
-export function ageRival(c:Career){const r=c.development.rival;r.player.age=c.player.age;r.player.energy=100;r.player.fatigue=0;r.retired=c.player.age>=36;const decline=agingDecline(r.traits,r.player.age,29,.8);if(decline)for(const k of ['speed','acceleration','stamina'] as Attr[])r.player.a[k]=Math.max(20,r.player.a[k]-decline);
+export function ageRival(c:Career){const r=c.development.rival;r.player.age=c.player.age;r.player.energy=100;r.player.fatigue=0;r.retired=c.player.age>=36;if(!r.retired)applyAging(r.player.a,r.traits,r.player.age);
  const choices=r.offers.filter(o=>o.clubId!==c.world.clubId&&(o.expiresDay??Infinity)>c.day);
  if(r.player.age>=19&&(c.world.clubs.find(x=>x.id===r.clubId)!.league===0||choices.length)){const best=choices.sort((a,b)=>b.salary-a.salary)[0];const club=best?c.world.clubs.find(x=>x.id===best.clubId)!:c.world.clubs.filter(x=>x.league>0&&x.id!==c.world.clubId).sort((a,b)=>Math.abs(overall(a.roster[0].a)-overall(r.player.a))-Math.abs(overall(b.roster[0].a)-overall(r.player.a)))[0];r.clubId=club.id;news(c,`${r.player.name} · ${club.name} 입단!`);}
  r.offers=[];if(c.player.age>=19){r.interests=[];c.development.interestIds=[];}c.world.interestedClubIds=[...c.development.interestIds];syncRival(c);

@@ -63,6 +63,8 @@ export type TraitDef={
 };
 
 export const TRAIT_LIMIT=3;
+// Rarity (0.5 review): traits that are much stronger or much harsher than the rest appear at half
+// the common chance — 천재, 강철몸, 실전파(×1.3 all), 행운아(×3 luck) and 유리몸, 불운, 조기 노화.
 // 0.4.0 started at 6 % / 3 % with 11 traits. With 34 traits that would leave only ~13 % of players
 // trait-free, so the per-trait chance was halved (ratio kept). Change these two numbers to retune.
 export const RARITY_CHANCE:Record<TraitRarity,number>={common:.03,rare:.015};
@@ -77,8 +79,8 @@ export const LUCKY_MULTIPLIER=3,UNLUCKY_MULTIPLIER=1/3;
 export const TRAIT_DEFS=[
   // ── positive ──────────────────────────────────────────────
   {id:'천재',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'star',summary:'모든 훈련 성장 ×1.7',effects:{trainingGrowth:1.7}},
-  {id:'실전파',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'flame',summary:'경기 진입 시 30% 확률 · 해당 경기 능력치 ×1.3',effects:{matchBoost:{chance:.3,multiplier:1.3},boostNews:'실전파 발동! 이번 경기 동안 모든 능력치 ×1.3 (최대 100)'}},
-  {id:'행운아',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'clover',summary:'훈련 럭키 확률 ×3 · 경기 중 깨달음 확률 0.5% → 1.5%',effects:{luck:LUCKY_MULTIPLIER},excludes:['불운']},
+  {id:'실전파',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'flame',summary:'경기 진입 시 30% 확률 · 해당 경기 능력치 ×1.3',effects:{matchBoost:{chance:.3,multiplier:1.3},boostNews:'실전파 발동! 이번 경기 동안 모든 능력치 ×1.3 (최대 100)'}},
+  {id:'행운아',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'clover',summary:'훈련 럭키 확률 ×3 · 경기 중 깨달음 확률 0.5% → 1.5%',effects:{luck:LUCKY_MULTIPLIER},excludes:['불운']},
   {id:'노력파',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'dumbbell',summary:'모든 훈련 성장 ×1.2',effects:{trainingGrowth:1.2},excludes:['게으름']},
   {id:'강철 체력',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'battery',summary:'훈련 피로 증가량 ×0.7',effects:{trainingFatigue:.7},excludes:['유리몸']},
   {id:'회복력',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'cross',summary:'부상 확률 ×0.5 · 부상 기간 1주 단축(최소 1주)',effects:{injuryChance:.5,injuryWeeks:-1},excludes:['유리몸']},
@@ -98,19 +100,19 @@ export const TRAIT_DEFS=[
   {id:'성실함',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'clipCheck',summary:'감독 신뢰 상승량 ×1.5',effects:{trustGain:1.5},excludes:['감독과 불화']},
   {id:'해외 체질',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'globe',summary:'해외 리그 소속일 때 훈련 성장 ×1.15',effects:{abroadGrowth:1.15},excludes:['향수병']},
   // ── negative ──────────────────────────────────────────────
-  {id:'유리몸',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'crack',summary:'훈련 피로 증가량 ×1.5 · 부상 확률 ×1.5',effects:{trainingFatigue:1.5,injuryChance:1.5},excludes:['강철 체력','회복력','잔부상']},
+  {id:'유리몸',polarity:'negative',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'crack',summary:'훈련 피로 증가량 ×1.5 · 부상 확률 ×1.5',effects:{trainingFatigue:1.5,injuryChance:1.5},excludes:['강철 체력','회복력','잔부상']},
   {id:'게으름',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'zzz',summary:'모든 훈련 성장 ×0.8',effects:{trainingGrowth:.8},excludes:['노력파']},
   {id:'새가슴',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'shake',summary:'경기 중 침착성 −6 · 판단력 −4',effects:{matchAttributes:{composure:-6,decisions:-4}},excludes:['강심장']},
   {id:'잔부상',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'bandage',summary:'부상 확률 ×1.3 · 부상 기간 +1주',effects:{injuryChance:1.3,injuryWeeks:1},excludes:['회복력','강철몸','유리몸']},
   {id:'저질 체력',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'batteryLow',summary:'훈련 피로 증가량 ×1.3',effects:{trainingFatigue:1.3},excludes:['강철 체력','강철몸']},
   {id:'기복이 심함',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'wave',summary:'경기 진입 시 30% 확률 · 해당 경기 능력치 ×0.85',effects:{matchBoost:{chance:.3,multiplier:.85},boostNews:'기복이 심함 · 이번 경기는 컨디션 난조 (능력치 ×0.85)'}},
-  {id:'불운',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'rain',summary:'훈련 럭키 확률 ×⅓ · 경기 중 깨달음 확률 0.5% → 약 0.17%',effects:{luck:UNLUCKY_MULTIPLIER},excludes:['행운아']},
+  {id:'불운',polarity:'negative',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'rain',summary:'훈련 럭키 확률 ×⅓ · 경기 중 깨달음 확률 0.5% → 약 0.17%',effects:{luck:UNLUCKY_MULTIPLIER},excludes:['행운아']},
   {id:'향수병',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'home',summary:'해외 리그 소속일 때 훈련 성장 ×0.85',effects:{abroadGrowth:.85},excludes:['해외 체질']},
   {id:'큰 경기 울렁증',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'nervous',summary:'컵·대륙대회·국가대표 경기에서 침착성 −8 · 판단력 −4',effects:{bigMatchAttributes:{composure:-8,decisions:-4}},excludes:['빅매치 체질']},
   {id:'다혈질',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'cards',summary:'경기 중 파울·경고 확률 ×1.5',effects:{match:{temper:1.5}}},
   {id:'감독과 불화',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'clipX',summary:'감독 신뢰 상승량 ×0.5',effects:{trustGain:.5},excludes:['성실함']},
   {id:'둔한 발',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'boot',summary:'경기 중 스피드 −5 · 가속도 −4',effects:{matchAttributes:{speed:-5,acceleration:-4}},excludes:['스피드스타']},
-  {id:'조기 노화',polarity:'negative',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'hourglass',summary:'신체 능력 감퇴가 3년 빨리 시작 · 감퇴 속도 ×1.5',effects:{aging:{yearsEarlier:3,rate:1.5}},excludes:['대기만성']},
+  {id:'조기 노화',polarity:'negative',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'hourglass',summary:'노화(능력 감퇴)가 3년 빨리 시작(30세) · 감퇴 속도 ×1.5',effects:{aging:{yearsEarlier:3,rate:1.5}},excludes:['대기만성']},
 ] as const satisfies readonly TraitDef[];
 
 export type TraitId=typeof TRAIT_DEFS[number]['id'];
@@ -160,7 +162,9 @@ export function matchFx(t:TraitInput):MatchFx|undefined{
   return any?fx:undefined;
 }
 
-/** Annual physical decline for a player of this age (0 when not yet declining). */
+/** 조기 노화-style shift of the age model (see aging.ts). */
+export function agingShift(t:TraitInput){const a=defs(t).find(d=>d.effects.aging)?.effects.aging;return {yearsEarlier:a?.yearsEarlier??0,rate:a?.rate??1};}
+/** @deprecated 0.4 flat decline (from 29/30). The game uses aging.ts since 0.5; kept for older imports. */
 export function agingDecline(t:TraitInput,age:number,startAge:number,perYear:number){
   const a=defs(t).find(d=>d.effects.aging)?.effects.aging;
   const start=startAge-(a?.yearsEarlier??0);

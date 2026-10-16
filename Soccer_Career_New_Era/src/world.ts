@@ -1,7 +1,10 @@
 import {attributes,clamp,random,overall,type Attributes,type Position} from './engine';
 import {roleAbility} from './roles';
-import {npcTraits,trainingGrowthMultiplier,agingDecline,lateBloom,abroadGrowthMultiplier} from './traits';
-export type RosterPlayer={id:string,traits?:string[],name:string,pos:Position,age:number,a:Attributes,potential:number,energy:number,form:number,goals:number,appearances:number,years:number};
+import {npcTraits,trainingGrowthMultiplier,lateBloom,abroadGrowthMultiplier,injuryChanceMultiplier,injuryWeeks,seedFrom,restRecoveryMultiplier,trainingFatigueMultiplier} from './traits';
+import {agingLoss,npcGrowthRate} from './aging';
+export type RosterPlayer={id:string,traits?:string[],
+ /** Weeks out injured (0.5). Injured players are left out of lineups until recovered. */
+ injuryWeeks?:number,name:string,pos:Position,age:number,a:Attributes,potential:number,energy:number,form:number,goals:number,appearances:number,years:number};
 export type Coach={name:string,style:'점유'|'역습'|'수비',preference:'유망주'|'현재 실력'|'베테랑',formation:'4-3-3'|'4-4-2'};
 export type Club={id:string,name:string,league:number,budget:number,reputation:number,development:number,coach:Coach,roster:RosterPlayer[]};
 export type Fixture={home:string,away:string,score?:[number,number]};
@@ -21,7 +24,9 @@ export function resetSeason(w:World){w.round=0;w.phase='league';w.opponentId=nul
 export function nextFixture(w:World){return w.phase==='league'?w.fixtures[w.round]?.find(f=>f.home===w.clubId||f.away===w.clubId):undefined;}
 export function nextOpponent(w:World){if(w.phase==='national')return {name:w.knockoutRound===0?'일본 대표팀':'브라질 대표팀',strength:w.knockoutRound===0?68:76};const f=nextFixture(w);const id=f?(f.home===w.clubId?f.away:f.home):w.opponentId;const club=w.clubs.find(c=>c.id===id);return {name:club?.name??'시즌 종료',strength:club?teamStrength(club):45,club};}
 export function selectionScore(a:Attributes,pos:Position,target:Position,age:number,energy:number,form:number,coach:Coach,secondary?:Position){const fit=pos===target?0:secondary===target?-3:(['LB','RB'].includes(pos)&&['LB','RB'].includes(target)||['LW','RW'].includes(pos)&&['LW','RW'].includes(target))?-5:-18;const tactical=coach.style==='점유'?a.passing:coach.style==='역습'?a.speed:a.defending;const preference=coach.preference==='유망주'?clamp(23-age,-5,5)*.45:coach.preference==='베테랑'?clamp(age-24,-5,5)*.4:0;return roleAbility(a,target)+fit+(form-6.5)*3-(100-energy)*.12+(tactical-50)*.035+preference;}
-export function chooseLineup(club:Club,hero?:RosterPlayer&{secondary?:Position}){const pool=[...club.roster,...(hero?[hero]:[])],used=new Set<string>();return lineupSlots(club.coach).map(target=>{const sorted=pool.filter(p=>!used.has(p.id)).sort((a,b)=>selectionScore(b.a,b.pos,target,b.age,b.energy,b.form,club.coach,b.id==='hero'?hero?.secondary:undefined)-selectionScore(a.a,a.pos,target,a.age,a.energy,a.form,club.coach,a.id==='hero'?hero?.secondary:undefined));const p=sorted[0];used.add(p.id);return {...p,slotPos:target};});}
+/** Injured players sit out; if a club ever had fewer than 11 fit players, the least injured would fill in. */
+function available(roster:RosterPlayer[]){const fit=roster.filter(p=>!p.injuryWeeks);return fit.length>=11?fit:[...fit,...roster.filter(p=>p.injuryWeeks).sort((a,b)=>a.injuryWeeks!-b.injuryWeeks!).slice(0,11-fit.length)];}
+export function chooseLineup(club:Club,hero?:RosterPlayer&{secondary?:Position}){const pool=[...available(club.roster),...(hero?[hero]:[])],used=new Set<string>();return lineupSlots(club.coach).map(target=>{const sorted=pool.filter(p=>!used.has(p.id)).sort((a,b)=>selectionScore(b.a,b.pos,target,b.age,b.energy,b.form,club.coach,b.id==='hero'?hero?.secondary:undefined)-selectionScore(a.a,a.pos,target,a.age,a.energy,a.form,club.coach,a.id==='hero'?hero?.secondary:undefined));const p=sorted[0];used.add(p.id);return {...p,slotPos:target};});}
 export function teamStrength(c:Club){return chooseLineup(c).reduce((n,p)=>n+roleAbility(p.a,p.slotPos)*(0.75+p.energy/400),0)/11;}
 function poisson(w:World,mean:number){let product=1,n=0;do{n++;product*=random(w);}while(product>Math.exp(-mean)&&n<12);return n-1;}
 export function lightweight(w:World,home:Club,away:Club):[number,number]{const diff=teamStrength(home)-teamStrength(away);return [poisson(w,clamp(1.35+diff*.045,.25,3.5)),poisson(w,clamp(1.2-diff*.045,.25,3.5))];}
@@ -35,10 +40,39 @@ export function marketValue(ability:number,age:number,form:number,years:number){
 export function generateOffers(w:World,p:{a:Attributes,pos:Position,age:number,energy:number},form:number){const ability=overall(p.a),current=clubOf(w),fee=current.league===0||w.contract.years<=0?0:marketValue(ability,p.age,form,w.contract.years);w.offers=[];if(p.age<19&&current.league===0)return;for(const club of w.clubs.filter(c=>c.league>0)){const peers=club.roster.filter(r=>r.pos===p.pos);const strength=peers.reduce((n,r)=>n+roleAbility(r.a,r.pos),0)/Math.max(1,peers.length);const fit=ability-strength;const youth=p.age<22&&ability>=strength-17;const isCurrent=club.id===w.clubId;const guaranteed=w.interestedClubIds?.includes(club.id);if(!isCurrent&&!guaranteed&&!youth&&fit< -9)continue;const salary=roleSalary(ability,club.league);if(club.budget<fee+salary*2&&!isCurrent&&!guaranteed)continue;w.offers.push({clubId:club.id,salary,years:2,fee:isCurrent?0:guaranteed?Math.max(0,Math.min(fee,club.budget-salary*2)):fee,issuedDay:w.currentDay??0,expiresDay:(w.currentDay??0)+14,role:fit>=0?'주전 경쟁':fit>=-7?'로테이션':'유망주 / 벤치',negotiated:false,status:'open'});}w.offers.sort((a,b)=>w.clubs.find(c=>c.id===a.clubId)!.league-w.clubs.find(c=>c.id===b.clubId)!.league);}
 export function negotiate(w:World,clubId:string){expireOffers(w);const o=w.offers.find(o=>o.clubId===clubId);if(!o||o.status!=='open'||o.negotiated)throw Error('협상 가능한 제안이 없습니다.');o.negotiated=true;const club=w.clubs.find(c=>c.id===clubId)!;if(random(w)<.68&&club.budget>=o.fee+o.salary*2.3){o.salary=Math.round(o.salary*1.15);w.news.unshift(`${club.name} · 연봉 15% 인상 수락`);}else{w.news.unshift(`${club.name} · 인상 거절, 기존 조건 유지`);}}
 export function acceptOffer(w:World,clubId:string,name:string){expireOffers(w);if(w.phase!=='offseason')throw Error('이적은 시즌 종료 후 가능합니다.');const o=w.offers.find(o=>o.clubId===clubId&&o.status==='open');if(!o)throw Error('유효한 제안이 아닙니다.');const buyer=w.clubs.find(c=>c.id===clubId)!,seller=clubOf(w);if(buyer.budget<o.fee+o.salary*o.years)throw Error('구단 예산이 부족합니다.');if(buyer.id!==seller.id){buyer.budget-=o.fee;seller.budget+=o.fee;w.ledger.push({year:w.year,from:buyer.id,to:seller.id,fee:o.fee,player:name});}w.clubId=buyer.id;w.contract={salary:o.salary,years:o.years};w.offers=[];w.news.unshift(`${name} · ${buyer.name}와 ${o.years}년 계약`);}
-export function advanceWorldYear(w:World){w.year++;for(const c of w.clubs){c.budget+= [0,2500,6000,16000][c.league];for(let i=0;i<c.roster.length;i++){const p=c.roster[i];if(p.id==='career-rival')continue;p.age++;p.years=Math.max(0,p.years-1);if(p.age>=(c.league===0?19:36)){c.roster[i]=rookie(w,c.league,p.pos,c.league===0?16:18);continue;}const bloom=lateBloom(p.traits),late=bloom&&p.age>=bloom.startAge&&p.age<bloom.startAge+6?.6:0;for(const k of Object.keys(p.a) as (keyof Attributes)[])p.a[k]=clamp(p.a[k]+(p.age<25?Math.max(0,p.potential-p.a[k])*.025*trainingGrowthMultiplier(p.traits)*abroadGrowthMultiplier(p.traits,c.league):-agingDecline(p.traits,p.age,30,.8))+late,20,96);p.energy=100;p.goals=0;p.appearances=0;}
+export function advanceWorldYear(w:World){w.year++;for(const c of w.clubs){c.budget+= [0,2500,6000,16000][c.league];for(let i=0;i<c.roster.length;i++){const p=c.roster[i];if(p.id==='career-rival')continue;p.age++;p.years=Math.max(0,p.years-1);if(p.age>=(c.league===0?19:36)){c.roster[i]=rookie(w,c.league,p.pos,c.league===0?16:18);continue;}const bloom=lateBloom(p.traits),late=bloom&&p.age>=bloom.startAge&&p.age<bloom.startAge+6?.6:0,rate=npcGrowthRate(p.age)*trainingGrowthMultiplier(p.traits)*abroadGrowthMultiplier(p.traits,c.league);
+// Same age model as the user and the rival (aging.ts): growth slows towards 32, decline from 33.
+for(const k of Object.keys(p.a) as (keyof Attributes)[])p.a[k]=clamp(p.a[k]+Math.max(0,p.potential-p.a[k])*rate-agingLoss(p.traits,p.age,k)+late,20,96);p.energy=100;p.goals=0;p.appearances=0;}
 if(random(w)<.22){c.coach.preference=(['유망주','현재 실력','베테랑'] as const)[Math.floor(random(w)*3)];c.coach.style=(['점유','역습','수비'] as const)[Math.floor(random(w)*3)];c.coach.name='신임 '+c.coach.name.replace('신임 ','');w.news.unshift(`${c.name} · 감독 교체`);}}
 // AI clubs buy for a weak position with an explicit balanced transfer ledger.
 for(const buyer of w.clubs.filter(c=>c.league>0)){const weakest=buyer.roster.filter(p=>p.id!=='career-rival').sort((a,b)=>roleAbility(a.a,a.pos)-roleAbility(b.a,b.pos))[0];const seller=w.clubs.filter(c=>c.league===buyer.league&&c.id!==buyer.id)[Math.floor(random(w)*5)];const candidate=seller.roster.filter(p=>p.id!=='career-rival'&&p.pos===weakest.pos&&roleAbility(p.a,p.pos)>roleAbility(weakest.a,weakest.pos)+2).sort((a,b)=>roleAbility(b.a,b.pos)-roleAbility(a.a,a.pos))[0];if(!candidate)continue;const fee=marketValue(roleAbility(candidate.a,candidate.pos),candidate.age,candidate.form,candidate.years);if(buyer.budget<fee+2000)continue;buyer.budget-=fee;seller.budget+=fee;buyer.roster=buyer.roster.filter(p=>p.id!==weakest.id);seller.roster=seller.roster.filter(p=>p.id!==candidate.id);buyer.roster.push(candidate);seller.roster.push(weakest);candidate.years=3;w.ledger.push({year:w.year,from:buyer.id,to:seller.id,fee,player:candidate.name});}w.news=w.news.slice(0,60);w.ledger=w.ledger.slice(-200);resetSeason(w);}
 
 export const roleSalary=(ability:number,league:number)=>Math.round(Math.max(30,ability-35)*[0,2,4,8][league]);
 export function expireOffers(w:World){w.offers=w.offers.filter(o=>(o.expiresDay??Infinity)>(w.currentDay??0));}
+
+// ── NPC injuries (0.5) ─────────────────────────────────────────────
+// NPCs use the same trait effects as the user (유리몸/잔부상 raise the chance, 회복력/강철몸 lower it,
+// injuryWeeks adds/removes weeks). Rolls use a hashed RNG per player and week, so they never shift
+// the world's or the career's random streams.
+/** Weekly chance of an NPC picking up a knock in training or a match not simulated in detail. */
+export const NPC_WEEKLY_INJURY=.008;
+/** Match injury rule shared by the user, the rival and NPCs: tired (< 35 energy) players risk 4 %. */
+export const MATCH_INJURY_ENERGY=35,MATCH_INJURY_CHANCE=.04;
+const roll=(seed:number,key:string)=>random({seed:seedFrom(seed>>>0,key)});
+/** One week for every NPC: injured players recover a week, fit players may get injured. The rival is handled by the career. */
+export function npcInjuryWeek(w:World,week:number,skip:string[]=[]){
+  for(const c of w.clubs)for(const p of c.roster){
+    if(skip.includes(p.id))continue;
+    if(p.injuryWeeks){p.injuryWeeks--;if(!p.injuryWeeks)delete p.injuryWeeks;continue;}
+    const r=roll(w.seed^week,'inj:'+p.id);
+    if(r<NPC_WEEKLY_INJURY*injuryChanceMultiplier(p.traits))p.injuryWeeks=injuryWeeks(p.traits,1+Math.floor(roll(w.seed^week,'len:'+p.id)*3));
+  }
+}
+/** Injury after a detailed match, from end-of-match energy (same rule for everyone). Returns weeks or 0. */
+export function matchInjury(seed:number,key:string,energy:number,traits:readonly string[]|undefined,baseWeeks=2){
+  if(energy>=MATCH_INJURY_ENERGY)return 0;
+  return roll(seed,'match-inj:'+key)<MATCH_INJURY_CHANCE*injuryChanceMultiplier(traits)?injuryWeeks(traits,baseWeeks):0;
+}
+/** Between-match energy recovery for NPCs, scaled by fatigue/recovery traits (강철 체력, 유리몸, 강철몸 …). */
+export const npcRecovery=(p:RosterPlayer,base=8)=>base*restRecoveryMultiplier(p.traits)/trainingFatigueMultiplier(p.traits);
+export function clearInjuries(w:World,skip:string[]=[]){for(const c of w.clubs)for(const p of c.roster)if(!skip.includes(p.id))delete p.injuryWeeks;}
