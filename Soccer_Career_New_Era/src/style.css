@@ -1830,3 +1830,19 @@ td strong {
 }
 .sidebar nav{gap:2px}.sidebar nav button{padding-top:11px;padding-bottom:11px}.sidebar-season{padding-top:18px;padding-bottom:14px}.intensity{flex-wrap:wrap}.stat-row>b{font-size:11px;text-align:center;padding:0 10px}@media(max-height:820px){.sidebar-season{display:none}.sidebar{overflow-y:auto}.nav-label{margin-top:26px}.version{margin-top:auto}}
 .week-planner{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}.plan-day{padding:18px 12px;display:flex;flex-direction:column;gap:16px}.plan-day>span{font-weight:700}.plan-day small{display:block;font-size:12px;color:var(--muted);margin-top:6px}.plan-day select{width:100%;min-width:0;padding:10px 5px;border:1px solid #ccd4ca;border-radius:8px;background:white;color:#173d30;font-size:13px}.plan-day.match-day{background:#e0ebdd}.growth-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.growth-grid>div{display:flex;align-items:center;gap:10px;font-size:12px;border-bottom:1px solid #e5e8df;padding:8px 0}.growth-grid span{flex:1}.growth-grid small{color:#667366}.growth-grid .positive{color:#28714b;font-weight:700}.headline-news{max-width:650px}.career-hero h2{font-size:32px}.career-hero .headline-news p{font-size:15px;margin:8px 0}.growth-notes details{margin-top:15px;font-size:13px}.growth-notes summary{cursor:pointer}@media(max-width:1000px){.week-planner{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:600px){.week-planner{grid-template-columns:repeat(2,minmax(0,1fr))}.career-hero h2{font-size:26px}.growth-grid{grid-template-columns:1fr}}
+
+/* ── 0.4 traits ─────────────────────────────────────────── */
+.trait-list{display:inline-flex;flex-wrap:wrap;gap:6px;vertical-align:middle}
+.trait-list.detail{display:flex;flex-direction:column;align-items:flex-start}
+.trait-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 9px 4px 7px;border-radius:999px;border:1px solid;font-size:12px;font-weight:700;line-height:1.2;white-space:nowrap}
+.trait-badge.positive{color:#14633b;background:#e2f3e7;border-color:#9fd3b0}
+.trait-badge.negative{color:#a3241c;background:#fce6e3;border-color:#efada6}
+.trait-badge.unknown{color:#4d5a52;background:#eef0ec;border-color:#cfd5cc}
+.trait-badge.rare{box-shadow:0 0 0 2px rgba(203,117,75,.35)}
+.trait-badge .trait-sign{font-weight:800;margin-left:1px}
+.trait-badge small{font-weight:500;margin-left:4px;white-space:normal;color:inherit;opacity:.9}
+.trait-list.detail .trait-badge{border-radius:10px;white-space:normal}
+.trait-empty{font-size:12px;color:var(--muted)}
+.career-hero .trait-line{margin:12px 0 18px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.table-wrap td .trait-list{margin-left:6px}
+.career-hero .trait-empty{color:#cfe0c8}.career-hero .trait-line>span:first-child{font-weight:700}

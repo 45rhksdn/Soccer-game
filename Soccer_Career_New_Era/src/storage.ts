@@ -1,4 +1,15 @@
-import {ensureDevelopment,TRAITS} from './development';
+import {ensureDevelopment} from './development';
+import {isKnownTrait,npcTraits,normalizeTraits,TRAIT_LIMIT} from './traits';
+export const SAVE_VERSION=5;
+const traitsValid=(t:unknown)=>Array.isArray(t)&&t.length<=TRAIT_LIMIT&&t.every(x=>typeof x==='string');
+/** v4 → v5: single trait → trait list (the existing trait is kept), NPC traits added deterministically. */
+function migrateV4(c:Career){
+  const d=c.development as unknown as {trait?:unknown,traits?:unknown,rival:{trait?:unknown,traits?:unknown}};
+  d.traits=Array.isArray(d.traits)?normalizeTraits(d.traits):isKnownTrait(d.trait)?[d.trait]:[];delete d.trait;
+  d.rival.traits=Array.isArray(d.rival.traits)?normalizeTraits(d.rival.traits):isKnownTrait(d.rival.trait)?[d.rival.trait]:[];delete d.rival.trait;
+  for(const club of c.world.clubs)for(const p of club.roster)p.traits??=p.id===c.development.rival.id?[...(d.rival.traits as string[])]:npcTraits(c.world.seed,p.id);
+  (c as {version:number}).version=5;
+}
 import {newWorld} from "./world";
 import type { Career } from "./career";
 const DB = "soccer-career-new-era";
@@ -38,8 +49,9 @@ export function validate(raw: unknown): Career {
     c.feed ??= [];
   }
   if ((c as {version:number}).version === 2) {(c as {version:number}).version=3;c.world=newWorld(c.seed,c.school,c.week);c.world.year=2026+Math.floor(c.week/52);}
-  if((c as {version:number}).version===3){c.version=4;ensureDevelopment(c);}
-  if (c.version !== 4) throw Error("지원되지 않는 저장 버전입니다.");
+  if((c as {version:number}).version===3){(c as {version:number}).version=4;ensureDevelopment(c);}
+  if((c as {version:number}).version===4&&c.development&&c.world?.clubs)migrateV4(c);
+  if (c.version !== SAVE_VERSION) throw Error("지원되지 않는 저장 버전입니다.");
   if (
     !c.player ||
     typeof c.player.name !== "string" ||
@@ -78,7 +90,7 @@ export function validate(raw: unknown): Career {
   )
     throw Error("경기 데이터가 손상되었습니다.");
   if(!c.world || !Array.isArray(c.world.clubs) || c.world.clubs.length!==24 || !c.world.clubs.some(club=>club.id===c.world.clubId) || !Array.isArray(c.world.fixtures) || !Array.isArray(c.world.tables))throw Error('축구 세계 저장이 손상되었습니다.');
-  if(!c.development || c.development.plan.length!==7 || !(TRAITS as readonly string[]).includes(c.development.trait) || !(TRAITS as readonly string[]).includes(c.development.rival?.trait) ||!Number.isFinite(c.development.wallet) || c.development.wallet<0 || !c.development.rival?.player)throw Error('육성 저장 데이터가 손상되었습니다.');
+  if(!c.development || c.development.plan.length!==7 || !traitsValid(c.development.traits) || !traitsValid(c.development.rival?.traits) || c.world.clubs.some(club=>club.roster.some(p=>p.traits!==undefined&&!traitsValid(p.traits))) || (c.schoolRef!==undefined&&(typeof c.schoolRef?.id!=='string'||typeof c.schoolRef?.name!=='string')) ||!Number.isFinite(c.development.wallet) || c.development.wallet<0 || !c.development.rival?.player)throw Error('육성 저장 데이터가 손상되었습니다.');
   return c;
 }
 export function encode(c: Career) {

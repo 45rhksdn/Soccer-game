@@ -29,11 +29,13 @@ it('only a readable save is rotated into the backup slot', ()=>{
   expect(isRestorableSave(good.replace('수정검증','손상검증'))).toBe(false);
 });
 
-it('unknown trait values are rejected for the user and the rival', ()=>{
+it('malformed trait lists are rejected for the user and the rival; unknown future ids are kept', ()=>{
   const c=newCareer(profile,0,79);
-  const userBad=structuredClone(c);(userBad.development as {trait:string}).trait='없는특성';
+  const userBad=structuredClone(c);(userBad.development as {traits:unknown}).traits='천재';
   expect(()=>validate(userBad)).toThrow('육성');
-  const rivalBad=structuredClone(c);(rivalBad.development.rival as {trait:string}).trait='없는특성';
+  const rivalBad=structuredClone(c);(rivalBad.development.rival as {traits:unknown}).traits=['천재','행운아','노력파','유리몸'];
   expect(()=>validate(rivalBad)).toThrow('육성');
+  const future=structuredClone(c);future.development.traits=['미래특성'];
+  expect(validate(future).development.traits).toEqual(['미래특성']);
   expect(()=>validate(c)).not.toThrow();
 });

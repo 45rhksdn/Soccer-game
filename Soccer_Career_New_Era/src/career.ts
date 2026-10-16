@@ -2,6 +2,7 @@ import {ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledM
 import {ROLE_KEYS,roleAbility} from './roles';
 import {newWorld,clubOf,nextOpponent,chooseLineup,selectionScore,advanceLeague,startPostseason,advanceCup,sortedTable,LEAGUES,advanceWorldYear,type World,type RosterPlayer} from './world';
 import {createMatch,userPerformance} from './engine';
+import {injuryChanceMultiplier,injuryWeeks,agingDecline} from './traits';
 import {
   ATTRS,
   attributes,
@@ -65,8 +66,13 @@ export type Result = {
   year?:number;
   competition?:string;
 };
+/** Optional link to a real school from the catalogue; `school` (0–2) stays the world slot for compatibility. */
+export type SchoolRef={id:string,name:string,region:string};
+/** Values chosen in scouting that override the generated starting profile. */
+export type CareerPreset={a?:Attributes,potential?:number,learning?:number,traits?:string[],schoolRef?:SchoolRef};
 export type Career = {
-  version: 4;
+  version: 5;
+  schoolRef?: SchoolRef;
   development: Development;
   world: World;
   seed: number;
@@ -92,6 +98,7 @@ export function newCareer(
   >,
   school: number,
   seed = 2026,
+  preset: CareerPreset = {},
 ): Career {
   const r = { seed },
     a = attributes(43);
@@ -122,7 +129,7 @@ export function newCareer(
     a.vision += 5;
   }
   const c = {
-    version: 4,
+    version: 5,
     world: newWorld(seed,school),
     seed: r.seed,
     player: {
@@ -145,7 +152,11 @@ export function newCareer(
     ],
     match: null,
   } as unknown as Career;
-  ensureDevelopment(c);return c;
+  if(preset.a){c.player.a={...preset.a};c.growth=[{week:0,overall:roleAbility(c.player.a,p.pos)}];}
+  if(preset.potential!==undefined)c.player.potential=preset.potential;
+  if(preset.learning!==undefined)c.player.learning=preset.learning;
+  if(preset.schoolRef){c.schoolRef={...preset.schoolRef};const club=c.world.clubs.find(x=>x.id===c.world.clubId);if(club)club.name=preset.schoolRef.name;c.feed=[`${preset.schoolRef.name} 축구부 입단 · 등번호 10번의 여정이 시작됩니다.`];}
+  ensureDevelopment(c,{traits:preset.traits});return c;
 }
 export const TRAINING = {
   shooting: {
@@ -274,7 +285,7 @@ export function settle(c: Career) {
     if(w.phase==='offseason')completeSeason(c);
   }
   if(c.player.injuryWeeks)c.player.injuryWeeks--;
-  if(appeared&&p.energy<35&&random(c)<.04){c.player.injuryWeeks=2;c.feed.unshift('경기 후 근육 부상 · 2경기 회복');}
+  if(appeared&&p.energy<35&&random(c)<.04*injuryChanceMultiplier(c.development.traits)){c.player.injuryWeeks=injuryWeeks(c.development.traits,2);c.feed.unshift(`경기 후 근육 부상 · ${c.player.injuryWeeks}경기 회복`);}
 
   c.feed.unshift(
     `경기 종료 · 평점 ${appeared?r.toFixed(1):"출전 없음"} · 감독 신뢰 ${c.player.trust.toFixed(0)}`,
@@ -337,7 +348,7 @@ export function nextSeason(c:Career){
  if(c.player.age>=18&&clubOf(w).league===0)throw Error('졸업 예정입니다. 이적 시장에서 프로 계약을 선택해 주세요.');
  if(clubOf(w).league>0&&w.contract.years===0)throw Error('계약이 만료되었습니다. 재계약 또는 이적을 선택해 주세요.');
  c.player.age++;ageRival(c);if(c.player.age>=36){w.year++;retire(c);return;}
- if(c.player.age>29)for(const k of ['speed','acceleration','stamina'] as Attr[])c.player.a[k]=Math.max(20,c.player.a[k]-.8);
+ const decline=agingDecline(c.development.traits,c.player.age,29,.8);if(decline)for(const k of ['speed','acceleration','stamina'] as Attr[])c.player.a[k]=Math.max(20,c.player.a[k]-decline);
  advanceWorldYear(w);syncRival(c);c.week=Math.max(c.week,Math.round((w.year-2026)*365.25/7));c.day=c.week*7;w.currentDay=c.day;w.currentSeasonStart=c.week;
  c.player.energy=100;c.player.fatigue=0;c.player.injuryWeeks=0;c.trainingCount=0;c.feed.unshift(`${w.year} 새 시즌 · ${teamName(c)} · ${c.player.age}세`);
 }

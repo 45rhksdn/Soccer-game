@@ -1,5 +1,5 @@
 import {WeekPlanner,GrowthNotes,RivalPanel} from './WeeklyPanels';
-import {TRAIT_TEXT} from './development';
+import {TraitList} from './TraitBadges';
 import {WorldPanel} from './WorldPanels';
 import {teamName,competitionName,selection} from './career';
 import {clubOf} from './world';
@@ -623,7 +623,7 @@ export default function App() {
                       </span>
                       <h2>지난주 주요 뉴스</h2>
                       <div className="headline-news">{c.development.news.filter(n=>n.day>=c.day-7).slice(0,4).map((n,i)=><p key={i}>{n.text}</p>)}{!c.development.news.some(n=>n.day>=c.day-7)&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
-                      <p>주요 특성 <b>{c.development.trait}</b> · {TRAIT_TEXT[c.development.trait]}</p>
+                      <div className="trait-line"><span>보유 특성</span><TraitList traits={c.development.traits} empty="특성 없음"/></div>
                       <button className="primary cream" onClick={()=>go("training")}>이번주 일정 진행 <ArrowRight size={18}/></button>
                     </div>
                     <div className="hero-number">
@@ -741,6 +741,7 @@ export default function App() {
                       <p>
                         {p!.style} · {p!.curve}
                       </p>
+                      <TraitList traits={c.development.traits} detail empty="보유 특성 없음" />
                     </div>
                     <div className="ovr">
                       {roleAbility(p!.a,p!.pos).toFixed(1)}

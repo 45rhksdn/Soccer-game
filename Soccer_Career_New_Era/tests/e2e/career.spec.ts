@@ -4,7 +4,7 @@ async function create(page:Page,age='16'){await page.goto('/');await page.getByR
 async function playWeek(page:Page){await page.getByRole('button',{name:'이번주 일정 진행',exact:true}).click();await page.getByRole('button',{name:'7일 일정 확정 · 진행'}).click();await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영 · 남은 일정 진행'}).click();}
 test('weekly plan → live action → growth/rival → reload → remembered plan → slots and file restore',async({page},info)=>{
  test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await create(page);
- await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.getByText(/주요 특성/).first()).toBeVisible();
+ await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.getByText(/보유 특성/).first()).toBeVisible();
  await page.getByRole('button',{name:'이번주 일정 진행',exact:true}).click();await page.getByLabel('월요일 일정').selectOption('passing');await page.getByLabel('일요일 일정').selectOption('vacation');
  await page.screenshot({path:`reports/${info.project.name}-weekly.png`,fullPage:true});
  await page.getByRole('button',{name:'7일 일정 확정 · 진행'}).click();await page.getByRole('button',{name:'12×',exact:true}).click();
