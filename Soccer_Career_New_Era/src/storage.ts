@@ -1,4 +1,4 @@
-import {ensureDevelopment} from './development';
+import {ensureDevelopment,TRAITS} from './development';
 import {newWorld} from "./world";
 import type { Career } from "./career";
 const DB = "soccer-career-new-era";
@@ -78,7 +78,7 @@ export function validate(raw: unknown): Career {
   )
     throw Error("경기 데이터가 손상되었습니다.");
   if(!c.world || !Array.isArray(c.world.clubs) || c.world.clubs.length!==24 || !c.world.clubs.some(club=>club.id===c.world.clubId) || !Array.isArray(c.world.fixtures) || !Array.isArray(c.world.tables))throw Error('축구 세계 저장이 손상되었습니다.');
-  if(!c.development || c.development.plan.length!==7 || !['천재','실전파','행운아'].includes(c.development.trait) || !Number.isFinite(c.development.wallet) || c.development.wallet<0 || !c.development.rival?.player)throw Error('육성 저장 데이터가 손상되었습니다.');
+  if(!c.development || c.development.plan.length!==7 || !(TRAITS as readonly string[]).includes(c.development.trait) || !(TRAITS as readonly string[]).includes(c.development.rival?.trait) ||!Number.isFinite(c.development.wallet) || c.development.wallet<0 || !c.development.rival?.player)throw Error('육성 저장 데이터가 손상되었습니다.');
   return c;
 }
 export function encode(c: Career) {
@@ -100,6 +100,16 @@ export function decode(s: string) {
     throw Error("저장 파일 검증 실패: 파일이 손상되었습니다.");
   return validate(JSON.parse(envelope.payload));
 }
+/** True when a stored slot value can be read back as a valid career. */
+export function isRestorableSave(raw: unknown) {
+  if (typeof raw !== "string") return false;
+  try {
+    decode(raw);
+    return true;
+  } catch {
+    return false;
+  }
+}
 let queue = Promise.resolve();
 export function save(slot: number, c: Career): Promise<void> {
   const data = encode(c);
@@ -108,11 +118,16 @@ export function save(slot: number, c: Career): Promise<void> {
     .then(async () => {
       const d = await db();
       const old = await get("slot" + slot);
+      // Unchanged state: only record the active slot, so the backup keeps the
+      // last *different* save instead of being overwritten by an identical copy.
+      const unchanged = old === data;
+      // Never replace a good backup with an unreadable slot.
+      const rotate = !unchanged && isRestorableSave(old);
       await new Promise<void>((res, rej) => {
         const t = d.transaction("saves", "readwrite");
         const store = t.objectStore("saves");
-        if (old) store.put(old, "backup" + slot);
-        store.put(data, "slot" + slot);
+        if (rotate) store.put(old, "backup" + slot);
+        if (!unchanged) store.put(data, "slot" + slot);
         store.put(slot, "activeSlot");
         t.oncomplete = () => res();
         t.onerror = () => rej(t.error);

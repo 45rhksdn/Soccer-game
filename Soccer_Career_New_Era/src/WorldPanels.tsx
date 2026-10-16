@@ -1,7 +1,7 @@
 import {renewSearch} from './development';
 import {useState} from 'react';
 import {type Career,selection,nextSeason,retire,teamName,competitionName} from './career';
-import {clubOf,LEAGUES,sortedTable,negotiate,acceptOffer,marketValue,selectionScore} from './world';
+import {clubOf,LEAGUES,sortedTable,negotiate,acceptOffer,marketValue} from './world';
 import {roleAbility} from './roles';
 export function WorldPanel({c,tab,update}:{c:Career,tab:string,update:(f:(c:Career)=>void)=>void}){
  const w=c.world,club=clubOf(w),plan=selection(c),p=c.player;

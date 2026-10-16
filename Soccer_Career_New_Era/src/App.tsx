@@ -1,7 +1,7 @@
 import {WeekPlanner,GrowthNotes,RivalPanel} from './WeeklyPanels';
 import {TRAIT_TEXT} from './development';
 import {WorldPanel} from './WorldPanels';
-import {teamName,competitionName,selection,startCareerMatch} from './career';
+import {teamName,competitionName,selection} from './career';
 import {clubOf} from './world';
 import {roleAbility} from './roles';
 import {userPerformance} from './engine';
@@ -22,7 +22,6 @@ import {
   Pause,
   Play,
   Plus,
-  Settings2,
   Shield,
   Target,
   Trophy,
@@ -38,23 +37,18 @@ import {
   actionChance,
   act,
   availableActions,
-  createMatch,
   finishMatch,
-  overall,
   rating,
   step,
   type Position,
 } from "./engine";
 import {
   SCHOOLS,
-  TRAINING,
   dateOf,
   newCareer,
   opponentOf,
   settle,
-  train,
   type Career,
-  type Training,
   type Player,
 } from "./career";
 import * as storage from "./storage";
@@ -143,7 +137,7 @@ export default function App() {
         if (m.decision || m.ended) break;
       }
       setTick((v) => v + 1);
-      if (m.decision || m.ended) persist(live.current!);
+      if (m.decision || m.ended) persist(live.current!, currentSlot.current);
     }, 50);
     return () => clearInterval(interval);
   }, [c?.match, paused, speed]);
@@ -972,6 +966,8 @@ export default function App() {
                         accept=".json"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
+                          // Reset first so picking the same file again still fires onChange.
+                          e.target.value = "";
                           if (
                             file &&
                             c &&
@@ -979,7 +975,6 @@ export default function App() {
                           )
                             return;
                           importSave(file);
-                          e.target.value = "";
                         }}
                       />
                     </label>
@@ -1076,62 +1071,6 @@ function Growth({ values }: { values: number[] }) {
         <strong>현재 {values.at(-1)!.toFixed(1)}</strong>
       </div>
     </div>
-  );
-}
-function TrainingCards({
-  disabled,
-  onTrain,
-}: {
-  disabled: boolean;
-  onTrain: (type: Training, intensity: number) => void;
-}) {
-  const [intensity, setIntensity] = useState(1);
-  return (
-    <>
-      <div className="intensity">
-        <span>
-          <Settings2 size={17} /> 훈련 강도
-        </span>
-        {[
-          [0.7, "가볍게"],
-          [1, "보통"],
-          [1.4, "강하게"],
-        ].map(([v, label]) => (
-          <button
-            key={v}
-            className={intensity === v ? "selected" : ""}
-            onClick={() => setIntensity(Number(v))}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="training-grid">
-        {(Object.keys(TRAINING) as Training[]).map((key, i) => (
-          <section className="card training-card" key={key}>
-            <div className="intro-top">
-              {key === "rest" ? <Activity /> : <Dumbbell />}
-              <span>0{i + 1}</span>
-            </div>
-            <h3>{TRAINING[key].label}</h3>
-            <p>{TRAINING[key].desc}</p>
-            <small>
-              {key === "rest"
-                ? "컨디션 +30 · 피로 -25"
-                : `컨디션 -${(9 * intensity).toFixed(1)} · 능력에 따른 점진적 성장`}
-            </small>
-            <button
-              className="secondary full"
-              disabled={disabled}
-              onClick={() => onTrain(key, intensity)}
-            >
-              {disabled ? "이번 주 훈련 완료 / 경기 진행 중" : "훈련 시작"}
-              <ArrowRight size={16} />
-            </button>
-          </section>
-        ))}
-      </div>
-    </>
   );
 }
 function Create({
