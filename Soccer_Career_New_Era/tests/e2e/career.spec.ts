@@ -7,12 +7,14 @@ async function playWeek(page:Page){await nav(page,'오늘의 일정');
  await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();
  if(await page.getByRole('heading',{name:'시즌을 마쳤습니다.'}).count())return;
  await nav(page,'오늘의 일정');await page.getByRole('button',{name:'오늘 휴식하기'}).click();await nav(page,'커리어 홈');}
+// 럭키 / 깨달음 popups can appear at random (training lucky, insight during a match); close them whenever they block a step.
+test.beforeEach(async({page})=>{await page.addLocatorHandler(page.locator('.growth-popup'),async()=>{await page.locator('.growth-popup').getByRole('button',{name:'확인'}).click();});});
 async function tapDays(page:Page,acts:string[]){for(const a of acts)await page.getByRole('button',{name:`오늘 ${a}`}).click();}
 /** Day index (0 = 월) of the week stored in the active slot, to wait for the autosave before reloading. */
 const savedDay=(page:Page)=>page.evaluate(()=>new Promise<number>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const s=q.result.transaction('saves').objectStore('saves');const a=s.get('activeSlot');a.onsuccess=()=>{const r=s.get('slot'+(a.result??1));r.onsuccess=()=>{q.result.close();try{resolve(JSON.parse(JSON.parse(String(r.result)).payload).development.active?.cursor??0);}catch{resolve(-1);}};};};}));
 test('daily schedule → live action → growth/rival → reload mid-week and mid-match → slots and file restore',async({page},info)=>{
  test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await create(page);
- await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.getByText(/보유 특성/).first()).toBeVisible();
+ await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.locator('.career-hero')).not.toContainText('보유 특성');await expect(page.locator('.today-help')).toContainText('낮은 확률');
  await nav(page,'오늘의 일정');await tapDays(page,['패스훈련','달리기','슈팅훈련','휴식하기','드리블훈련']);
  await page.screenshot({path:`reports/${info.project.name}-daily.png`,fullPage:true});
  await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'12×',exact:true}).click();

@@ -1,10 +1,15 @@
+import {traitNotice} from './traitPresentation';
 import {GrowthNotes,RivalPanel} from './WeeklyPanels';
 import {TraitList} from './TraitBadges';
 import {ScoutPanel} from './ScoutPanel';
 import {PlayerSlots} from './PlayerSlots';
 import {TodayPanel} from './TodayPanel';
-import {playToday,startTodayMatch,type TodayResult} from './development';
+import {playToday,startTodayMatch,LUCKY_NEWS,INSIGHT_NEWS,type TodayResult} from './development';
+import {GrowthPopup,type PopupInfo} from './GrowthPopup';
+import {EquipmentPanel} from './EquipmentPanel';
+import {buyEquipment,equip,unequip,equipmentBonus} from './equipment';
 import {careerFromCandidate,newScoutState,nextList,type ScoutState} from './scouting';
+import {potentialBonus,type Legacy} from './legacy';
 import {WorldPanel} from './WorldPanels';
 import {teamName,competitionName,selection} from './career';
 import {clubOf} from './world';
@@ -77,8 +82,37 @@ export default function App() {
     [targetSlot, setTargetSlot] = useState(1),
     [scout, setScout] = useState<ScoutState | null>(null),
     [scoutSchool, setScoutSchool] = useState<string | null>(null),
-    [today, setToday] = useState<TodayResult | null>(null);
+    [today, setToday] = useState<TodayResult | null>(null),
+    [popup, setPopup] = useState<PopupInfo | null>(null),
+    [legacy, setLegacy] = useState<Legacy | null>(null);
+  // 깨달음 popup: compare the user's insight events of the current match with what was already shown.
+  const insightSeen = useRef({ key: "", count: 0 });
+  useEffect(() => {
+    const key = c?.match ? `${c.seed}:${c.week}` : "",
+      count = c?.match?.insight?.events.length ?? 0;
+    if (key !== insightSeen.current.key) { insightSeen.current = { key, count }; return; }
+    if (count <= insightSeen.current.count) return;
+    insightSeen.current.count = count;
+    setPopup({ kind: "insight", text: INSIGHT_NEWS, resume: !paused && !c!.match!.ended });
+    setPaused(true);
+  });
   const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
+  /** A new id for every newly created player (retirement rewards are granted once per id). */
+  const freshId = () => `p-${Date.now().toString(36)}-${freshSeed().toString(36)}`;
+  useEffect(() => {
+    storage.loadLegacy().then(setLegacy).catch(() => {});
+  }, []);
+  // A retired career is recorded once in the shared progress (idempotent: reloads, restores and switches are safe).
+  useEffect(() => {
+    if (!c || c.world.phase !== "retired" || !c.id) return;
+    storage
+      .claimRetirement(c)
+      .then((r) => {
+        setLegacy(r.legacy);
+        if (r.rewarded) inform(`은퇴 누적 보상 · 새 선수 후보의 잠재력 최대 상한이 +${potentialBonus(r.legacy)}(으)로 올랐습니다.`);
+      })
+      .catch(() => {});
+  }, [c?.id, c?.world.phase]);
   useEffect(() => {
     storage
       .loadScouting()
@@ -274,6 +308,25 @@ export default function App() {
     await openSlot(n);
     storage.slots().then(setSlots);
   }
+  /** Deletes the player of slot n (and its backup) after confirmation; the archive and retirement record stay. */
+  async function deleteSlotPlayer(n: number) {
+    const s = slots.find((x) => x.slot === n), name = s?.summary?.name ?? "손상된 저장";
+    if (!confirm(`슬롯 ${n}의 ${name}을(를) 삭제할까요? 이 슬롯의 선수와 자동 백업이 지워지며 되돌릴 수 없습니다. (교체 전 선수와 은퇴 기록은 유지됩니다)`)) return;
+    try {
+      const active = !!c && n === slot;
+      if (active) { live.current = null; setC(null); setToday(null); }
+      else if (c) await persist(c, slot);
+      await storage.deleteSlot(n);
+      if (active) {
+        const rest = (await storage.slots()).find((x) => x.slot !== n && x.summary);
+        if (rest) await openSlot(rest.slot); else { setCreating(true); setTargetSlot(n); }
+      }
+      inform(`슬롯 ${n}의 ${name}을(를) 삭제했습니다.`);
+    } catch (e) {
+      inform(String(e));
+    }
+    storage.slots().then(setSlots);
+  }
   async function restoreArchive(n: number) {
     if (!confirm(`슬롯 ${n}의 교체 전 선수를 복원할까요? 지금 슬롯 ${n}에 있는 선수는 대신 보관됩니다.`)) return;
     try {
@@ -337,7 +390,7 @@ export default function App() {
         </div>
         <div className="version">
           <span className="dot" /> 오프라인 플레이 지원
-          <small>0.4 · 다중 특성 · 실제 고교 발굴</small>
+          <small>0.5 · 장비 · 은퇴 보상 · 32세 전성기</small>
         </div>
       </aside>
       <div className="workspace">
@@ -362,6 +415,7 @@ export default function App() {
           </div>
         </header>
         <main>
+          {popup && <GrowthPopup info={popup} onClose={() => { if (popup.resume) setPaused(false); setPopup(null); }} />}
           {notice && (
             <div className="toast" role="status">
               {notice}
@@ -385,6 +439,7 @@ export default function App() {
                   {scout ? (
                     <ScoutPanel
                       scout={scout}
+                      potentialBonus={potentialBonus(legacy)}
                       school={scoutSchool}
                       setSchool={setScoutSchool}
                       onReroll={(id) => {
@@ -392,7 +447,7 @@ export default function App() {
                         setScout(n);
                         storage.saveScouting(n).catch((e) => inform(String(e)));
                       }}
-                      onPick={(cand) => beginCareer(careerFromCandidate(cand, scout.seed))}
+                      onPick={(cand) => beginCareer(careerFromCandidate(cand, scout.seed, undefined, freshId()))}
                     />
                   ) : (
                     <div className="note">스카우트 정보를 불러오는 중…</div>
@@ -402,7 +457,7 @@ export default function App() {
               ) : (
                 <Create
                   onCancel={() => setCreating(false)}
-                  onCreate={(player, school) => beginCareer(newCareer(player, school, freshSeed()))}
+                  onCreate={(player, school) => beginCareer(newCareer(player, school, freshSeed(), { id: freshId(), potentialBonus: potentialBonus(legacy) }))}
                 />
               )}
             </>
@@ -571,7 +626,7 @@ export default function App() {
                           {userPerformance(m).stats.assists}
                         </p>
                         <p>패스 {userPerformance(m).stats.completed}/{userPerformance(m).stats.passes} · 전진 패스 {userPerformance(m).stats.progressivePasses ?? 0} · 키패스 {userPerformance(m).stats.keyPasses ?? 0} · 기대 도움 {(userPerformance(m).stats.expectedAssists ?? 0).toFixed(2)}</p>
-                        {(m.traitNotes??(m.traitBoost?['실전파 발동 · 이번 경기 능력치 ×1.3']:[])).map((t)=><p key={t} className="note">{t}</p>)}
+                        {(m.traitNotes??(m.traitBoost?['실전파 발동! 오늘은 몸놀림이 남다릅니다.']:[])).map((t)=><p key={t} className="note">{traitNotice(t)}</p>)}
                         <small className="muted">키패스는 동료의 슈팅으로 연결한 패스입니다. 동료가 놓쳐도 평점에 반영됩니다.</small>
                       </div>
                       <div className="rating">
@@ -730,8 +785,7 @@ export default function App() {
                         {competitionName(c)}
                       </span>
                       <h2>지난주 주요 뉴스</h2>
-                      <div className="headline-news">{c.development.news.filter(n=>n.day>=c.day-7).slice(0,4).map((n,i)=><p key={i}>{n.text}</p>)}{!c.development.news.some(n=>n.day>=c.day-7)&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
-                      <div className="trait-line"><span>보유 특성</span><TraitList traits={c.development.traits} empty="특성 없음"/></div>
+                      <div className="headline-news">{c.development.news.filter(n=>n.day>=c.day-7&&!n.text.startsWith('보유 특성')).slice(0,4).map((n,i)=><p key={i}>{traitNotice(n.text)}</p>)}{!c.development.news.some(n=>n.day>=c.day-7)&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
                     </div>
                     <div className="hero-number">
                       10
@@ -744,7 +798,7 @@ export default function App() {
                   <TodayPanel
                     c={c}
                     last={today}
-                    onTrain={(t) => update((n) => setToday(playToday(n, t)))}
+                    onTrain={(t) => update((n) => { const r = playToday(n, t); setToday(r); if (r.lucky) setPopup({ kind: "lucky", text: LUCKY_NEWS }); })}
                     onMatch={() => { setToday(null); update(startTodayMatch); }}
                   />
                   <div className="metrics">
@@ -841,7 +895,7 @@ export default function App() {
                   <TodayPanel
                     c={c}
                     last={today}
-                    onTrain={(t) => update((n) => setToday(playToday(n, t)))}
+                    onTrain={(t) => update((n) => { const r = playToday(n, t); setToday(r); if (r.lucky) setPopup({ kind: "lucky", text: LUCKY_NEWS }); })}
                     onMatch={() => { setToday(null); update(startTodayMatch); }}
                   />
                   <GrowthNotes c={c} />
@@ -879,15 +933,16 @@ export default function App() {
                         <span className="muted">0 — 100</span>
                       </div>
                       <div className="attributes">
-                        {ATTRS.map((k) => (
+                        {ATTRS.map((k) => { const bonus = equipmentBonus(c.development.equipment)[k] ?? 0; return (
                           <div className="attribute" key={k}>
                             <label>{LABELS[k]}</label>
                             <div className="bar">
                               <i style={{ width: p!.a[k] + "%" }} />
+                              {bonus > 0 && <i className="gear" style={{ left: p!.a[k] + "%", width: Math.min(bonus, 100 - p!.a[k]) + "%" }} />}
                             </div>
-                            <b>{p!.a[k].toFixed(1)}</b>
+                            <b title={bonus ? `기본 ${p!.a[k].toFixed(1)} + 장비 ${bonus}` : undefined}>{p!.a[k].toFixed(1)}{bonus > 0 && <small className="gear-bonus"> +{bonus}</small>}</b>
                           </div>
-                        ))}
+                        ); })}
                       </div>
                     </section>
                     <section className="card">
@@ -917,6 +972,12 @@ export default function App() {
                       </div>
                     </section>
                   </div>
+                  <EquipmentPanel
+                    c={c}
+                    onBuy={(id) => update((n) => buyEquipment(n, id))}
+                    onEquip={(id) => update((n) => equip(n, id))}
+                    onUnequip={(slot) => update((n) => unequip(n, slot))}
+                  />
                 </>
               )}
               {tab === "records" && c && (
@@ -1020,6 +1081,8 @@ export default function App() {
                   onNew={startNew}
                   onRestore={(n) => openSlot(n, true)}
                   onRestoreArchive={restoreArchive}
+                  legacy={legacy}
+                  onDelete={deleteSlotPlayer}
                 />
               )}
               {tab === "saves" && (
@@ -1137,7 +1200,7 @@ export default function App() {
               SOCCER CAREER <b>NEW ERA</b>
             </span>
             <span>한 명의 선수. 무한한 가능성.</span>
-            <small>CAREER BETA · 0.4</small>
+            <small>CAREER BETA · 0.5</small>
           </footer>
         </main>
       </div>

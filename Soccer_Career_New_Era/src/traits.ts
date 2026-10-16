@@ -16,8 +16,11 @@ export type TraitEffects={
   injuryChance?:number;
   /** Weeks added to (negative: removed from) each injury, minimum 1 week. */
   injuryWeeks?:number;
-  /** Chance per training day / match action of 럭키 and 깨달음 (default 3 %). */
-  luckChance?:number;
+  /**
+   * Luck multiplier shared by training 럭키 and match 깨달음 (행운아 ×3, 불운 ×⅓).
+   * The base chances live in TRAINING_LUCK_BY_AGE and INSIGHT_CHANCE.
+   */
+  luck?:number;
   /** Chance on match entry of boosting every attribute for that match only. */
   matchBoost?:{chance:number,multiplier:number};
   /** Flat attribute changes applied to the match copy only (never permanent). */
@@ -60,48 +63,56 @@ export type TraitDef={
 };
 
 export const TRAIT_LIMIT=3;
+// Rarity (0.5 review): traits that are much stronger or much harsher than the rest appear at half
+// the common chance — 천재, 강철몸, 실전파(×1.3 all), 행운아(×3 luck) and 유리몸, 불운, 조기 노화.
 // 0.4.0 started at 6 % / 3 % with 11 traits. With 34 traits that would leave only ~13 % of players
 // trait-free, so the per-trait chance was halved (ratio kept). Change these two numbers to retune.
 export const RARITY_CHANCE:Record<TraitRarity,number>={common:.03,rare:.015};
+/** @deprecated 0.4 combined 럭키·깨달음 chance; kept only for older imports. */
 export const BASE_LUCK=.03;
+/** 깨달음: chance per match action attempt (행운아 ×3 = 1.5 %, 불운 ×⅓ ≈ 0.17 %). */
+export const INSIGHT_CHANCE=.005;
+/** 훈련 럭키: chance per training day by age (≤20 · 21–24 · 25–32 · 33+). */
+export const TRAINING_LUCK_BY_AGE:readonly {maxAge:number,chance:number}[]=[{maxAge:20,chance:.045},{maxAge:24,chance:.035},{maxAge:32,chance:.025},{maxAge:Infinity,chance:.005}];
+export const LUCKY_MULTIPLIER=3,UNLUCKY_MULTIPLIER=1/3;
 
 export const TRAIT_DEFS=[
   // ── positive ──────────────────────────────────────────────
-  {id:'천재',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'star',summary:'모든 훈련 성장 ×1.7',effects:{trainingGrowth:1.7}},
-  {id:'실전파',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'flame',summary:'경기 진입 시 30% 확률 · 해당 경기 능력치 ×1.3',effects:{matchBoost:{chance:.3,multiplier:1.3},boostNews:'실전파 발동! 이번 경기 동안 모든 능력치 ×1.3 (최대 100)'}},
-  {id:'행운아',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'clover',summary:'럭키·깨달음 확률 3% → 9%',effects:{luckChance:.09},excludes:['불운']},
-  {id:'노력파',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'dumbbell',summary:'모든 훈련 성장 ×1.2',effects:{trainingGrowth:1.2},excludes:['게으름']},
-  {id:'강철 체력',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'battery',summary:'훈련 피로 증가량 ×0.7',effects:{trainingFatigue:.7},excludes:['유리몸']},
-  {id:'회복력',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'cross',summary:'부상 확률 ×0.5 · 부상 기간 1주 단축(최소 1주)',effects:{injuryChance:.5,injuryWeeks:-1},excludes:['유리몸']},
-  {id:'강심장',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'heart',summary:'경기 중 침착성 +6 · 판단력 +4',effects:{matchAttributes:{composure:6,decisions:4}},excludes:['새가슴']},
-  {id:'강철몸',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'shield',summary:'훈련 피로 누적 −40% · 부상 확률 −60% · 휴식 시 피로 회복 +50%',effects:{trainingFatigue:.6,injuryChance:.4,restRecovery:1.5},excludes:['유리몸','강철 체력','회복력']},
-  {id:'플레이메이커',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'pass',summary:'내 패스를 받은 동료의 다음 슛·패스·돌파 성공 확률 +10% (중첩 불가)',effects:{match:{playmaker:.1}}},
-  {id:'분위기 메이커',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'spark',summary:'내 골·도움 후 10분간 팀 전체 체력 소모 −50% · 실점하면 종료',effects:{match:{momentum:{seconds:600,drain:.5}}}},
-  {id:'집념',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'fist',summary:'공을 잃고 60초 안에 직접 되찾으면 체력 +6 · 평점 가산(회당 +0.15, 최대 +0.45)',effects:{match:{grit:{energy:6,window:60}}}},
-  {id:'라이벌 의식',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'versus',summary:'지난주 라이벌 평점이 더 높으면 이번 주 첫 훈련 성장 ×2',effects:{rivalryDrive:2}},
-  {id:'독학파',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'book',summary:'같은 훈련을 주 3회 하면 그 분야 추가 성장(훈련 1회분, 주 1회)',effects:{focusBonus:{times:3,extra:1}}},
-  {id:'대기만성',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'sprout',summary:'28세 전 훈련 성장의 30%를 경험으로 적립 → 28세부터 매주 포지션 핵심 능력으로 전환',effects:{lateBloom:{bankRate:.3,startAge:28,weeklyRate:.08,minWeekly:.3,cap:60}},excludes:['조기 노화']},
-  {id:'철벽',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'wall',summary:'경기 중 수비 +6 · 위치선정 +4',effects:{matchAttributes:{defending:6,positioning:4}}},
-  {id:'스피드스타',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'bolt',summary:'경기 중 스피드 +5 · 가속도 +5',effects:{matchAttributes:{speed:5,acceleration:5}},excludes:['둔한 발']},
-  {id:'골 냄새',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'goal',summary:'경기 중 슈팅 +5 · 침착성 +3',effects:{matchAttributes:{shooting:5,composure:3}}},
-  {id:'슈퍼 조커',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'swap',summary:'교체로 투입되면 그 경기 능력치 ×1.15',effects:{superSub:1.15}},
-  {id:'빅매치 체질',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'trophy',summary:'컵·대륙대회·국가대표 경기에서 모든 능력치 +5',effects:{bigMatchAttributes:Object.fromEntries(ATTRS.map(k=>[k,5])) as Partial<Record<Attr,number>>},excludes:['큰 경기 울렁증']},
-  {id:'성실함',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'clipCheck',summary:'감독 신뢰 상승량 ×1.5',effects:{trustGain:1.5},excludes:['감독과 불화']},
-  {id:'해외 체질',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'globe',summary:'해외 리그 소속일 때 훈련 성장 ×1.15',effects:{abroadGrowth:1.15},excludes:['향수병']},
+  {id:'천재',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'star',summary:'훈련에서 남다른 배움의 속도를 보입니다.',effects:{trainingGrowth:1.7}},
+  {id:'실전파',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'flame',summary:'실전에서 뜻밖의 힘을 발휘하기도 합니다.',effects:{matchBoost:{chance:.3,multiplier:1.3},boostNews:'실전파 발동! 오늘은 몸놀림이 남다릅니다.'}},
+  {id:'행운아',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'clover',summary:'훈련과 경기에서 특별한 성장의 순간을 더 자주 만납니다.',effects:{luck:LUCKY_MULTIPLIER},excludes:['불운']},
+  {id:'노력파',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'dumbbell',summary:'꾸준한 훈련에서 더 많은 것을 얻습니다.',effects:{trainingGrowth:1.2},excludes:['게으름']},
+  {id:'강철 체력',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'battery',summary:'고된 훈련에도 쉽게 지치지 않습니다.',effects:{trainingFatigue:.7},excludes:['유리몸']},
+  {id:'회복력',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'cross',summary:'부상에 강하고 회복이 빠릅니다.',effects:{injuryChance:.5,injuryWeeks:-1},excludes:['유리몸']},
+  {id:'강심장',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'heart',summary:'경기에서 침착하게 상황을 읽습니다.',effects:{matchAttributes:{composure:6,decisions:4}},excludes:['새가슴']},
+  {id:'강철몸',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'shield',summary:'피로를 잘 견디고 부상에 매우 강하며 휴식도 잘 활용합니다.',effects:{trainingFatigue:.6,injuryChance:.4,restRecovery:1.5},excludes:['유리몸','강철 체력','회복력']},
+  {id:'플레이메이커',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'pass',summary:'내 패스를 받은 동료가 다음 플레이를 더 잘 해냅니다.',effects:{match:{playmaker:.1}}},
+  {id:'분위기 메이커',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'spark',summary:'득점에 기여하면 팀에 활기를 불어넣습니다.',effects:{match:{momentum:{seconds:600,drain:.5}}}},
+  {id:'집념',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'fist',summary:'빼앗긴 공을 곧바로 되찾으면 다시 힘을 냅니다.',effects:{match:{grit:{energy:6,window:60}}}},
+  {id:'라이벌 의식',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'versus',summary:'라이벌의 활약을 보면 훈련에 더 몰입합니다.',effects:{rivalryDrive:2}},
+  {id:'독학파',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'book',summary:'같은 훈련을 꾸준히 반복하면 추가 성장을 얻습니다.',effects:{focusBonus:{times:3,extra:1}}},
+  {id:'대기만성',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'sprout',summary:'젊은 날 쌓은 경험이 늦게 꽃을 피웁니다.',effects:{lateBloom:{bankRate:.3,startAge:28,weeklyRate:.08,minWeekly:.3,cap:60}},excludes:['조기 노화']},
+  {id:'철벽',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'wall',summary:'위험한 공간을 읽고 수비를 단단하게 만듭니다.',effects:{matchAttributes:{defending:6,positioning:4}}},
+  {id:'스피드스타',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'bolt',summary:'경기에서 폭발적인 속도를 보여 줍니다.',effects:{matchAttributes:{speed:5,acceleration:5}},excludes:['둔한 발']},
+  {id:'골 냄새',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'goal',summary:'득점 기회를 본능적으로 알아봅니다.',effects:{matchAttributes:{shooting:5,composure:3}}},
+  {id:'슈퍼 조커',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'swap',summary:'교체 투입될 때 특별한 힘을 발휘합니다.',effects:{superSub:1.15}},
+  {id:'빅매치 체질',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'trophy',summary:'중요한 경기에서 더욱 빛납니다.',effects:{bigMatchAttributes:Object.fromEntries(ATTRS.map(k=>[k,5])) as Partial<Record<Attr,number>>},excludes:['큰 경기 울렁증']},
+  {id:'성실함',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'clipCheck',summary:'감독의 신뢰를 더 빠르게 얻습니다.',effects:{trustGain:1.5},excludes:['감독과 불화']},
+  {id:'해외 체질',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'globe',summary:'해외 환경에 잘 적응하고 더 잘 배웁니다.',effects:{abroadGrowth:1.15},excludes:['향수병']},
   // ── negative ──────────────────────────────────────────────
-  {id:'유리몸',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'crack',summary:'훈련 피로 증가량 ×1.5 · 부상 확률 ×1.5',effects:{trainingFatigue:1.5,injuryChance:1.5},excludes:['강철 체력','회복력','잔부상']},
-  {id:'게으름',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'zzz',summary:'모든 훈련 성장 ×0.8',effects:{trainingGrowth:.8},excludes:['노력파']},
-  {id:'새가슴',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'shake',summary:'경기 중 침착성 −6 · 판단력 −4',effects:{matchAttributes:{composure:-6,decisions:-4}},excludes:['강심장']},
-  {id:'잔부상',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'bandage',summary:'부상 확률 ×1.3 · 부상 기간 +1주',effects:{injuryChance:1.3,injuryWeeks:1},excludes:['회복력','강철몸','유리몸']},
-  {id:'저질 체력',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'batteryLow',summary:'훈련 피로 증가량 ×1.3',effects:{trainingFatigue:1.3},excludes:['강철 체력','강철몸']},
-  {id:'기복이 심함',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'wave',summary:'경기 진입 시 30% 확률 · 해당 경기 능력치 ×0.85',effects:{matchBoost:{chance:.3,multiplier:.85},boostNews:'기복이 심함 · 이번 경기는 컨디션 난조 (능력치 ×0.85)'}},
-  {id:'불운',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'rain',summary:'럭키·깨달음 확률 3% → 1%',effects:{luckChance:.01},excludes:['행운아']},
-  {id:'향수병',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'home',summary:'해외 리그 소속일 때 훈련 성장 ×0.85',effects:{abroadGrowth:.85},excludes:['해외 체질']},
-  {id:'큰 경기 울렁증',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'nervous',summary:'컵·대륙대회·국가대표 경기에서 침착성 −8 · 판단력 −4',effects:{bigMatchAttributes:{composure:-8,decisions:-4}},excludes:['빅매치 체질']},
-  {id:'다혈질',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'cards',summary:'경기 중 파울·경고 확률 ×1.5',effects:{match:{temper:1.5}}},
-  {id:'감독과 불화',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'clipX',summary:'감독 신뢰 상승량 ×0.5',effects:{trustGain:.5},excludes:['성실함']},
-  {id:'둔한 발',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'boot',summary:'경기 중 스피드 −5 · 가속도 −4',effects:{matchAttributes:{speed:-5,acceleration:-4}},excludes:['스피드스타']},
-  {id:'조기 노화',polarity:'negative',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'hourglass',summary:'신체 능력 감퇴가 3년 빨리 시작 · 감퇴 속도 ×1.5',effects:{aging:{yearsEarlier:3,rate:1.5}},excludes:['대기만성']},
+  {id:'유리몸',polarity:'negative',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'crack',summary:'훈련에서 쉽게 지치고 부상에도 취약합니다.',effects:{trainingFatigue:1.5,injuryChance:1.5},excludes:['강철 체력','회복력','잔부상']},
+  {id:'게으름',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'zzz',summary:'훈련에서 배움을 얻는 속도가 느립니다.',effects:{trainingGrowth:.8},excludes:['노력파']},
+  {id:'새가슴',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'shake',summary:'경기 중 긴장하면 판단이 흐려집니다.',effects:{matchAttributes:{composure:-6,decisions:-4}},excludes:['강심장']},
+  {id:'잔부상',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'bandage',summary:'작은 부상이 잦고 회복도 더딥니다.',effects:{injuryChance:1.3,injuryWeeks:1},excludes:['회복력','강철몸','유리몸']},
+  {id:'저질 체력',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'batteryLow',summary:'훈련하면 쉽게 피로해집니다.',effects:{trainingFatigue:1.3},excludes:['강철 체력','강철몸']},
+  {id:'기복이 심함',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'wave',summary:'때때로 실전에서 제 기량을 발휘하지 못합니다.',effects:{matchBoost:{chance:.3,multiplier:.85},boostNews:'기복이 심함 · 오늘은 몸이 무겁습니다.'}},
+  {id:'불운',polarity:'negative',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'rain',summary:'특별한 성장의 순간을 만나기 어렵습니다.',effects:{luck:UNLUCKY_MULTIPLIER},excludes:['행운아']},
+  {id:'향수병',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'home',summary:'해외에서는 적응과 성장이 더딥니다.',effects:{abroadGrowth:.85},excludes:['해외 체질']},
+  {id:'큰 경기 울렁증',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'nervous',summary:'중요한 경기에서 부담을 크게 느낍니다.',effects:{bigMatchAttributes:{composure:-8,decisions:-4}},excludes:['빅매치 체질']},
+  {id:'다혈질',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'cards',summary:'흥분하면 거친 플레이가 나옵니다.',effects:{match:{temper:1.5}}},
+  {id:'감독과 불화',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'clipX',summary:'감독의 신뢰를 얻기 어렵습니다.',effects:{trustGain:.5},excludes:['성실함']},
+  {id:'둔한 발',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'boot',summary:'경기에서 발걸음이 무겁습니다.',effects:{matchAttributes:{speed:-5,acceleration:-4}},excludes:['스피드스타']},
+  {id:'조기 노화',polarity:'negative',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'hourglass',summary:'다른 선수보다 이르게 몸의 변화를 느낍니다.',effects:{aging:{yearsEarlier:3,rate:1.5}},excludes:['대기만성']},
 ] as const satisfies readonly TraitDef[];
 
 export type TraitId=typeof TRAIT_DEFS[number]['id'];
@@ -121,8 +132,19 @@ const product=(t:TraitInput,key:'trainingGrowth'|'trainingFatigue'|'injuryChance
 export const trainingGrowthMultiplier=(t:TraitInput)=>product(t,'trainingGrowth');
 export const trainingFatigueMultiplier=(t:TraitInput)=>product(t,'trainingFatigue');
 export const injuryChanceMultiplier=(t:TraitInput)=>product(t,'injuryChance');
-/** Best positive luck wins; otherwise the worst negative luck applies; otherwise the base 3 %. */
-export const luckChance=(t:TraitInput)=>{const v=defs(t).map(d=>d.effects.luckChance).filter((x):x is number=>x!==undefined);const up=v.filter(x=>x>BASE_LUCK),down=v.filter(x=>x<BASE_LUCK);return up.length?Math.max(...up):down.length?Math.min(...down):BASE_LUCK;};
+/**
+ * Luck multiplier: the best positive multiplier wins; otherwise the worst negative one applies; otherwise 1.
+ * (행운아 and 불운 exclude each other, so in practice only one of them is ever present.)
+ */
+export const luckMultiplier=(t:TraitInput)=>{const v=defs(t).map(d=>d.effects.luck).filter((x):x is number=>x!==undefined);const up=v.filter(x=>x>1),down=v.filter(x=>x<1);return up.length?Math.max(...up):down.length?Math.min(...down):1;};
+/** 깨달음 chance per match action attempt. */
+export const insightChance=(t:TraitInput)=>INSIGHT_CHANCE*luckMultiplier(t);
+/** Base 훈련 럭키 chance for an age (before traits). */
+export const trainingLuckBase=(age:number)=>TRAINING_LUCK_BY_AGE.find(x=>age<=x.maxAge)!.chance;
+/** 훈련 럭키 chance per training day for this age and traits. */
+export const trainingLuckChance=(t:TraitInput,age:number)=>trainingLuckBase(age)*luckMultiplier(t);
+/** @deprecated 0.4 combined chance (3 % base, 행운아 9 %, 불운 1 %). Use insightChance / trainingLuckChance. */
+export const luckChance=(t:TraitInput)=>BASE_LUCK*luckMultiplier(t);
 export const injuryWeeks=(t:TraitInput,base:number)=>Math.max(1,base+defs(t).reduce((n,d)=>n+(d.effects.injuryWeeks??0),0));
 export const hasTrait=(t:TraitInput,id:TraitId)=>list(t).includes(id);
 export const restRecoveryMultiplier=(t:TraitInput)=>product(t,'restRecovery');
@@ -140,7 +162,9 @@ export function matchFx(t:TraitInput):MatchFx|undefined{
   return any?fx:undefined;
 }
 
-/** Annual physical decline for a player of this age (0 when not yet declining). */
+/** 조기 노화-style shift of the age model (see aging.ts). */
+export function agingShift(t:TraitInput){const a=defs(t).find(d=>d.effects.aging)?.effects.aging;return {yearsEarlier:a?.yearsEarlier??0,rate:a?.rate??1};}
+/** @deprecated 0.4 flat decline (from 29/30). The game uses aging.ts since 0.5; kept for older imports. */
 export function agingDecline(t:TraitInput,age:number,startAge:number,perYear:number){
   const a=defs(t).find(d=>d.effects.aging)?.effects.aging;
   const start=startAge-(a?.yearsEarlier??0);

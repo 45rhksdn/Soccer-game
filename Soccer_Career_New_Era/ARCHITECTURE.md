@@ -1,4 +1,4 @@
-# Architecture — 0.4.0
+# Architecture — 0.5.0
 
 React + TypeScript + Vite, Canvas 2D, IndexedDB. 앱의 플레이에는 서버나 외부 AI API가 필요 없다. 원작 코드/리소스를 복제하지 않았다.
 
@@ -59,3 +59,11 @@ World.currentDay와 Offer.issuedDay/expiresDay가 만료 기준이다. 관심 ID
 `schools.ts`는 실제 학교 카탈로그(불변 id·시·도·출처), `scouting.ts`는 `seedFrom(스카우트 시드, 학교#목록)`으로 후보를 만든다. 후보 선택은 `newCareer(..., preset)`으로 능력치·잠재력·특성·`schoolRef`를 넘긴다. `school`(0~2)은 가상 리그 구조의 슬롯으로 유지되어 기존 저장·월드 생성과 호환된다.
 
 저장은 v5. `validate()`가 v1→v2→v3→v4→v5를 차례로 적용한다. 슬롯 외에 `archive{n}`(교체 전 선수)과 `scouting`을 같은 store에 둔다. `save()`는 내용이 같으면 쓰지 않고, 읽을 수 있는 이전 슬롯만 `backup{n}`으로 옮긴다.
+
+## 0.5 규칙·장비·은퇴 보상
+- `aging.ts`가 나이 모델을 소유한다: `growthAgeFactor`(career `grow()` 기본값), `experienceAgeFactor`(settle의 경기 경험 성장), `applyAging`/`agingLoss`(주인공·라이벌 연 1회, NPC는 `advanceWorldYear`), `npcGrowthRate`. 계수 변경은 이 파일만 고치면 된다.
+- 확률: `insightChance`(경기 엔진 `Insight.chance`), `trainingLuckChance(traits, age)`(applyDaily). 엔진 `insightAttempt`는 `Insight.base`가 있으면 기본 능력치+누적 깨달음으로 100 한도를 판단한다(경기 사본 능력치는 장비·특성 포함).
+- `equipment.ts`: `player.a`는 항상 기본 능력치. 경기 진입 지점(`selection` 영웅 능력치, `createMatch`, `benchEntry`, `configureTrait`의 특성 적용 기준)만 `matchAttributesOf(c)`를 쓴다. 장비 변경은 경기 중 금지.
+- `legacy.ts` + `storage.claimRetirement`: 은퇴한 커리어를 `legacy` 키에 id 기준으로 한 번 기록(읽기·쓰기 단일 readwrite 트랜잭션). App은 은퇴 상태 커리어를 볼 때마다 호출(멱등). `potentialBonus(legacy)`를 `generateCandidates(..., bonus)`와 `newCareer(..., {potentialBonus})`에 넘긴다 — 같은 난수에서 상한 쪽만 넓어져 다른 필드는 그대로.
+- NPC 부상(`world.ts`): `npcInjuryWeek`(finishWeek에서 주 1회), `matchInjury`(상세 경기 후, NPC·라이벌), `available()`로 라인업 제외. 모두 `seedFrom` 해시 난수라 월드·커리어 RNG를 소비하지 않는다.
+- 저장 v6: `migrateV5`가 `Career.id`를 생성 시 고정값으로 만든다. `deleteSlot(n)`은 `slotN`·`backupN`만 지운다.

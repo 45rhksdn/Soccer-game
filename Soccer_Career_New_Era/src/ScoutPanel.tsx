@@ -22,13 +22,13 @@ export function RegionMap({value,onChange}:{value:Region|null,onChange:(r:Region
 
 function Potential({c}:{c:Candidate}){return <span>{c.potentialRange[0]}–{c.potentialRange[1]}</span>;}
 
-export function ScoutPanel({scout,onReroll,onPick,school,setSchool}:{scout:ScoutState,onReroll:(schoolId:string)=>void,onPick:(c:Candidate)=>void,school:string|null,setSchool:(id:string|null)=>void}){
+export function ScoutPanel({scout,onReroll,onPick,school,setSchool,potentialBonus=0}:{scout:ScoutState,potentialBonus?:number,onReroll:(schoolId:string)=>void,onPick:(c:Candidate)=>void,school:string|null,setSchool:(id:string|null)=>void}){
   const [region,setRegion]=useState<Region|null>(()=>school?schoolById(school)?.region??null:null);
   const [query,setQuery]=useState('');
   const results=useMemo(()=>searchSchools(query,region??undefined),[query,region]);
   const selected=school?schoolById(school):undefined;
   const list=selected?listNumber(scout,selected.id):0;
-  const candidates=useMemo(()=>selected?generateCandidates(scout.seed,selected.id,list):[],[scout.seed,selected?.id,list]);
+  const candidates=useMemo(()=>selected?generateCandidates(scout.seed,selected.id,list,undefined,potentialBonus):[],[scout.seed,selected?.id,list,potentialBonus]);
   const best=(k:keyof Candidate['a'])=>Math.max(...candidates.map(c=>c.a[k]));
   return <div className="scout">
     <section className="card scout-pick">
@@ -57,11 +57,12 @@ export function ScoutPanel({scout,onReroll,onPick,school,setSchool}:{scout:Scout
 function SchoolCandidates({school,list,candidates,best,onReroll,onPick}:{school:School,list:number,candidates:Candidate[],best:(k:keyof Candidate['a'])=>number,onReroll:()=>void,onPick:(c:Candidate)=>void}){
   return <>
     <section className="card">
-      <div className="section-title"><h3>2. {school.name} 후보 선수</h3><span className="muted">후보 목록 #{list+1}</span></div>
+      <div className="section-title"><h3>2. {school.name} 후보 선수 <span className="tag fictional">가상 선수</span></h3><span className="muted">후보 목록 #{list+1}</span></div>
+      <p className="note fictional-note">학교는 실제 축구부 운영 학교이고, 아래 후보는 모두 게임이 만든 <strong>가상 인물</strong>입니다. 이름·신체·능력치는 실존 선수와 관계없습니다.</p>
       <p className="muted scout-source">축구부 확인: {school.sources.map((k,i)=><span key={k}>{i?' · ':''}<a href={SCHOOL_SOURCES[k].url} target="_blank" rel="noreferrer">{SCHOOL_SOURCES[k].title}</a> ({SCHOOL_SOURCES[k].published})</span>)} · 확인일 {school.verifiedAt}</p>
       <div className="candidate-grid">
         {candidates.map(c=><article className="candidate" key={c.id} aria-label={`후보 ${c.name}`}>
-          <div className="candidate-top"><span className="tag">{c.pos} / {c.secondary}</span><strong className="candidate-ovr">{candidateOverall(c).toFixed(1)}<small>OVR</small></strong></div>
+          <div className="candidate-top"><span className="tag">{c.pos} / {c.secondary}</span><span className="tag fictional" title="게임이 만든 가상 선수">가상</span><strong className="candidate-ovr">{candidateOverall(c).toFixed(1)}<small>OVR</small></strong></div>
           <h4>{c.name}</h4>
           <p className="muted">{c.age}세 · {c.height}cm / {c.weight}kg · {c.foot}발<br/>{c.style} · {c.curve}</p>
           <dl className="candidate-facts"><div><dt>잠재력 추정</dt><dd><Potential c={c}/></dd></div><div><dt>학습 효율</dt><dd>{Math.round(c.learning*100)}%</dd></div></dl>

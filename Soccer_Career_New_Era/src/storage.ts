@@ -1,7 +1,9 @@
 import {ensureDevelopment} from './development';
 import {isKnownTrait,npcTraits,normalizeTraits,TRAIT_LIMIT} from './traits';
 import {validScoutState,type ScoutState} from './scouting';
-export const SAVE_VERSION=5;
+import {validEquipment} from './equipment';
+import {emptyLegacy,recordRetirement,validLegacy,type Legacy} from './legacy';
+export const SAVE_VERSION=6;
 const traitsValid=(t:unknown)=>Array.isArray(t)&&t.length<=TRAIT_LIMIT&&t.every(x=>typeof x==='string');
 /** v4 → v5: single trait → trait list (the existing trait is kept), NPC traits added deterministically. */
 function migrateV4(c:Career){
@@ -10,6 +12,17 @@ function migrateV4(c:Career){
   d.rival.traits=Array.isArray(d.rival.traits)?normalizeTraits(d.rival.traits):isKnownTrait(d.rival.trait)?[d.rival.trait]:[];delete d.rival.trait;
   for(const club of c.world.clubs)for(const p of club.roster)p.traits??=p.id===c.development.rival.id?[...(d.rival.traits as string[])]:npcTraits(c.world.seed,p.id);
   (c as {version:number}).version=5;
+}
+/**
+ * v5 → v6 (0.5): a stable player id for the account-wide retirement record. It is derived from
+ * data that never changes for a player, so every backup/archive copy of the same old save gets
+ * the same id and can never be rewarded twice. Equipment and NPC injuries are optional fields.
+ */
+function migrateV5(c:Career){
+  // Only values fixed at creation (RNG states such as c.seed change while playing, so they are not used).
+  const p=c.player,r=c.development?.rival;
+  c.id??=`legacy-${checksum([p.name,p.pos,p.secondary,p.foot,p.height,p.weight,p.style,p.curve,p.learning,c.school,c.schoolRef?.id??'',r?.player?.name??'',r?.school??'',c.growth?.[0]?.overall??''].join('|'))}`;
+  (c as {version:number}).version=6;
 }
 import {newWorld} from "./world";
 import type { Career } from "./career";
@@ -52,6 +65,7 @@ export function validate(raw: unknown): Career {
   if ((c as {version:number}).version === 2) {(c as {version:number}).version=3;c.world=newWorld(c.seed,c.school,c.week);c.world.year=2026+Math.floor(c.week/52);}
   if((c as {version:number}).version===3){(c as {version:number}).version=4;ensureDevelopment(c);}
   if((c as {version:number}).version===4&&c.development&&c.world?.clubs)migrateV4(c);
+  if((c as {version:number}).version===5)migrateV5(c);
   if (c.version !== SAVE_VERSION) throw Error("지원되지 않는 저장 버전입니다.");
   if (
     !c.player ||
@@ -91,7 +105,7 @@ export function validate(raw: unknown): Career {
   )
     throw Error("경기 데이터가 손상되었습니다.");
   if(!c.world || !Array.isArray(c.world.clubs) || c.world.clubs.length!==24 || !c.world.clubs.some(club=>club.id===c.world.clubId) || !Array.isArray(c.world.fixtures) || !Array.isArray(c.world.tables))throw Error('축구 세계 저장이 손상되었습니다.');
-  if(!c.development || c.development.plan.length!==7 || !traitsValid(c.development.traits) || !traitsValid(c.development.rival?.traits) || [c.development.experienceBank,c.development.rival?.experienceBank].some(v=>v!==undefined&&!(Number.isFinite(v)&&v>=0)) || c.world.clubs.some(club=>club.roster.some(p=>p.traits!==undefined&&!traitsValid(p.traits))) || (c.schoolRef!==undefined&&(typeof c.schoolRef?.id!=='string'||typeof c.schoolRef?.name!=='string')) ||!Number.isFinite(c.development.wallet) || c.development.wallet<0 || !c.development.rival?.player)throw Error('육성 저장 데이터가 손상되었습니다.');
+  if(!c.development || c.development.plan.length!==7 || !traitsValid(c.development.traits) || !traitsValid(c.development.rival?.traits) || [c.development.experienceBank,c.development.rival?.experienceBank].some(v=>v!==undefined&&!(Number.isFinite(v)&&v>=0)) || c.world.clubs.some(club=>club.roster.some(p=>p.traits!==undefined&&!traitsValid(p.traits))) || !validEquipment(c.development.equipment) || (c.id!==undefined&&(typeof c.id!=='string'||!c.id||c.id.length>80)) || (c.schoolRef!==undefined&&(typeof c.schoolRef?.id!=='string'||typeof c.schoolRef?.name!=='string')) ||!Number.isFinite(c.development.wallet) || c.development.wallet<0 || !c.development.rival?.player)throw Error('육성 저장 데이터가 손상되었습니다.');
   return c;
 }
 export function encode(c: Career) {
@@ -246,6 +260,60 @@ export async function swapArchive(slot: number): Promise<void> {
         store.put(archived, "slot" + slot);
         if (isRestorableSave(current)) store.put(current, "archive" + slot); else store.delete("archive" + slot);
         store.put(slot, "activeSlot");
+        t.oncomplete = () => res();
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      });
+    });
+  queue = task;
+  return task;
+}
+
+/** Account-wide progress (retirement record) shared by all slots; never stored inside a career. */
+export async function loadLegacy(): Promise<Legacy> {
+  const v = await get("legacy");
+  return validLegacy(v) ? v : emptyLegacy();
+}
+/**
+ * Records a retired career in the shared progress, at most once per career id. Read and write
+ * happen in one IndexedDB transaction, so two slots/tabs claiming at once cannot both be rewarded.
+ */
+export function claimRetirement(c: Career): Promise<{ legacy: Legacy; rewarded: boolean }> {
+  const task = queue
+    .catch(() => {})
+    .then(async () => {
+      const d = await db();
+      return new Promise<{ legacy: Legacy; rewarded: boolean }>((res, rej) => {
+        const t = d.transaction("saves", "readwrite"), store = t.objectStore("saves");
+        let out = { legacy: emptyLegacy(), rewarded: false };
+        const r = store.get("legacy");
+        r.onsuccess = () => {
+          out = recordRetirement(validLegacy(r.result) ? r.result : emptyLegacy(), c);
+          if (out.rewarded) store.put(out.legacy, "legacy");
+        };
+        t.oncomplete = () => res(out);
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      });
+    });
+  queue = task.then(() => {});
+  return task;
+}
+/**
+ * Deletes the player in slot n (and that slot's automatic backup). The archived "교체 전 선수"
+ * is a different player and is kept; the shared retirement record is never touched.
+ */
+export async function deleteSlot(slot: number, opts: { archive?: boolean } = {}): Promise<void> {
+  if (![1, 2, 3].includes(slot)) throw Error("잘못된 슬롯입니다.");
+  const task = queue
+    .catch(() => {})
+    .then(async () => {
+      const d = await db();
+      await new Promise<void>((res, rej) => {
+        const t = d.transaction("saves", "readwrite"), store = t.objectStore("saves");
+        store.delete("slot" + slot);
+        store.delete("backup" + slot);
+        if (opts.archive) store.delete("archive" + slot);
         t.oncomplete = () => res();
         t.onerror = () => rej(t.error);
         t.onabort = () => rej(t.error);

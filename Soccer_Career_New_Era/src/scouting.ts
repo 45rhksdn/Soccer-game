@@ -37,7 +37,12 @@ export function validScoutState(v:unknown):v is ScoutState{
 
 const pick=<T,>(r:{seed:number},xs:readonly T[])=>xs[Math.floor(random(r)*xs.length)];
 
-export function generateCandidates(scoutSeed:number,schoolId:string,list:number,count=CANDIDATES_PER_LIST):Candidate[]{
+/**
+ * `potentialBonus` (retirement reward, legacy.ts) widens only the top of the potential range:
+ * the same random draw maps to the same minimum, so no other candidate field changes.
+ */
+export function generateCandidates(scoutSeed:number,schoolId:string,list:number,count=CANDIDATES_PER_LIST,potentialBonus=0):Candidate[]{
+  const bonus=Math.max(0,potentialBonus);
   const r={seed:seedFrom(scoutSeed,`school:${schoolId}#${list}`)};
   const out:Candidate[]=[];
   for(let i=0;i<count;i++){
@@ -58,7 +63,7 @@ export function generateCandidates(scoutSeed:number,schoolId:string,list:number,
     if(style==='피지컬'){a.strength+=6;a.stamina+=4;}
     if(style==='플레이메이커'){a.passing+=5;a.vision+=5;}
     for(const k of ATTRS)a[k]=Math.round(clamp(a[k],20,85)*10)/10;
-    const potential=Math.round(clamp(74+random(r)*14+talent*.5,70,92)*10)/10;
+    const potential=Math.round(clamp(74+random(r)*(14+bonus)+talent*.5,70,92+bonus)*10)/10;
     const learning=Math.round((.85+random(r)*.3)*100)/100;
     const spread=3+Math.floor(random(r)*3),shift=Math.floor(random(r)*(spread+1));
     const potentialRange:[number,number]=[Math.floor(potential)-shift,Math.floor(potential)-shift+spread+1];
@@ -73,12 +78,12 @@ export const candidateOverall=(c:Candidate)=>roleAbility(c.a,c.pos);
 export const worldSlotFor=(schoolId:string)=>seedFrom(0,'slot:'+schoolId)%3;
 
 /** Starts a career with the chosen fictional candidate at the chosen real school. */
-export function careerFromCandidate(c:Candidate,scoutSeed:number,school:School=schoolById(c.schoolId)!):Career{
+export function careerFromCandidate(c:Candidate,scoutSeed:number,school:School=schoolById(c.schoolId)!,id?:string):Career{
   if(!school)throw Error('학교 정보를 찾을 수 없습니다.');
   return newCareer(
     {name:c.name,age:c.age,pos:c.pos,secondary:c.secondary,foot:c.foot,height:c.height,weight:c.weight,style:c.style,curve:c.curve},
     worldSlotFor(school.id),
     seedFrom(scoutSeed,'career:'+c.id),
-    {a:c.a,potential:c.potential,learning:c.learning,traits:c.traits,schoolRef:{id:school.id,name:school.name,region:school.region}},
+    {a:c.a,potential:c.potential,learning:c.learning,traits:c.traits,schoolRef:{id:school.id,name:school.name,region:school.region},id},
   );
 }

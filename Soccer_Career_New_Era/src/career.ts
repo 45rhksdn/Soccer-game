@@ -1,8 +1,10 @@
 import {ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledMatch,announceOffers,ageRival,news,syncRival,finishWeek,type Development} from './development';
 import {ROLE_KEYS,roleAbility} from './roles';
-import {newWorld,clubOf,nextOpponent,chooseLineup,selectionScore,advanceLeague,startPostseason,advanceCup,sortedTable,LEAGUES,advanceWorldYear,type World,type RosterPlayer} from './world';
+import {matchInjury,npcRecovery,clearInjuries,newWorld,clubOf,nextOpponent,chooseLineup,selectionScore,advanceLeague,startPostseason,advanceCup,sortedTable,LEAGUES,advanceWorldYear,type World,type RosterPlayer} from './world';
 import {createMatch,userPerformance} from './engine';
-import {injuryChanceMultiplier,injuryWeeks,agingDecline,matchFx,trustGainMultiplier} from './traits';
+import {injuryChanceMultiplier,injuryWeeks,matchFx,trustGainMultiplier,seedFrom} from './traits';
+import {matchAttributesOf} from './equipment';
+import {growthAgeFactor,experienceAgeFactor,applyAging,EXPERIENCE_KEYS} from './aging';
 import {
   ATTRS,
   attributes,
@@ -69,9 +71,15 @@ export type Result = {
 /** Optional link to a real school from the catalogue; `school` (0–2) stays the world slot for compatibility. */
 export type SchoolRef={id:string,name:string,region:string};
 /** Values chosen in scouting that override the generated starting profile. */
-export type CareerPreset={a?:Attributes,potential?:number,learning?:number,traits?:string[],schoolRef?:SchoolRef};
+export type CareerPreset={a?:Attributes,potential?:number,learning?:number,traits?:string[],schoolRef?:SchoolRef,
+ /** Unique player id (retirement rewards are granted once per id). Defaults to a value derived from the seed. */
+ id?:string,
+ /** Account-wide max-potential increase from retirements (legacy.ts); only raises the top of the random range. */
+ potentialBonus?:number};
 export type Career = {
-  version: 5;
+  version: 6;
+  /** Stable player id (0.5): same across backups/archives of this player, different for every new player. */
+  id?: string;
   schoolRef?: SchoolRef;
   development: Development;
   world: World;
@@ -129,13 +137,14 @@ export function newCareer(
     a.vision += 5;
   }
   const c = {
-    version: 5,
+    version: 6,
+    id: preset.id ?? `p-${seedFrom(seed >>> 0, `${p.name}|${p.pos}|${school}`).toString(36)}`,
     world: newWorld(seed,school),
     seed: r.seed,
     player: {
       ...p,
       a,
-      potential: 76 + random(r) * 13,
+      potential: 76 + random(r) * (13 + Math.max(0, preset.potentialBonus ?? 0)),
       learning: 0.85 + random(r) * 0.3,
       energy: 100,
       fatigue: 0,
@@ -158,6 +167,8 @@ export function newCareer(
   if(preset.schoolRef){c.schoolRef={...preset.schoolRef};const club=c.world.clubs.find(x=>x.id===c.world.clubId);if(club)club.name=preset.schoolRef.name;c.feed=[`${preset.schoolRef.name} 축구부 입단 · 등번호 10번의 여정이 시작됩니다.`];}
   ensureDevelopment(c,{traits:preset.traits});return c;
 }
+/** Match-experience growth per full match (game-reading attributes, see aging.ts). */
+export const MATCH_EXPERIENCE = 0.08;
 export const TRAINING = {
   shooting: {
     label: "피니시 훈련",
@@ -189,10 +200,13 @@ export const TRAINING = {
 export type Training = keyof typeof TRAINING;
 /** Coach-trust change after a match: trait multipliers scale gains only, never losses. */
 export const trustChange = (traits: readonly string[], delta: number) => (delta > 0 ? delta * trustGainMultiplier(traits) : delta);
-export function grow(p: Player, keys: readonly string[], amount: number) {
+/**
+ * Permanent growth towards the potential cap. `ageFactor` defaults to the age model of the
+ * player's growth curve (aging.ts); match experience passes its own factor.
+ */
+export function grow(p: Player, keys: readonly string[], amount: number, ageFactor = growthAgeFactor(p.curve, p.age)) {
   let total = 0;
-  const curve =
-    p.curve === "조기 성장형" ? (p.age < 20 ? 1.2 : p.age < 25 ? .8 : .5) : p.curve === "대기만성형" ? (p.age < 20 ? .85 : p.age < 28 ? 1.2 : .7) : (p.age < 25 ? 1 : .7);
+  const curve = ageFactor;
   for (const key of keys) {
     const k = key as Attr;
     const gain =
@@ -244,15 +258,18 @@ export function settle(c: Career) {
   if (!m?.ended) throw Error("경기가 아직 진행 중입니다.");
   if (c.history.some((r) => r.id === c.week))
     throw Error("이미 반영된 경기입니다.");
-  ensureDevelopment(c);applyInsights(c,m);
+  ensureDevelopment(c);const insight=applyInsights(c,m);
   const rivalResult=playRival(c,m);
   const p = userPerformance(m),
     r = rating(p),
     keys: Attr[] = ROLE_KEYS[c.player.pos];
   const appeared=p.stats.minutes>0;
-  const gain = appeared ? grow(c.player, keys, (0.2 + (r - 5) * 0.06)*Math.min(1,p.stats.minutes/75)) : 0;
+  const share = Math.min(1, p.stats.minutes / 75);
+  // Match growth (role attributes, by form) plus match experience (game reading), which keeps working up to the peak.
+  const gain = appeared ? grow(c.player, keys, (0.2 + (r - 5) * 0.06) * share) + grow(c.player, EXPERIENCE_KEYS, MATCH_EXPERIENCE * share, experienceAgeFactor(c.player.age)) : 0;
   c.player.trust = clamp(c.player.trust + trustChange(c.development.traits, appeared ? (r - 6) * 2 : 0), 0, 100);
-  c.player.potential = Math.min(94, c.player.potential + (appeared&&r >= 7 ? 0.015 : 0));
+  // Good matches nudge the potential up to 94; a higher potential (scouting reward) is never reduced.
+  if (appeared && r >= 7 && c.player.potential < 94) c.player.potential = Math.min(94, c.player.potential + 0.015);
   c.player.energy = appeared?clamp(p.energy + 30, 20, 100):Math.min(100,c.player.energy+20);
   c.player.fatigue = Math.max(0, c.player.fatigue - 15);
   c.history.unshift({
@@ -272,7 +289,9 @@ export function settle(c: Career) {
   if(c.world && m.competition){
     for(const [i,fp] of m.players.entries()){
       const id=m.rosterIds?.[i];const rp=c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===id);
-      if(rp){rp.energy=fp.energy;rp.form=rating(fp);rp.goals+=fp.stats.goals;rp.appearances++;}
+      if(rp){rp.energy=fp.energy;rp.form=rating(fp);rp.goals+=fp.stats.goals;rp.appearances++;
+        // NPCs follow the same match-injury rule as the user (the rival is handled in playRival).
+        if(rp.id!==c.development.rival.id&&fp.stats.minutes>0){const weeks=matchInjury(c.seed^c.week,rp.id,fp.energy,rp.traits);if(weeks)rp.injuryWeeks=weeks;}}
     }
     for(const replaced of m.replacedPlayers??[]){const rp=c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===replaced.rosterId);if(rp){rp.energy=replaced.player.energy;rp.form=rating(replaced.player);rp.goals+=replaced.player.stats.goals;rp.appearances++;}}
 
@@ -283,7 +302,7 @@ export function settle(c: Career) {
       if(m.score[0]===m.score[1])c.feed.unshift(`무승부 · 승부차기 ${won?'승리':'패배'} (간소화 판정)`);
       advanceCup(w,won,roleAbility(c.player.a,c.player.pos),c.player.age);
     }
-    for(const club of w.clubs)for(const rp of club.roster)rp.energy=Math.min(100,rp.energy+8);
+    for(const club of w.clubs)for(const rp of club.roster)rp.energy=Math.min(100,rp.energy+npcRecovery(rp));
     if(w.phase==='offseason')completeSeason(c);
   }
   if(c.player.injuryWeeks)c.player.injuryWeeks--;
@@ -292,17 +311,19 @@ export function settle(c: Career) {
   c.feed.unshift(
     `경기 종료 · 평점 ${appeared?r.toFixed(1):"출전 없음"} · 감독 신뢰 ${c.player.trust.toFixed(0)}`,
   );
-  c.match = null;afterScheduledMatch(c);
+  c.match = null;afterScheduledMatch(c,insight);
 }
 
 export function selection(c:Career){
  const club=clubOf(c.world),p=c.player;
  const recent=c.history.filter(r=>r.stats.minutes>0).slice(0,5);
- const hero:RosterPlayer&{secondary:Position}={id:'hero',name:p.name,pos:p.pos,secondary:p.secondary,age:p.age,a:p.a,potential:p.potential,energy:p.energy,form:recent.length?recent.reduce((n,r)=>n+r.rating,0)/recent.length:6.5,goals:0,appearances:0,years:0};
+ // Selection and the match use match-day attributes (base + equipment).
+ const gear=matchAttributesOf(c);
+ const hero:RosterPlayer&{secondary:Position}={id:'hero',name:p.name,pos:p.pos,secondary:p.secondary,age:p.age,a:gear,potential:p.potential,energy:p.energy,form:recent.length?recent.reduce((n,r)=>n+r.rating,0)/recent.length:6.5,goals:0,appearances:0,years:0};
  const lineup=chooseLineup(club,p.injuryWeeks?undefined:hero),index=lineup.findIndex(x=>x.id==='hero');
  const targetIndex=Math.max(0,lineup.findIndex(x=>x.slotPos===p.pos));
  const competitor=lineup[targetIndex];
- const yourScore=selectionScore(p.a,p.pos,p.pos,p.age,p.energy,hero.form,club.coach,p.secondary);
+ const yourScore=selectionScore(gear,p.pos,p.pos,p.age,p.energy,hero.form,club.coach,p.secondary);
  const rivalScore=selectionScore(competitor.a,competitor.pos,p.pos,competitor.age,competitor.energy,competitor.form,club.coach);
  return {lineup,hero,index,targetIndex,yourScore,rivalScore,role:p.injuryWeeks?'부상 결장':index>=0?'선발':yourScore>=rivalScore-16?'교체 대기':'명단 제외'};
 }
@@ -311,7 +332,7 @@ export function startCareerMatch(c:Career){
  if(c.match)throw Error('이미 진행 중인 경기입니다.');
  if(['offseason','retired'].includes(c.world.phase))throw Error('시즌 메뉴에서 다음 진행을 선택하세요.');
  const w=c.world,own=clubOf(w),other=nextOpponent(w),plan=selection(c);
- const m=createMatch(c.seed+c.week*7919,{name:c.player.name,pos:c.player.pos,a:c.player.a,energy:c.player.energy},other.strength);
+ const m=createMatch(c.seed+c.week*7919,{name:c.player.name,pos:c.player.pos,a:matchAttributesOf(c),energy:c.player.energy},other.strength);
  m.competition=competitionName(c);m.tactics=[own.coach.style,other.club?.coach.style??'역습'];
  if(w.phase==='national'){m.userOnPitch=!c.player.injuryWeeks;if(!m.userOnPitch)m.players[m.userId].name='대표팀 동료';configureTrait(c,m);c.match=m;return;}
  const lineup=plan.lineup;const opposition=other.club?chooseLineup(other.club):null;
@@ -324,7 +345,7 @@ export function startCareerMatch(c:Career){
  }
  m.rosterIds=[...lineup.map(p=>p.id),...(opposition?.map(p=>p.id)??[])];
  m.userId=plan.index>=0?plan.index:plan.targetIndex;m.userOnPitch=plan.index>=0;
- if(!m.userOnPitch&&plan.role==='교체 대기')m.benchEntry={minute:60,name:c.player.name,a:{...c.player.a},energy:c.player.energy,number:10};
+ if(!m.userOnPitch&&plan.role==='교체 대기')m.benchEntry={minute:60,name:c.player.name,a:matchAttributesOf(c),energy:c.player.energy,number:10};
  if(m.userOnPitch&&c.player.energy<70){
    const replacement=own.roster.filter(r=>!lineup.some(x=>x.id===r.id)).sort((a,b)=>selectionScore(b.a,b.pos,c.player.pos,b.age,b.energy,b.form,own.coach)-selectionScore(a.a,a.pos,c.player.pos,a.age,a.energy,a.form,own.coach))[0];
    if(replacement){m.userExitMinute=65;m.exitReplacement={name:replacement.name,a:{...replacement.a},energy:replacement.energy,number:19,rosterId:replacement.id,fx:matchFx(replacement.traits)};}
@@ -352,8 +373,8 @@ export function nextSeason(c:Career){
  if(c.player.age>=18&&clubOf(w).league===0)throw Error('졸업 예정입니다. 이적 시장에서 프로 계약을 선택해 주세요.');
  if(clubOf(w).league>0&&w.contract.years===0)throw Error('계약이 만료되었습니다. 재계약 또는 이적을 선택해 주세요.');
  c.player.age++;ageRival(c);if(c.player.age>=36){w.year++;retire(c);return;}
- const decline=agingDecline(c.development.traits,c.player.age,29,.8);if(decline)for(const k of ['speed','acceleration','stamina'] as Attr[])c.player.a[k]=Math.max(20,c.player.a[k]-decline);
- advanceWorldYear(w);syncRival(c);c.week=Math.max(c.week,Math.round((w.year-2026)*365.25/7));c.day=c.week*7;w.currentDay=c.day;w.currentSeasonStart=c.week;
+ applyAging(c.player.a,c.development.traits,c.player.age);
+ advanceWorldYear(w);clearInjuries(w,[c.development.rival.id]);c.development.rival.player.injuryWeeks=0;syncRival(c);c.week=Math.max(c.week,Math.round((w.year-2026)*365.25/7));c.day=c.week*7;w.currentDay=c.day;w.currentSeasonStart=c.week;
  c.player.energy=100;c.player.fatigue=0;c.player.injuryWeeks=0;c.trainingCount=0;c.feed.unshift(`${w.year} 새 시즌 · ${teamName(c)} · ${c.player.age}세`);
 }
 export function retire(c:Career){if(c.match)throw Error('진행 중인 경기를 완료하세요.');c.world.phase='retired';c.world.achievements.unshift(`${c.world.year} ${c.player.name} 은퇴 · 커리어 기록 보존`);}

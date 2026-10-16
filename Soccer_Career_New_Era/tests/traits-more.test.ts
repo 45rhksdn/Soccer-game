@@ -2,7 +2,7 @@ import {it,expect} from 'vitest';
 import {newCareer,startCareerMatch,trustChange} from '../src/career';
 import {attributes,createMatch,finishMatch,random} from '../src/engine';
 import {applyDaily,configureTrait} from '../src/development';
-import {TRAIT_DEFS,matchAttributes,hasMatchEffect,luckChance,injuryChanceMultiplier,injuryWeeks,trainingFatigueMultiplier,abroadGrowthMultiplier,trustGainMultiplier,superSubMultiplier,matchFx} from '../src/traits';
+import {TRAIT_DEFS,matchAttributes,hasMatchEffect,luckChance,insightChance,trainingLuckChance,injuryChanceMultiplier,injuryWeeks,trainingFatigueMultiplier,abroadGrowthMultiplier,trustGainMultiplier,superSubMultiplier,matchFx} from '../src/traits';
 
 const profile={name:'추가특성',age:16,pos:'CM' as const,secondary:'ST' as const,foot:'오른',height:178,weight:70,style:'플레이메이커',curve:'꾸준한 성장형'};
 const career=(seed=51)=>newCareer(profile,0,seed);
@@ -46,7 +46,8 @@ it('기복이 심함: 30 % of matches ×0.85 with its own notice; never labelled
 });
 
 it('luck, injuries and fatigue: 불운, 잔부상, 저질 체력',()=>{
-  expect(luckChance([])).toBe(.03);expect(luckChance(['불운'])).toBe(.01);expect(luckChance(['행운아'])).toBe(.09);expect(luckChance(['불운','행운아'])).toBe(.09);
+  // 0.5: 럭키 and 깨달음 have separate chances; 불운 is the mirror of 행운아 (×⅓ vs ×3) for both.
+  expect(insightChance(['불운'])).toBeCloseTo(.005/3,10);expect(trainingLuckChance(['불운'],16)).toBeCloseTo(.015,10);expect(luckChance(['불운','행운아'])).toBeCloseTo(.09,10);
   expect(injuryChanceMultiplier(['잔부상'])).toBe(1.3);expect(injuryWeeks(['잔부상'],2)).toBe(3);expect(injuryWeeks(['잔부상'],1)).toBe(2);
   expect(trainingFatigueMultiplier(['저질 체력'])).toBe(1.3);
   const c=career();c.player.fatigue=0;applyDaily(c,c.player,'passing',['저질 체력']);expect(c.player.fatigue).toBeCloseTo(15.6,8);
@@ -76,7 +77,7 @@ it('슈퍼 조커: bench entry attributes ×1.15 (capped at 100), with a notice'
   expect(superSubMultiplier(['슈퍼 조커'])).toBe(1.15);
   const c=career();c.player.a=attributes(60);c.development.traits=['슈퍼 조커'];
   const m=createMatch(4,{name:'조커',pos:'CM',a:attributes(60),energy:100});m.userOnPitch=false;m.benchEntry={minute:60,name:'조커',a:{...c.player.a},energy:100,number:10};
-  configureTrait(c,m);expect(m.benchEntry!.a.passing).toBeCloseTo(69,8);expect(m.traitNotes).toContain('슈퍼 조커 · 교체 투입 시 능력치 ×1.15');
+  configureTrait(c,m);expect(m.benchEntry!.a.passing).toBeCloseTo(69,8);expect(m.traitNotes).toContain('슈퍼 조커 · 교체 투입에 강한 선수');
   c.player.a=attributes(95);const n=createMatch(4,{name:'조커',pos:'CM',a:attributes(95),energy:100});n.userOnPitch=false;n.benchEntry={minute:60,name:'조커',a:{...c.player.a},energy:100,number:10};
   configureTrait(c,n);expect(n.benchEntry!.a.passing).toBe(100);
 });

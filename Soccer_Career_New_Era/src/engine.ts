@@ -127,7 +127,11 @@ export type Ball = {
     onTarget?: boolean;
   };
 };
-export type Insight = {chance:number,gains:Partial<Record<Attr,number>>,events:{minute:number,key:Attr}[]};
+/**
+ * 깨달음 state for one player in a match. `base` holds the permanent (pre-equipment, pre-trait)
+ * attributes: a key can still improve while base + gains < 100 even if the match copy shows 100.
+ */
+export type Insight = {chance:number,gains:Partial<Record<Attr,number>>,events:{minute:number,key:Attr}[],base?:Partial<Record<Attr,number>>};
 export type Match = {
   insight?:Insight;
   rivalInsight?:Insight & {playerId:number};
@@ -467,9 +471,11 @@ export function chooseAction(m: Match, p: Footballer): Action {
 export function insightAttempt(m:Match,p:Footballer,keys:Attr[]){
   const state=p.id===m.userId&&m.userOnPitch!==false?m.insight:m.rivalInsight?.playerId===p.id?m.rivalInsight:undefined;
   if(!state||random(m)>=state.chance)return;
-  const key=keys[Math.floor(random(m)*keys.length)];if(p.a[key]>=100)return;
+  const key=keys[Math.floor(random(m)*keys.length)];
+  const permanent=state.base?.[key];if((permanent===undefined?p.a[key]:permanent+(state.gains[key]??0))>=100)return;
   state.gains[key]=(state.gains[key]??0)+1;p.a[key]=Math.min(100,p.a[key]+1);state.events.push({minute:m.clock/60,key});
-  event(m,`${p.name} · 깨달음! ${LABELS[key]} +1`);
+  // The commentary keeps the event private (no stat name); exact gains are shown in the growth history.
+  event(m,`${p.name} · 경기 중에 깨달음을 얻었다!`);
 }
 export function act(m: Match, action: Action) {
   if (m.ended || m.ball.owner === null || !availableActions(m).includes(action))
