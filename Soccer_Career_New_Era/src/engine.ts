@@ -69,6 +69,8 @@ export type MatchFx = {
   momentum?: { seconds: number; drain: number };
   /** Winning the ball back within `window` seconds of losing it: +energy and a rating bonus. */
   grit?: { energy: number; window: number };
+  /** Multiplier on the chance that my challenge is a foul, and on the booking chance. */
+  temper?: number;
 };
 export const emptyStats = (): Stat => ({
   minutes: 0,
@@ -130,6 +132,8 @@ export type Match = {
   insight?:Insight;
   rivalInsight?:Insight & {playerId:number};
   traitBoost?:boolean;
+  /** Match-day trait notices shown on the match screen (실전파, 기복이 심함, 슈퍼 조커 …). */
+  traitNotes?: string[];
   /** 플레이메이커: pending boost for the next action of one receiver. */
   assistBoost?: { to: number; mult: number } | null;
   /** 분위기 메이커: per team, clock until which stamina drain is reduced, and the drain factor. */
@@ -774,9 +778,10 @@ export function step(m: Match, dt = 0.5, auto = false) {
         .sort((a, b) => dist(a, owner) - dist(b, owner))[0];
       if (near && random(m) < dt * 0.16) {
         insightAttempt(m,near,['defending']);
-        if (random(m) < 0.16) {
+        const temper = near.fx?.temper ?? 1;
+        if (random(m) < 0.16 * temper) {
           event(m, `${near.name} · 파울, 프리킥`);
-          if (random(m) < 0.24) {
+          if (random(m) < 0.24 * temper) {
             near.yellow++;
             event(m, `${near.name} · 경고`);
             if (near.yellow >= 2) {

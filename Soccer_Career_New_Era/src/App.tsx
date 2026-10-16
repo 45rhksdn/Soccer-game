@@ -567,7 +567,7 @@ export default function App() {
                           {userPerformance(m).stats.assists}
                         </p>
                         <p>패스 {userPerformance(m).stats.completed}/{userPerformance(m).stats.passes} · 전진 패스 {userPerformance(m).stats.progressivePasses ?? 0} · 키패스 {userPerformance(m).stats.keyPasses ?? 0} · 기대 도움 {(userPerformance(m).stats.expectedAssists ?? 0).toFixed(2)}</p>
-                        {m.traitBoost&&<p className="note">실전파 발동 · 이번 경기 능력치 ×1.3</p>}
+                        {(m.traitNotes??(m.traitBoost?['실전파 발동 · 이번 경기 능력치 ×1.3']:[])).map((t)=><p key={t} className="note">{t}</p>)}
                         <small className="muted">키패스는 동료의 슈팅으로 연결한 패스입니다. 동료가 놓쳐도 평점에 반영됩니다.</small>
                       </div>
                       <div className="rating">

@@ -2,7 +2,7 @@ import {ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledM
 import {ROLE_KEYS,roleAbility} from './roles';
 import {newWorld,clubOf,nextOpponent,chooseLineup,selectionScore,advanceLeague,startPostseason,advanceCup,sortedTable,LEAGUES,advanceWorldYear,type World,type RosterPlayer} from './world';
 import {createMatch,userPerformance} from './engine';
-import {injuryChanceMultiplier,injuryWeeks,agingDecline,matchFx} from './traits';
+import {injuryChanceMultiplier,injuryWeeks,agingDecline,matchFx,trustGainMultiplier} from './traits';
 import {
   ATTRS,
   attributes,
@@ -187,6 +187,8 @@ export const TRAINING = {
   rest: { label: "회복 & 휴식", desc: "컨디션 회복 · 피로 감소", keys: [] },
 } as const;
 export type Training = keyof typeof TRAINING;
+/** Coach-trust change after a match: trait multipliers scale gains only, never losses. */
+export const trustChange = (traits: readonly string[], delta: number) => (delta > 0 ? delta * trustGainMultiplier(traits) : delta);
 export function grow(p: Player, keys: readonly string[], amount: number) {
   let total = 0;
   const curve =
@@ -249,7 +251,7 @@ export function settle(c: Career) {
     keys: Attr[] = ROLE_KEYS[c.player.pos];
   const appeared=p.stats.minutes>0;
   const gain = appeared ? grow(c.player, keys, (0.2 + (r - 5) * 0.06)*Math.min(1,p.stats.minutes/75)) : 0;
-  c.player.trust = clamp(c.player.trust + (appeared?(r - 6) * 2:0), 0, 100);
+  c.player.trust = clamp(c.player.trust + trustChange(c.development.traits, appeared ? (r - 6) * 2 : 0), 0, 100);
   c.player.potential = Math.min(94, c.player.potential + (appeared&&r >= 7 ? 0.015 : 0));
   c.player.energy = appeared?clamp(p.energy + 30, 20, 100):Math.min(100,c.player.energy+20);
   c.player.fatigue = Math.max(0, c.player.fatigue - 15);
