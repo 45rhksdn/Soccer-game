@@ -17,8 +17,8 @@ it('genius multiplies training 1.7, lucky multiplies growth 10 and fatigue lower
  const normal=structuredClone(base),genius=structuredClone(base),tired=structuredClone(base);tired.player.fatigue=80;
  applyDaily(normal,normal.player,'passing','실전파');applyDaily(genius,genius.player,'passing','천재');applyDaily(tired,tired.player,'passing','실전파');
  const delta=normal.player.a.passing-40;expect((genius.player.a.passing-40)/delta).toBeCloseTo(1.7,8);expect((tired.player.a.passing-40)/delta).toBeCloseTo(.36,8);
- const lucky=structuredClone(base),plain=structuredClone(base);lucky.seed=plain.seed=seedFor(.03,.09);
- applyDaily(lucky,lucky.player,'passing','행운아');applyDaily(plain,plain.player,'passing','실전파');expect((lucky.player.a.passing-40)/(plain.player.a.passing-40)).toBeCloseTo(10,8);expect(lucky.development.news[0].text).toContain('럭키!');
+ const lucky=structuredClone(base),plain=structuredClone(base);lucky.seed=plain.seed=seedFor(.05,.13); // age 16: base 4.5 %, 행운아 13.5 %
+ applyDaily(lucky,lucky.player,'passing','행운아');applyDaily(plain,plain.player,'passing','실전파');expect((lucky.player.a.passing-40)/(plain.player.a.passing-40)).toBeCloseTo(10,8);expect(lucky.development.news[0].text).toBe('훈련 중 무언가를 느꼈다!');expect(lucky.development.news[0].kind).toBe('lucky');
 });
 it('vacation charges money and provides stronger recovery; insufficient funds are rejected',()=>{const c=career();c.player.energy=20;c.player.fatigue=80;const money=c.development.wallet;applyDaily(c,c.player,'vacation','천재');expect(c.player.energy).toBe(85);expect(c.player.fatigue).toBe(20);expect(c.development.wallet).toBe(money-5);c.development.wallet=0;expect(()=>prepareWeek(c,Array(7).fill('vacation'))).toThrow('비용');expect(c.development.active).toBeUndefined();});
 it('a seven-day plan pauses at the match, resumes after reload and records exactly one weekly note',()=>{

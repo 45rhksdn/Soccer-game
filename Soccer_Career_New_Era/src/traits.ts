@@ -16,8 +16,11 @@ export type TraitEffects={
   injuryChance?:number;
   /** Weeks added to (negative: removed from) each injury, minimum 1 week. */
   injuryWeeks?:number;
-  /** Chance per training day / match action of 럭키 and 깨달음 (default 3 %). */
-  luckChance?:number;
+  /**
+   * Luck multiplier shared by training 럭키 and match 깨달음 (행운아 ×3, 불운 ×⅓).
+   * The base chances live in TRAINING_LUCK_BY_AGE and INSIGHT_CHANCE.
+   */
+  luck?:number;
   /** Chance on match entry of boosting every attribute for that match only. */
   matchBoost?:{chance:number,multiplier:number};
   /** Flat attribute changes applied to the match copy only (never permanent). */
@@ -63,13 +66,19 @@ export const TRAIT_LIMIT=3;
 // 0.4.0 started at 6 % / 3 % with 11 traits. With 34 traits that would leave only ~13 % of players
 // trait-free, so the per-trait chance was halved (ratio kept). Change these two numbers to retune.
 export const RARITY_CHANCE:Record<TraitRarity,number>={common:.03,rare:.015};
+/** @deprecated 0.4 combined 럭키·깨달음 chance; kept only for older imports. */
 export const BASE_LUCK=.03;
+/** 깨달음: chance per match action attempt (행운아 ×3 = 1.5 %, 불운 ×⅓ ≈ 0.17 %). */
+export const INSIGHT_CHANCE=.005;
+/** 훈련 럭키: chance per training day by age (≤20 · 21–24 · 25–32 · 33+). */
+export const TRAINING_LUCK_BY_AGE:readonly {maxAge:number,chance:number}[]=[{maxAge:20,chance:.045},{maxAge:24,chance:.035},{maxAge:32,chance:.025},{maxAge:Infinity,chance:.005}];
+export const LUCKY_MULTIPLIER=3,UNLUCKY_MULTIPLIER=1/3;
 
 export const TRAIT_DEFS=[
   // ── positive ──────────────────────────────────────────────
   {id:'천재',polarity:'positive',rarity:'rare',chance:RARITY_CHANCE.rare,icon:'star',summary:'모든 훈련 성장 ×1.7',effects:{trainingGrowth:1.7}},
   {id:'실전파',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'flame',summary:'경기 진입 시 30% 확률 · 해당 경기 능력치 ×1.3',effects:{matchBoost:{chance:.3,multiplier:1.3},boostNews:'실전파 발동! 이번 경기 동안 모든 능력치 ×1.3 (최대 100)'}},
-  {id:'행운아',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'clover',summary:'럭키·깨달음 확률 3% → 9%',effects:{luckChance:.09},excludes:['불운']},
+  {id:'행운아',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'clover',summary:'훈련 럭키 확률 ×3 · 경기 중 깨달음 확률 0.5% → 1.5%',effects:{luck:LUCKY_MULTIPLIER},excludes:['불운']},
   {id:'노력파',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'dumbbell',summary:'모든 훈련 성장 ×1.2',effects:{trainingGrowth:1.2},excludes:['게으름']},
   {id:'강철 체력',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'battery',summary:'훈련 피로 증가량 ×0.7',effects:{trainingFatigue:.7},excludes:['유리몸']},
   {id:'회복력',polarity:'positive',rarity:'common',chance:RARITY_CHANCE.common,icon:'cross',summary:'부상 확률 ×0.5 · 부상 기간 1주 단축(최소 1주)',effects:{injuryChance:.5,injuryWeeks:-1},excludes:['유리몸']},
@@ -95,7 +104,7 @@ export const TRAIT_DEFS=[
   {id:'잔부상',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'bandage',summary:'부상 확률 ×1.3 · 부상 기간 +1주',effects:{injuryChance:1.3,injuryWeeks:1},excludes:['회복력','강철몸','유리몸']},
   {id:'저질 체력',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'batteryLow',summary:'훈련 피로 증가량 ×1.3',effects:{trainingFatigue:1.3},excludes:['강철 체력','강철몸']},
   {id:'기복이 심함',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'wave',summary:'경기 진입 시 30% 확률 · 해당 경기 능력치 ×0.85',effects:{matchBoost:{chance:.3,multiplier:.85},boostNews:'기복이 심함 · 이번 경기는 컨디션 난조 (능력치 ×0.85)'}},
-  {id:'불운',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'rain',summary:'럭키·깨달음 확률 3% → 1%',effects:{luckChance:.01},excludes:['행운아']},
+  {id:'불운',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'rain',summary:'훈련 럭키 확률 ×⅓ · 경기 중 깨달음 확률 0.5% → 약 0.17%',effects:{luck:UNLUCKY_MULTIPLIER},excludes:['행운아']},
   {id:'향수병',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'home',summary:'해외 리그 소속일 때 훈련 성장 ×0.85',effects:{abroadGrowth:.85},excludes:['해외 체질']},
   {id:'큰 경기 울렁증',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'nervous',summary:'컵·대륙대회·국가대표 경기에서 침착성 −8 · 판단력 −4',effects:{bigMatchAttributes:{composure:-8,decisions:-4}},excludes:['빅매치 체질']},
   {id:'다혈질',polarity:'negative',rarity:'common',chance:RARITY_CHANCE.common,icon:'cards',summary:'경기 중 파울·경고 확률 ×1.5',effects:{match:{temper:1.5}}},
@@ -121,8 +130,19 @@ const product=(t:TraitInput,key:'trainingGrowth'|'trainingFatigue'|'injuryChance
 export const trainingGrowthMultiplier=(t:TraitInput)=>product(t,'trainingGrowth');
 export const trainingFatigueMultiplier=(t:TraitInput)=>product(t,'trainingFatigue');
 export const injuryChanceMultiplier=(t:TraitInput)=>product(t,'injuryChance');
-/** Best positive luck wins; otherwise the worst negative luck applies; otherwise the base 3 %. */
-export const luckChance=(t:TraitInput)=>{const v=defs(t).map(d=>d.effects.luckChance).filter((x):x is number=>x!==undefined);const up=v.filter(x=>x>BASE_LUCK),down=v.filter(x=>x<BASE_LUCK);return up.length?Math.max(...up):down.length?Math.min(...down):BASE_LUCK;};
+/**
+ * Luck multiplier: the best positive multiplier wins; otherwise the worst negative one applies; otherwise 1.
+ * (행운아 and 불운 exclude each other, so in practice only one of them is ever present.)
+ */
+export const luckMultiplier=(t:TraitInput)=>{const v=defs(t).map(d=>d.effects.luck).filter((x):x is number=>x!==undefined);const up=v.filter(x=>x>1),down=v.filter(x=>x<1);return up.length?Math.max(...up):down.length?Math.min(...down):1;};
+/** 깨달음 chance per match action attempt. */
+export const insightChance=(t:TraitInput)=>INSIGHT_CHANCE*luckMultiplier(t);
+/** Base 훈련 럭키 chance for an age (before traits). */
+export const trainingLuckBase=(age:number)=>TRAINING_LUCK_BY_AGE.find(x=>age<=x.maxAge)!.chance;
+/** 훈련 럭키 chance per training day for this age and traits. */
+export const trainingLuckChance=(t:TraitInput,age:number)=>trainingLuckBase(age)*luckMultiplier(t);
+/** @deprecated 0.4 combined chance (3 % base, 행운아 9 %, 불운 1 %). Use insightChance / trainingLuckChance. */
+export const luckChance=(t:TraitInput)=>BASE_LUCK*luckMultiplier(t);
 export const injuryWeeks=(t:TraitInput,base:number)=>Math.max(1,base+defs(t).reduce((n,d)=>n+(d.effects.injuryWeeks??0),0));
 export const hasTrait=(t:TraitInput,id:TraitId)=>list(t).includes(id);
 export const restRecoveryMultiplier=(t:TraitInput)=>product(t,'restRecovery');

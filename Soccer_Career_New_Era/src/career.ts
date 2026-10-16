@@ -244,7 +244,7 @@ export function settle(c: Career) {
   if (!m?.ended) throw Error("경기가 아직 진행 중입니다.");
   if (c.history.some((r) => r.id === c.week))
     throw Error("이미 반영된 경기입니다.");
-  ensureDevelopment(c);applyInsights(c,m);
+  ensureDevelopment(c);const insight=applyInsights(c,m);
   const rivalResult=playRival(c,m);
   const p = userPerformance(m),
     r = rating(p),
@@ -292,7 +292,7 @@ export function settle(c: Career) {
   c.feed.unshift(
     `경기 종료 · 평점 ${appeared?r.toFixed(1):"출전 없음"} · 감독 신뢰 ${c.player.trust.toFixed(0)}`,
   );
-  c.match = null;afterScheduledMatch(c);
+  c.match = null;afterScheduledMatch(c,insight);
 }
 
 export function selection(c:Career){

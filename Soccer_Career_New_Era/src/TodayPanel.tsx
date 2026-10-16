@@ -1,7 +1,7 @@
 import {DAILY,WEEKDAYS,todayIndex,isMatchToday,TRAINING_INJURY_FATIGUE,type Daily,type TodayResult} from './development';
 import {LABELS,type Attr} from './engine';
 import {dateOf,opponentOf,competitionName,selection,type Career} from './career';
-import {luckChance,lateBloom} from './traits';
+import {trainingLuckChance,insightChance,lateBloom} from './traits';
 
 // One glyph per daily activity (24×24 stroke icons).
 const ICONS:Record<Daily,string>={
@@ -39,7 +39,7 @@ export function TodayPanel({c,last,onTrain,onMatch}:{c:Career,last:TodayResult|n
       <button type="button" className="primary" onClick={onMatch}>경기 진행</button>
     </div>
     :<>
-      <p className="muted today-help">할 일을 누르면 하루가 지나고 결과가 바로 반영됩니다. 컨디션 {Math.round(p.energy)}% · 피로 {Math.round(p.fatigue)}% · 잔액 {d.wallet.toLocaleString()}만원 · 럭키 확률 {Math.round(luckChance(d.traits)*100)}%{p.injuryWeeks?' · 부상 중(훈련은 휴식으로 전환)':''}{p.fatigue>=TRAINING_INJURY_FATIGUE-12&&!p.injuryWeeks?' · 피로가 높아 부상 위험이 있습니다':''}{lateBloom(d.traits)?` · 대기만성 경험 ${(d.experienceBank??0).toFixed(1)}`:''}</p>
+      <p className="muted today-help">할 일을 누르면 하루가 지나고 결과가 바로 반영됩니다. 컨디션 {Math.round(p.energy)}% · 피로 {Math.round(p.fatigue)}% · 잔액 {d.wallet.toLocaleString()}만원 · 훈련 럭키 {(trainingLuckChance(d.traits,p.age)*100).toFixed(1)}% · 깨달음 {(insightChance(d.traits)*100).toFixed(2)}%/행동{p.injuryWeeks?' · 부상 중(훈련은 휴식으로 전환)':''}{p.fatigue>=TRAINING_INJURY_FATIGUE-12&&!p.injuryWeeks?' · 피로가 높아 부상 위험이 있습니다':''}{lateBloom(d.traits)?` · 대기만성 경험 ${(d.experienceBank??0).toFixed(1)}`:''}</p>
       <div className="today-grid">
         {(Object.keys(DAILY) as Daily[]).map(t=><button key={t} type="button" className={`today-tile ${t}`} disabled={t==='vacation'&&d.wallet<5} onClick={()=>onTrain(t)} aria-label={`오늘 ${DAILY[t].label.replace(' · 5만원','')}`}>
           <DailyIcon type={t}/><strong>{DAILY[t].label.replace(' · 5만원','')}</strong><small>{effect(t)}</small>
@@ -47,7 +47,7 @@ export function TodayPanel({c,last,onTrain,onMatch}:{c:Career,last:TodayResult|n
       </div>
     </>}
     {last&&<div className={`today-result${last.lucky?' lucky':''}`} role="status" aria-live="polite">
-      {last.lucky&&<span className="lucky-burst">럭키! ×10</span>}
+      {last.lucky&&<span className="lucky-burst">럭키! 훈련 효과 ×10</span>}
       <p>{WEEKDAYS[last.day]}요일 · {last.text}</p>
       {last.gain>0&&<small>종합 능력 +{last.gain.toFixed(2)}</small>}
       {last.weekDone&&<small>한 주가 끝났습니다. 성장노트에 기록되었습니다.</small>}

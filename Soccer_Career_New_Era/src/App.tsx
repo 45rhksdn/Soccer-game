@@ -3,7 +3,8 @@ import {TraitList} from './TraitBadges';
 import {ScoutPanel} from './ScoutPanel';
 import {PlayerSlots} from './PlayerSlots';
 import {TodayPanel} from './TodayPanel';
-import {playToday,startTodayMatch,type TodayResult} from './development';
+import {playToday,startTodayMatch,LUCKY_NEWS,INSIGHT_NEWS,type TodayResult} from './development';
+import {GrowthPopup,type PopupInfo} from './GrowthPopup';
 import {careerFromCandidate,newScoutState,nextList,type ScoutState} from './scouting';
 import {WorldPanel} from './WorldPanels';
 import {teamName,competitionName,selection} from './career';
@@ -77,7 +78,19 @@ export default function App() {
     [targetSlot, setTargetSlot] = useState(1),
     [scout, setScout] = useState<ScoutState | null>(null),
     [scoutSchool, setScoutSchool] = useState<string | null>(null),
-    [today, setToday] = useState<TodayResult | null>(null);
+    [today, setToday] = useState<TodayResult | null>(null),
+    [popup, setPopup] = useState<PopupInfo | null>(null);
+  // 깨달음 popup: compare the user's insight events of the current match with what was already shown.
+  const insightSeen = useRef({ key: "", count: 0 });
+  useEffect(() => {
+    const key = c?.match ? `${c.seed}:${c.week}` : "",
+      count = c?.match?.insight?.events.length ?? 0;
+    if (key !== insightSeen.current.key) { insightSeen.current = { key, count }; return; }
+    if (count <= insightSeen.current.count) return;
+    insightSeen.current.count = count;
+    setPopup({ kind: "insight", text: INSIGHT_NEWS, resume: !paused && !c!.match!.ended });
+    setPaused(true);
+  });
   const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
   useEffect(() => {
     storage
@@ -362,6 +375,7 @@ export default function App() {
           </div>
         </header>
         <main>
+          {popup && <GrowthPopup info={popup} onClose={() => { if (popup.resume) setPaused(false); setPopup(null); }} />}
           {notice && (
             <div className="toast" role="status">
               {notice}
@@ -744,7 +758,7 @@ export default function App() {
                   <TodayPanel
                     c={c}
                     last={today}
-                    onTrain={(t) => update((n) => setToday(playToday(n, t)))}
+                    onTrain={(t) => update((n) => { const r = playToday(n, t); setToday(r); if (r.lucky) setPopup({ kind: "lucky", text: LUCKY_NEWS }); })}
                     onMatch={() => { setToday(null); update(startTodayMatch); }}
                   />
                   <div className="metrics">
@@ -841,7 +855,7 @@ export default function App() {
                   <TodayPanel
                     c={c}
                     last={today}
-                    onTrain={(t) => update((n) => setToday(playToday(n, t)))}
+                    onTrain={(t) => update((n) => { const r = playToday(n, t); setToday(r); if (r.lucky) setPopup({ kind: "lucky", text: LUCKY_NEWS }); })}
                     onMatch={() => { setToday(null); update(startTodayMatch); }}
                   />
                   <GrowthNotes c={c} />
