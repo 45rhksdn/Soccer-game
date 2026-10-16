@@ -1846,3 +1846,56 @@ td strong {
 .career-hero .trait-line{margin:12px 0 18px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .table-wrap td .trait-list{margin-left:6px}
 .career-hero .trait-empty{color:#cfe0c8}.career-hero .trait-line>span:first-child{font-weight:700}
+
+/* ── 0.4 scouting & player slots ───────────────────────── */
+.create-mode{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:18px}
+.create-mode button{padding:10px 16px;border-radius:999px;border:1px solid #ccd4ca;background:white;color:#173d30;font-weight:700;cursor:pointer}
+.create-mode button.selected{background:var(--green);border-color:var(--green);color:#f4f1df}
+.create-mode .muted{margin-left:auto;font-size:12px}
+.scout{display:flex;flex-direction:column;gap:18px}
+.scout-columns{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:24px;align-items:start}
+.region-map{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-auto-rows:54px;gap:6px;margin-bottom:8px}
+.region-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1px solid #cfd8cc;border-radius:10px;background:#f1f5ee;color:#173d30;cursor:pointer;padding:4px;min-width:0}
+.region-tile strong{font-size:13px}
+.region-tile small{font-size:11px;color:#667366}
+.region-tile:hover{background:#e3ecdf}
+.region-tile.selected{background:var(--green);border-color:var(--green);color:#f4f1df}
+.region-tile.selected small{color:#cfe0c8}
+.region-tile:focus-visible,.school-row:focus-visible,.create-mode button:focus-visible{outline:3px solid #cb754b;outline-offset:2px}
+.school-search label{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:13px}
+.school-search input{padding:11px 12px;border:1px solid #ccd4ca;border-radius:10px;font-size:16px;background:white}
+.school-results{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;max-height:330px;overflow-y:auto}
+.school-row{width:100%;display:grid;grid-template-columns:1fr auto;grid-template-areas:"name dot" "meta dot";text-align:left;gap:2px 8px;padding:10px 12px;border:1px solid #dfe5dc;border-radius:10px;background:white;cursor:pointer;color:#173d30}
+.school-row strong{grid-area:name;font-size:14px}
+.school-row small{grid-area:meta;color:#667366;font-size:11px}
+.school-row span{grid-area:dot;align-self:center;color:var(--green)}
+.school-row.selected{border-color:var(--green);background:#eef5ea}
+.scout-source{font-size:12px;line-height:1.6}
+.scout-source a{color:var(--green)}
+.candidate-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+.candidate{border:1px solid #dfe5dc;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px;background:white;min-width:0}
+.candidate h4{margin:0;font-size:20px}
+.candidate p{margin:0;font-size:12px;line-height:1.5}
+.candidate-top{display:flex;justify-content:space-between;align-items:center}
+.candidate-ovr{font-size:24px;display:flex;align-items:baseline;gap:4px}
+.candidate-ovr small{font-size:10px;color:var(--muted)}
+.candidate-facts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0}
+.candidate-facts div{background:#f4f7f1;border-radius:8px;padding:6px 8px}
+.candidate-facts dt{font-size:11px;color:#667366}
+.candidate-facts dd{margin:0;font-weight:700}
+.candidate .primary{margin-top:auto}
+.scout-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.scout-actions small{flex:1;min-width:200px}
+.compare{overflow-x:auto}
+.compare td.best{color:#14633b;font-weight:800;background:#e8f5ec}
+.compare th small{color:var(--muted);font-weight:500}
+.scout-note{font-size:12px}
+.player-slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.player-slot{display:flex;flex-direction:column;gap:10px}
+.player-slot h3{margin:0;font-size:22px}
+.player-slot p{margin:0;font-size:13px;line-height:1.6}
+.player-slot.current{border:2px solid var(--green)}
+.slot-actions{display:flex;flex-direction:column;gap:6px;margin-top:auto}
+.player-slot .archive{font-size:12px}
+@media(max-width:1000px){.candidate-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.scout-columns{grid-template-columns:1fr}.player-slots{grid-template-columns:1fr}}
+@media(max-width:600px){.candidate-grid{grid-template-columns:1fr}.region-map{grid-auto-rows:48px;gap:5px}.create-mode .muted{margin-left:0;width:100%}}

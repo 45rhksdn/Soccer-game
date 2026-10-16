@@ -4,13 +4,14 @@ on:
   push:
   pull_request:
 
+defaults:
+  run:
+    working-directory: Soccer_Career_New_Era
+
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: Soccer_Career_New_Era
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,3 +24,25 @@ jobs:
         run: npm run build
       - name: Unit, regression and balance tests
         run: npm test
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Soccer_Career_New_Era/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Browser tests (desktop + iPhone-size Chromium, dev server)
+        run: npm run test:e2e
+      - name: Production build + offline PWA browser tests
+        run: npm run build && PWA_TEST=1 npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-reports
+          path: Soccer_Career_New_Era/reports/

@@ -1,5 +1,8 @@
 import {WeekPlanner,GrowthNotes,RivalPanel} from './WeeklyPanels';
 import {TraitList} from './TraitBadges';
+import {ScoutPanel} from './ScoutPanel';
+import {PlayerSlots} from './PlayerSlots';
+import {careerFromCandidate,newScoutState,nextList,type ScoutState} from './scouting';
 import {WorldPanel} from './WorldPanels';
 import {teamName,competitionName,selection} from './career';
 import {clubOf} from './world';
@@ -27,6 +30,7 @@ import {
   Trophy,
   Upload,
   User,
+  Users,
   Volume2,
   Zap,
 } from "lucide-react";
@@ -53,7 +57,7 @@ import {
 } from "./career";
 import * as storage from "./storage";
 import { Pitch } from "./Pitch";
-type Tab = "home" | "training" | "player" | "records" | "saves" | "team" | "season" | "market" | "career" | "rival";
+type Tab = "home" | "training" | "player" | "records" | "saves" | "players" | "team" | "season" | "market" | "career" | "rival";
 export default function App() {
   const [c, setC] = useState<Career | null>(null),
     [tab, setTab] = useState<Tab>("home"),
@@ -66,7 +70,22 @@ export default function App() {
     [paused, setPaused] = useState(false),
     [speed, setSpeed] = useState(4),
     [tick, setTick] = useState(0),
-    [menu, setMenu] = useState(false);
+    [menu, setMenu] = useState(false),
+    [createMode, setCreateMode] = useState<"scout" | "manual">("scout"),
+    [targetSlot, setTargetSlot] = useState(1),
+    [scout, setScout] = useState<ScoutState | null>(null),
+    [scoutSchool, setScoutSchool] = useState<string | null>(null);
+  const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
+  useEffect(() => {
+    storage
+      .loadScouting()
+      .then((s) => s ?? newScoutState(freshSeed()))
+      .catch(() => newScoutState(freshSeed()))
+      .then((s) => {
+        setScout(s);
+        storage.saveScouting(s).catch(() => {});
+      });
+  }, []);
   const live = useRef(c);
   live.current = c;
   const currentSlot = useRef(slot);
@@ -168,12 +187,13 @@ export default function App() {
     { id: "season", label: "시즌 · 리그", icon: Trophy },
     { id: "market", label: "이적 · 계약", icon: Flag },
     { id: "career", label: "커리어 · 업적", icon: CalendarDays },
+    { id: "players", label: "선수 변경하기", icon: Users },
     { id: "saves", label: "저장 관리", icon: FolderHeart },
   ] as const;
   function go(t: Tab) {
     setTab(t);
     setMenu(false);
-    if (t === "saves") storage.slots().then(setSlots);
+    if (t === "saves" || t === "players") storage.slots().then(setSlots);
   }
   async function openSlot(n: number, backup = false) {
     try {
@@ -212,6 +232,55 @@ export default function App() {
     } catch (e) {
       inform(String(e));
     }
+  }
+  /** Starts the creation flow for an explicit slot; occupied slots need confirmation. */
+  function startNew(n: number) {
+    const s = slots.find((x) => x.slot === n);
+    if (
+      s?.summary &&
+      !confirm(
+        `슬롯 ${n}의 ${s.summary.name} 선수를 새 선수로 교체할까요? 기존 선수는 ‘교체 전 선수’로 보관되어 복원할 수 있습니다.`,
+      )
+    )
+      return;
+    setTargetSlot(n);
+    setCreateMode("scout");
+    setCreating(true);
+    setMenu(false);
+  }
+  /** Saves the current player, archives an occupied target slot, then starts the new career there. */
+  async function beginCareer(next: Career) {
+    const target = targetSlot;
+    try {
+      if (c) await persist(c, slot);
+      await storage.archiveSlot(target);
+    } catch (e) {
+      inform(String(e));
+      return;
+    }
+    setSlot(target);
+    setC(next);
+    setCreating(false);
+    setScoutSchool(null);
+    setTab("home");
+    inform(`입단을 축하합니다. 슬롯 ${target}에 저장됩니다. 이번주 일정을 정해 보세요.`);
+  }
+  async function switchTo(n: number) {
+    if (c) await persist(c, slot);
+    await openSlot(n);
+    storage.slots().then(setSlots);
+  }
+  async function restoreArchive(n: number) {
+    if (!confirm(`슬롯 ${n}의 교체 전 선수를 복원할까요? 지금 슬롯 ${n}에 있는 선수는 대신 보관됩니다.`)) return;
+    try {
+      if (c) await persist(c, slot);
+      await storage.swapArchive(n);
+      await openSlot(n);
+      inform("교체 전 선수를 복원했습니다. 바뀐 선수는 다시 보관되었습니다.");
+    } catch (e) {
+      inform(String(e));
+    }
+    storage.slots().then(setSlots);
   }
   if (!ready)
     return (
@@ -264,7 +333,7 @@ export default function App() {
         </div>
         <div className="version">
           <span className="dot" /> 오프라인 플레이 지원
-          <small>0.3 · 라이벌과 주간 일정</small>
+          <small>0.4 · 다중 특성 · 실제 고교 발굴</small>
         </div>
       </aside>
       <div className="workspace">
@@ -296,17 +365,44 @@ export default function App() {
             </div>
           )}
           {creating ? (
-            <Create
-              onCancel={() => setCreating(false)}
-              onCreate={(player, school) => {
-                const n = newCareer(player, school, crypto.getRandomValues(new Uint32Array(1))[0]);
-                setC(n);
-                setCreating(false);
-                setTab("home");
-                inform("입단을 축하합니다. 이번주 일정을 정해 보세요.");
-              }}
-            />
-          ) : !c && tab !== "saves" ? (
+            <>
+              <div className="create-mode" role="tablist" aria-label="선수 생성 방식">
+                <button role="tab" type="button" aria-selected={createMode === "scout"} className={createMode === "scout" ? "selected" : ""} onClick={() => setCreateMode("scout")}>실제 고교에서 발굴</button>
+                <button role="tab" type="button" aria-selected={createMode === "manual"} className={createMode === "manual" ? "selected" : ""} onClick={() => setCreateMode("manual")}>직접 만들기</button>
+                <span className="muted">저장 위치 · 슬롯 {targetSlot}</span>
+              </div>
+              {createMode === "scout" ? (
+                <>
+                  <Heading
+                    eyebrow="SCOUTING / 01"
+                    title="실제 고교 축구부에서 시작하세요."
+                    text="지역과 학교를 고르면 가상의 후보 선수들이 나옵니다. 비교한 뒤 한 명을 골라 커리어를 시작하세요."
+                  />
+                  {scout ? (
+                    <ScoutPanel
+                      scout={scout}
+                      school={scoutSchool}
+                      setSchool={setScoutSchool}
+                      onReroll={(id) => {
+                        const n = nextList(scout, id);
+                        setScout(n);
+                        storage.saveScouting(n).catch((e) => inform(String(e)));
+                      }}
+                      onPick={(cand) => beginCareer(careerFromCandidate(cand, scout.seed))}
+                    />
+                  ) : (
+                    <div className="note">스카우트 정보를 불러오는 중…</div>
+                  )}
+                  <button className="text-button" type="button" onClick={() => setCreating(false)}>돌아가기</button>
+                </>
+              ) : (
+                <Create
+                  onCancel={() => setCreating(false)}
+                  onCreate={(player, school) => beginCareer(newCareer(player, school, freshSeed()))}
+                />
+              )}
+            </>
+          ) : !c && tab !== "saves" && tab !== "players" ? (
             <>
               <div className="page-heading">
                 <div>
@@ -333,11 +429,11 @@ export default function App() {
                   </p>
                   <button
                     className="primary cream"
-                    onClick={() => setCreating(true)}
+                    onClick={() => startNew(slot)}
                   >
                     새로운 커리어 시작 <ArrowRight size={18} />
                   </button>
-                  <small>가상의 고교 팀 · 22인 경기 · 나만의 선수 육성</small>
+                  <small>실제 고교 축구부 · 가상의 선수 · 22인 경기 · 나만의 선수 육성</small>
                 </div>
                 <div className="welcome-pitch">
                   <Pitch ambient />
@@ -887,6 +983,17 @@ export default function App() {
                 </>
               )}
               {c&&["team","season","market","career"].includes(tab)&&<WorldPanel c={c} tab={tab} update={update}/>}
+              {tab === "players" && (
+                <PlayerSlots
+                  slots={slots}
+                  current={slot}
+                  hasCareer={!!c}
+                  onSwitch={switchTo}
+                  onNew={startNew}
+                  onRestore={(n) => openSlot(n, true)}
+                  onRestoreArchive={restoreArchive}
+                />
+              )}
               {tab === "saves" && (
                 <>
                   <Heading
@@ -983,14 +1090,7 @@ export default function App() {
                   <button
                     className="text-button"
                     onClick={() => {
-                      if (
-                        c &&
-                        !confirm(
-                          "현재 슬롯에 새 커리어를 시작할까요? 다른 슬롯에 저장하거나 내보내기를 먼저 권장합니다.",
-                        )
-                      )
-                        return;
-                      setCreating(true);
+                      go("players");
                     }}
                   >
                     <Plus size={17} /> 새 커리어 만들기
@@ -1009,7 +1109,7 @@ export default function App() {
               SOCCER CAREER <b>NEW ERA</b>
             </span>
             <span>한 명의 선수. 무한한 가능성.</span>
-            <small>CAREER BETA · 0.3</small>
+            <small>CAREER BETA · 0.4</small>
           </footer>
         </main>
       </div>

@@ -1,5 +1,6 @@
 import {ensureDevelopment} from './development';
 import {isKnownTrait,npcTraits,normalizeTraits,TRAIT_LIMIT} from './traits';
+import {validScoutState,type ScoutState} from './scouting';
 export const SAVE_VERSION=5;
 const traitsValid=(t:unknown)=>Array.isArray(t)&&t.length<=TRAIT_LIMIT&&t.every(x=>typeof x==='string');
 /** v4 → v5: single trait → trait list (the existing trait is kept), NPC traits added deterministically. */
@@ -153,14 +154,23 @@ export async function load(slot: number, backup = false) {
   const raw = await get((backup ? "backup" : "slot") + slot);
   return raw ? decode(String(raw)) : null;
 }
+/** Short, display-only description of a career for slot pickers. */
+export function summarize(c: Career) {
+  const club = c.world.clubs.find((x) => x.id === c.world.clubId);
+  return {
+    name: c.player.name, age: c.player.age, pos: c.player.pos, team: club?.name ?? "", year: c.world.year, week: c.week,
+    school: c.schoolRef?.name, traits: [...c.development.traits], retired: c.world.phase === "retired",
+  };
+}
+export type SlotInfo = Awaited<ReturnType<typeof slots>>[number];
 export async function slots() {
   return Promise.all(
     [1, 2, 3].map(async (slot) => {
       try {
         const c = await load(slot);
-        return { slot, name: c?.player.name, week: c?.week, broken: false };
+        return { slot, name: c?.player.name, week: c?.week, broken: false, summary: c ? summarize(c) : undefined, archived: await archiveName(slot) };
       } catch {
-        return { slot, name: "손상된 저장", week: 0, broken: true };
+        return { slot, name: "손상된 저장", week: 0, broken: true, summary: undefined, archived: await archiveName(slot) };
       }
     }),
   );
@@ -169,4 +179,78 @@ export async function slots() {
 export async function activeSlot() {
   const n = await get("activeSlot");
   return [1, 2, 3].includes(Number(n)) ? Number(n) : 1;
+}
+
+/** Scouting progress lives outside the career slots so it can never overwrite a career. */
+export async function loadScouting(): Promise<ScoutState | null> {
+  const v = await get("scouting");
+  return validScoutState(v) ? v : null;
+}
+export function saveScouting(s: ScoutState): Promise<void> {
+  const task = queue
+    .catch(() => {})
+    .then(async () => {
+      const d = await db();
+      await new Promise<void>((res, rej) => {
+        const t = d.transaction("saves", "readwrite");
+        t.objectStore("saves").put(s, "scouting");
+        t.oncomplete = () => res();
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      });
+    });
+  queue = task;
+  return task;
+}
+
+/**
+ * Before a new player replaces an occupied slot, keep the old career under
+ * `archive{n}`. Autosaves never touch it, so it survives until the next replacement.
+ */
+export async function archiveSlot(slot: number): Promise<boolean> {
+  const old = await get("slot" + slot);
+  if (!isRestorableSave(old)) return false;
+  const task = queue
+    .catch(() => {})
+    .then(async () => {
+      const d = await db();
+      await new Promise<void>((res, rej) => {
+        const t = d.transaction("saves", "readwrite");
+        t.objectStore("saves").put(old, "archive" + slot);
+        t.oncomplete = () => res();
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      });
+    });
+  queue = task;
+  await task;
+  return true;
+}
+export async function loadArchive(slot: number) {
+  const raw = await get("archive" + slot);
+  return raw ? decode(String(raw)) : null;
+}
+export async function archiveName(slot: number): Promise<string | undefined> {
+  try { return (await loadArchive(slot))?.player.name; } catch { return undefined; }
+}
+/** Swaps slot n and its archived player in one transaction, so neither career is lost. */
+export async function swapArchive(slot: number): Promise<void> {
+  const task = queue
+    .catch(() => {})
+    .then(async () => {
+      const d = await db();
+      const current = await get("slot" + slot), archived = await get("archive" + slot);
+      if (!isRestorableSave(archived)) throw Error("복원할 교체 전 선수가 없습니다.");
+      await new Promise<void>((res, rej) => {
+        const t = d.transaction("saves", "readwrite"), store = t.objectStore("saves");
+        store.put(archived, "slot" + slot);
+        if (isRestorableSave(current)) store.put(current, "archive" + slot); else store.delete("archive" + slot);
+        store.put(slot, "activeSlot");
+        t.oncomplete = () => res();
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      });
+    });
+  queue = task;
+  return task;
 }
