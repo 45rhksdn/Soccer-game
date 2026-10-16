@@ -1,0 +1,13 @@
+{
+  "matches": 200,
+  "passes": 1678,
+  "completed": 1371,
+  "keyPasses": 7,
+  "xA": 0.814749994736307,
+  "assists": 0,
+  "goodReceipts": 1,
+  "shotsFromGoodReceipts": 1,
+  "goalsFromGoodReceipts": 0,
+  "qualityAtReceipt": 0.1542986806612356,
+  "qualityAtShot": 0.12443517233022194
+}
