@@ -18,8 +18,8 @@ export function EquipmentPanel({c,onBuy,onEquip,onUnequip}:{c:Career,onBuy:(id:s
       {EQUIPMENT.map(e=>{const owned=s.owned.includes(e.id),on=s.equipped[e.slot]===e.id;return <li key={e.id}>
         <div><strong>{e.name}</strong> <small className="muted">{EQUIP_SLOTS.find(x=>x.id===e.slot)!.label}</small><br/><span className="muted">{bonusText(e.bonus,LABELS)}</span></div>
         {on?<span className="pill">장착 중</span>
-        :owned?<button type="button" disabled={locked} onClick={()=>onEquip(e.id)} aria-label={`${e.name} 장착`}>장착</button>
-        :<button type="button" disabled={locked||d.wallet<e.price} onClick={()=>onBuy(e.id)} aria-label={`${e.name} 구매`}>{e.price}만원 구매</button>}
+        :owned?<button type="button" className="secondary" disabled={locked} onClick={()=>onEquip(e.id)} aria-label={`${e.name} 장착`}>장착</button>
+        :<button type="button" className="secondary" disabled={locked||d.wallet<e.price} onClick={()=>onBuy(e.id)} aria-label={`${e.name} 구매`}>{e.price}만원 구매</button>}
       </li>;})}
     </ul>
     {c.match&&<p className="muted">경기 중에는 장비를 바꿀 수 없습니다.</p>}

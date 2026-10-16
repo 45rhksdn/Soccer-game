@@ -19,7 +19,9 @@ function migrateV4(c:Career){
  * the same id and can never be rewarded twice. Equipment and NPC injuries are optional fields.
  */
 function migrateV5(c:Career){
-  c.id??=`legacy-${checksum(`${c.seed}|${c.player.name}|${c.player.pos}|${c.school}|${c.world?.seed}|${c.schoolRef?.id??''}`)}`;
+  // Only values fixed at creation (RNG states such as c.seed change while playing, so they are not used).
+  const p=c.player,r=c.development?.rival;
+  c.id??=`legacy-${checksum([p.name,p.pos,p.secondary,p.foot,p.height,p.weight,p.style,p.curve,p.learning,c.school,c.schoolRef?.id??'',r?.player?.name??'',r?.school??'',c.growth?.[0]?.overall??''].join('|'))}`;
   (c as {version:number}).version=6;
 }
 import {newWorld} from "./world";

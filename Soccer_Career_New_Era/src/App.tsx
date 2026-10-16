@@ -389,7 +389,7 @@ export default function App() {
         </div>
         <div className="version">
           <span className="dot" /> 오프라인 플레이 지원
-          <small>0.4 · 다중 특성 · 실제 고교 발굴</small>
+          <small>0.5 · 장비 · 은퇴 보상 · 32세 전성기</small>
         </div>
       </aside>
       <div className="workspace">
@@ -1200,7 +1200,7 @@ export default function App() {
               SOCCER CAREER <b>NEW ERA</b>
             </span>
             <span>한 명의 선수. 무한한 가능성.</span>
-            <small>CAREER BETA · 0.4</small>
+            <small>CAREER BETA · 0.5</small>
           </footer>
         </main>
       </div>
