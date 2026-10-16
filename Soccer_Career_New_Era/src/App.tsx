@@ -1,7 +1,12 @@
-import {WeekPlanner,GrowthNotes,RivalPanel} from './WeeklyPanels';
-import {TRAIT_TEXT} from './development';
+import {GrowthNotes,RivalPanel} from './WeeklyPanels';
+import {TraitList} from './TraitBadges';
+import {ScoutPanel} from './ScoutPanel';
+import {PlayerSlots} from './PlayerSlots';
+import {TodayPanel} from './TodayPanel';
+import {playToday,startTodayMatch,type TodayResult} from './development';
+import {careerFromCandidate,newScoutState,nextList,type ScoutState} from './scouting';
 import {WorldPanel} from './WorldPanels';
-import {teamName,competitionName,selection,startCareerMatch} from './career';
+import {teamName,competitionName,selection} from './career';
 import {clubOf} from './world';
 import {roleAbility} from './roles';
 import {userPerformance} from './engine';
@@ -22,12 +27,12 @@ import {
   Pause,
   Play,
   Plus,
-  Settings2,
   Shield,
   Target,
   Trophy,
   Upload,
   User,
+  Users,
   Volume2,
   Zap,
 } from "lucide-react";
@@ -38,28 +43,23 @@ import {
   actionChance,
   act,
   availableActions,
-  createMatch,
   finishMatch,
-  overall,
   rating,
   step,
   type Position,
 } from "./engine";
 import {
   SCHOOLS,
-  TRAINING,
   dateOf,
   newCareer,
   opponentOf,
   settle,
-  train,
   type Career,
-  type Training,
   type Player,
 } from "./career";
 import * as storage from "./storage";
 import { Pitch } from "./Pitch";
-type Tab = "home" | "training" | "player" | "records" | "saves" | "team" | "season" | "market" | "career" | "rival";
+type Tab = "home" | "training" | "player" | "records" | "saves" | "players" | "team" | "season" | "market" | "career" | "rival";
 export default function App() {
   const [c, setC] = useState<Career | null>(null),
     [tab, setTab] = useState<Tab>("home"),
@@ -72,7 +72,23 @@ export default function App() {
     [paused, setPaused] = useState(false),
     [speed, setSpeed] = useState(4),
     [tick, setTick] = useState(0),
-    [menu, setMenu] = useState(false);
+    [menu, setMenu] = useState(false),
+    [createMode, setCreateMode] = useState<"scout" | "manual">("scout"),
+    [targetSlot, setTargetSlot] = useState(1),
+    [scout, setScout] = useState<ScoutState | null>(null),
+    [scoutSchool, setScoutSchool] = useState<string | null>(null),
+    [today, setToday] = useState<TodayResult | null>(null);
+  const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
+  useEffect(() => {
+    storage
+      .loadScouting()
+      .then((s) => s ?? newScoutState(freshSeed()))
+      .catch(() => newScoutState(freshSeed()))
+      .then((s) => {
+        setScout(s);
+        storage.saveScouting(s).catch(() => {});
+      });
+  }, []);
   const live = useRef(c);
   live.current = c;
   const currentSlot = useRef(slot);
@@ -143,7 +159,7 @@ export default function App() {
         if (m.decision || m.ended) break;
       }
       setTick((v) => v + 1);
-      if (m.decision || m.ended) persist(live.current!);
+      if (m.decision || m.ended) persist(live.current!, currentSlot.current);
     }, 50);
     return () => clearInterval(interval);
   }, [c?.match, paused, speed]);
@@ -167,19 +183,20 @@ export default function App() {
   const nav = [
     { id: "home", label: "커리어 홈", icon: Home },
     { id: "player", label: "내 선수", icon: User },
-    { id: "training", label: "주간 일정", icon: Dumbbell },
+    { id: "training", label: "오늘의 일정", icon: Dumbbell },
     { id: "records", label: "경기 기록", icon: ChartNoAxesCombined },
     { id: "rival", label: "라이벌", icon: User },
     { id: "team", label: "팀 · 주전 경쟁", icon: Shield },
     { id: "season", label: "시즌 · 리그", icon: Trophy },
     { id: "market", label: "이적 · 계약", icon: Flag },
     { id: "career", label: "커리어 · 업적", icon: CalendarDays },
+    { id: "players", label: "선수 변경하기", icon: Users },
     { id: "saves", label: "저장 관리", icon: FolderHeart },
   ] as const;
   function go(t: Tab) {
     setTab(t);
     setMenu(false);
-    if (t === "saves") storage.slots().then(setSlots);
+    if (t === "saves" || t === "players") storage.slots().then(setSlots);
   }
   async function openSlot(n: number, backup = false) {
     try {
@@ -190,6 +207,7 @@ export default function App() {
       }
       setSlot(n);
       setC(value);
+      setToday(null);
       setCreating(false);
       setTab("home");
       inform(backup ? "직전 백업을 복원했습니다." : "커리어를 불러왔습니다.");
@@ -218,6 +236,55 @@ export default function App() {
     } catch (e) {
       inform(String(e));
     }
+  }
+  /** Starts the creation flow for an explicit slot; occupied slots need confirmation. */
+  function startNew(n: number) {
+    const s = slots.find((x) => x.slot === n);
+    if (
+      s?.summary &&
+      !confirm(
+        `슬롯 ${n}의 ${s.summary.name} 선수를 새 선수로 교체할까요? 기존 선수는 ‘교체 전 선수’로 보관되어 복원할 수 있습니다.`,
+      )
+    )
+      return;
+    setTargetSlot(n);
+    setCreateMode("scout");
+    setCreating(true);
+    setMenu(false);
+  }
+  /** Saves the current player, archives an occupied target slot, then starts the new career there. */
+  async function beginCareer(next: Career) {
+    const target = targetSlot;
+    try {
+      if (c) await persist(c, slot);
+      await storage.archiveSlot(target);
+    } catch (e) {
+      inform(String(e));
+      return;
+    }
+    setSlot(target);
+    setC(next);
+    setCreating(false);
+    setScoutSchool(null);
+    setTab("home");
+    inform(`입단을 축하합니다. 슬롯 ${target}에 저장됩니다. 이번주 일정을 정해 보세요.`);
+  }
+  async function switchTo(n: number) {
+    if (c) await persist(c, slot);
+    await openSlot(n);
+    storage.slots().then(setSlots);
+  }
+  async function restoreArchive(n: number) {
+    if (!confirm(`슬롯 ${n}의 교체 전 선수를 복원할까요? 지금 슬롯 ${n}에 있는 선수는 대신 보관됩니다.`)) return;
+    try {
+      if (c) await persist(c, slot);
+      await storage.swapArchive(n);
+      await openSlot(n);
+      inform("교체 전 선수를 복원했습니다. 바뀐 선수는 다시 보관되었습니다.");
+    } catch (e) {
+      inform(String(e));
+    }
+    storage.slots().then(setSlots);
   }
   if (!ready)
     return (
@@ -270,7 +337,7 @@ export default function App() {
         </div>
         <div className="version">
           <span className="dot" /> 오프라인 플레이 지원
-          <small>0.3 · 라이벌과 주간 일정</small>
+          <small>0.4 · 다중 특성 · 실제 고교 발굴</small>
         </div>
       </aside>
       <div className="workspace">
@@ -302,17 +369,44 @@ export default function App() {
             </div>
           )}
           {creating ? (
-            <Create
-              onCancel={() => setCreating(false)}
-              onCreate={(player, school) => {
-                const n = newCareer(player, school, crypto.getRandomValues(new Uint32Array(1))[0]);
-                setC(n);
-                setCreating(false);
-                setTab("home");
-                inform("입단을 축하합니다. 이번주 일정을 정해 보세요.");
-              }}
-            />
-          ) : !c && tab !== "saves" ? (
+            <>
+              <div className="create-mode" role="tablist" aria-label="선수 생성 방식">
+                <button role="tab" type="button" aria-selected={createMode === "scout"} className={createMode === "scout" ? "selected" : ""} onClick={() => setCreateMode("scout")}>실제 고교에서 발굴</button>
+                <button role="tab" type="button" aria-selected={createMode === "manual"} className={createMode === "manual" ? "selected" : ""} onClick={() => setCreateMode("manual")}>직접 만들기</button>
+                <span className="muted">저장 위치 · 슬롯 {targetSlot}</span>
+              </div>
+              {createMode === "scout" ? (
+                <>
+                  <Heading
+                    eyebrow="SCOUTING / 01"
+                    title="실제 고교 축구부에서 시작하세요."
+                    text="지역과 학교를 고르면 가상의 후보 선수들이 나옵니다. 비교한 뒤 한 명을 골라 커리어를 시작하세요."
+                  />
+                  {scout ? (
+                    <ScoutPanel
+                      scout={scout}
+                      school={scoutSchool}
+                      setSchool={setScoutSchool}
+                      onReroll={(id) => {
+                        const n = nextList(scout, id);
+                        setScout(n);
+                        storage.saveScouting(n).catch((e) => inform(String(e)));
+                      }}
+                      onPick={(cand) => beginCareer(careerFromCandidate(cand, scout.seed))}
+                    />
+                  ) : (
+                    <div className="note">스카우트 정보를 불러오는 중…</div>
+                  )}
+                  <button className="text-button" type="button" onClick={() => setCreating(false)}>돌아가기</button>
+                </>
+              ) : (
+                <Create
+                  onCancel={() => setCreating(false)}
+                  onCreate={(player, school) => beginCareer(newCareer(player, school, freshSeed()))}
+                />
+              )}
+            </>
+          ) : !c && tab !== "saves" && tab !== "players" ? (
             <>
               <div className="page-heading">
                 <div>
@@ -339,11 +433,11 @@ export default function App() {
                   </p>
                   <button
                     className="primary cream"
-                    onClick={() => setCreating(true)}
+                    onClick={() => startNew(slot)}
                   >
                     새로운 커리어 시작 <ArrowRight size={18} />
                   </button>
-                  <small>가상의 고교 팀 · 22인 경기 · 나만의 선수 육성</small>
+                  <small>실제 고교 축구부 · 가상의 선수 · 22인 경기 · 나만의 선수 육성</small>
                 </div>
                 <div className="welcome-pitch">
                   <Pitch ambient />
@@ -477,7 +571,7 @@ export default function App() {
                           {userPerformance(m).stats.assists}
                         </p>
                         <p>패스 {userPerformance(m).stats.completed}/{userPerformance(m).stats.passes} · 전진 패스 {userPerformance(m).stats.progressivePasses ?? 0} · 키패스 {userPerformance(m).stats.keyPasses ?? 0} · 기대 도움 {(userPerformance(m).stats.expectedAssists ?? 0).toFixed(2)}</p>
-                        {m.traitBoost&&<p className="note">실전파 발동 · 이번 경기 능력치 ×1.3</p>}
+                        {(m.traitNotes??(m.traitBoost?['실전파 발동 · 이번 경기 능력치 ×1.3']:[])).map((t)=><p key={t} className="note">{t}</p>)}
                         <small className="muted">키패스는 동료의 슈팅으로 연결한 패스입니다. 동료가 놓쳐도 평점에 반영됩니다.</small>
                       </div>
                       <div className="rating">
@@ -486,9 +580,17 @@ export default function App() {
                       </div>
                       <button
                         className="primary"
-                        onClick={() => {update(settle);setTab("home");setPaused(false);}}
+                        onClick={() => {
+                          // The season ends inside settle (last league/cup/national match): go straight to the season summary.
+                          let seasonEnded = false;
+                          update((n) => { const was = n.world.phase; settle(n); seasonEnded = was !== "offseason" && n.world.phase === "offseason"; });
+                          setTab(seasonEnded ? "season" : "home");
+                          if (seasonEnded) inform("시즌이 끝났습니다. 시즌 결산을 확인하세요.");
+                          setPaused(false);
+                          setToday(null);
+                        }}
                       >
-                        결과 반영 · 남은 일정 진행 <ArrowRight size={17} />
+                        {c?.development.active?.mode === "daily" ? "결과 반영" : "결과 반영 · 남은 일정 진행"} <ArrowRight size={17} />
                       </button>
                     </section>
                   ) : (
@@ -629,8 +731,7 @@ export default function App() {
                       </span>
                       <h2>지난주 주요 뉴스</h2>
                       <div className="headline-news">{c.development.news.filter(n=>n.day>=c.day-7).slice(0,4).map((n,i)=><p key={i}>{n.text}</p>)}{!c.development.news.some(n=>n.day>=c.day-7)&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
-                      <p>주요 특성 <b>{c.development.trait}</b> · {TRAIT_TEXT[c.development.trait]}</p>
-                      <button className="primary cream" onClick={()=>go("training")}>이번주 일정 진행 <ArrowRight size={18}/></button>
+                      <div className="trait-line"><span>보유 특성</span><TraitList traits={c.development.traits} empty="특성 없음"/></div>
                     </div>
                     <div className="hero-number">
                       10
@@ -640,6 +741,12 @@ export default function App() {
                     </div>
                     <div className="hero-pattern" />
                   </section>
+                  <TodayPanel
+                    c={c}
+                    last={today}
+                    onTrain={(t) => update((n) => setToday(playToday(n, t)))}
+                    onMatch={() => { setToday(null); update(startTodayMatch); }}
+                  />
                   <div className="metrics">
                     {[
                       {
@@ -709,8 +816,8 @@ export default function App() {
                           <small>AWAY</small>
                         </div>
                       </div>
-                      <button className="primary full" onClick={()=>go(c.world.phase==='offseason'?'season':c.world.phase==='retired'?'career':'training')}>{c.world.phase==='offseason'?'시즌 결산 · 다음 시즌':c.world.phase==='retired'?'은퇴 기록 보기':'주간 일정에서 경기 준비'}</button>
-                      <small className="center muted">경기는 7일 일정의 토요일에 진행합니다.</small>
+                      <button className="primary full" onClick={()=>go(c.world.phase==='offseason'?'season':c.world.phase==='retired'?'career':'training')}>{c.world.phase==='offseason'?'시즌 결산 · 다음 시즌':c.world.phase==='retired'?'은퇴 기록 보기':'오늘의 일정으로 이동'}</button>
+                      <small className="center muted">경기는 매주 토요일입니다. 오늘의 일정에서 하루씩 진행하세요.</small>
                     </section>
                     <GrowthNotes c={c}/>
                   </div>
@@ -728,7 +835,18 @@ export default function App() {
                   </section>
                 </>
               ) : null}
-              {tab === "training" && c && <WeekPlanner c={c} update={update}/>}
+              {tab === "training" && c && !m && (
+                <>
+                  <Heading eyebrow="DAILY ROUTINE" title="오늘의 일정" text="하루에 한 가지를 고르면 하루가 지나고 바로 반영됩니다. 토요일은 경기일입니다." />
+                  <TodayPanel
+                    c={c}
+                    last={today}
+                    onTrain={(t) => update((n) => setToday(playToday(n, t)))}
+                    onMatch={() => { setToday(null); update(startTodayMatch); }}
+                  />
+                  <GrowthNotes c={c} />
+                </>
+              )}
               {tab === "rival" && c && <RivalPanel c={c}/>}
               {tab === "player" && c && (
                 <>
@@ -747,6 +865,7 @@ export default function App() {
                       <p>
                         {p!.style} · {p!.curve}
                       </p>
+                      <TraitList traits={c.development.traits} detail empty="보유 특성 없음" />
                     </div>
                     <div className="ovr">
                       {roleAbility(p!.a,p!.pos).toFixed(1)}
@@ -892,6 +1011,17 @@ export default function App() {
                 </>
               )}
               {c&&["team","season","market","career"].includes(tab)&&<WorldPanel c={c} tab={tab} update={update}/>}
+              {tab === "players" && (
+                <PlayerSlots
+                  slots={slots}
+                  current={slot}
+                  hasCareer={!!c}
+                  onSwitch={switchTo}
+                  onNew={startNew}
+                  onRestore={(n) => openSlot(n, true)}
+                  onRestoreArchive={restoreArchive}
+                />
+              )}
               {tab === "saves" && (
                 <>
                   <Heading
@@ -972,6 +1102,8 @@ export default function App() {
                         accept=".json"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
+                          // Reset first so picking the same file again still fires onChange.
+                          e.target.value = "";
                           if (
                             file &&
                             c &&
@@ -979,7 +1111,6 @@ export default function App() {
                           )
                             return;
                           importSave(file);
-                          e.target.value = "";
                         }}
                       />
                     </label>
@@ -987,14 +1118,7 @@ export default function App() {
                   <button
                     className="text-button"
                     onClick={() => {
-                      if (
-                        c &&
-                        !confirm(
-                          "현재 슬롯에 새 커리어를 시작할까요? 다른 슬롯에 저장하거나 내보내기를 먼저 권장합니다.",
-                        )
-                      )
-                        return;
-                      setCreating(true);
+                      go("players");
                     }}
                   >
                     <Plus size={17} /> 새 커리어 만들기
@@ -1013,7 +1137,7 @@ export default function App() {
               SOCCER CAREER <b>NEW ERA</b>
             </span>
             <span>한 명의 선수. 무한한 가능성.</span>
-            <small>CAREER BETA · 0.3</small>
+            <small>CAREER BETA · 0.4</small>
           </footer>
         </main>
       </div>
@@ -1076,62 +1200,6 @@ function Growth({ values }: { values: number[] }) {
         <strong>현재 {values.at(-1)!.toFixed(1)}</strong>
       </div>
     </div>
-  );
-}
-function TrainingCards({
-  disabled,
-  onTrain,
-}: {
-  disabled: boolean;
-  onTrain: (type: Training, intensity: number) => void;
-}) {
-  const [intensity, setIntensity] = useState(1);
-  return (
-    <>
-      <div className="intensity">
-        <span>
-          <Settings2 size={17} /> 훈련 강도
-        </span>
-        {[
-          [0.7, "가볍게"],
-          [1, "보통"],
-          [1.4, "강하게"],
-        ].map(([v, label]) => (
-          <button
-            key={v}
-            className={intensity === v ? "selected" : ""}
-            onClick={() => setIntensity(Number(v))}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="training-grid">
-        {(Object.keys(TRAINING) as Training[]).map((key, i) => (
-          <section className="card training-card" key={key}>
-            <div className="intro-top">
-              {key === "rest" ? <Activity /> : <Dumbbell />}
-              <span>0{i + 1}</span>
-            </div>
-            <h3>{TRAINING[key].label}</h3>
-            <p>{TRAINING[key].desc}</p>
-            <small>
-              {key === "rest"
-                ? "컨디션 +30 · 피로 -25"
-                : `컨디션 -${(9 * intensity).toFixed(1)} · 능력에 따른 점진적 성장`}
-            </small>
-            <button
-              className="secondary full"
-              disabled={disabled}
-              onClick={() => onTrain(key, intensity)}
-            >
-              {disabled ? "이번 주 훈련 완료 / 경기 진행 중" : "훈련 시작"}
-              <ArrowRight size={16} />
-            </button>
-          </section>
-        ))}
-      </div>
-    </>
   );
 }
 function Create({

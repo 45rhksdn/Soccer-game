@@ -1,4 +1,4 @@
-# Architecture — 0.3.0
+# Architecture — 0.4.0
 
 React + TypeScript + Vite, Canvas 2D, IndexedDB. 앱의 플레이에는 서버나 외부 AI API가 필요 없다. 원작 코드/리소스를 복제하지 않았다.
 
@@ -52,3 +52,10 @@ Development에는 trait, wallet, 마지막 plan[7], active(시작일·cursor·�
 Match.insight와 rivalInsight는 발동률, 능력별 누적 영구 증가, 경기 중 이벤트를 보존한다. 경기 안에서는 즉시 증가, 영구 능력은 settle에서 한 번 반영한다. 실전파는 경기 슬롯/교체 대기 복사본에만 ×1.3을 적용하며 영구 능력에 덮어쓰지 않는다.
 
 World.currentDay와 Offer.issuedDay/expiresDay가 만료 기준이다. 관심 ID는 졸업 가능한 시즌까지 보존하고 제안 생성에 강제 포함한다. 연봉/이적료는 예산 내에서 구성한다. 협상과 수락 직전에도 만료를 검사한다. 비시즌에도 일정으로 날짜를 진행할 수 있고, 만료 후 재구직 경로로 진행 불능을 방지한다.
+
+## 0.4 특성·고교 발굴·선수 변경하기
+`traits.ts`가 특성 데이터 표와 효과 계층을 소유한다. 게임 로직은 `trainingGrowthMultiplier`, `trainingFatigueMultiplier`, `injuryChanceMultiplier`, `injuryWeeks`, `luckChance`, `matchAttributes`, `agingDecline`만 호출하므로 새 특성은 표에 추가하면 된다(새 효과 종류만 코드 추가). 경기 효과는 `configureTrait`에서 경기 사본 능력치에만 적용한다. 사용자·라이벌의 실전파 판정은 기존처럼 커리어 RNG를 쓰고(특성이 없으면 난수 소비 순서가 0.3과 같다), NPC는 `seedFrom(시드, id)` 해시 RNG를 써서 커리어·월드 RNG를 흔들지 않는다.
+
+`schools.ts`는 실제 학교 카탈로그(불변 id·시·도·출처), `scouting.ts`는 `seedFrom(스카우트 시드, 학교#목록)`으로 후보를 만든다. 후보 선택은 `newCareer(..., preset)`으로 능력치·잠재력·특성·`schoolRef`를 넘긴다. `school`(0~2)은 가상 리그 구조의 슬롯으로 유지되어 기존 저장·월드 생성과 호환된다.
+
+저장은 v5. `validate()`가 v1→v2→v3→v4→v5를 차례로 적용한다. 슬롯 외에 `archive{n}`(교체 전 선수)과 `scouting`을 같은 store에 둔다. `save()`는 내용이 같으면 쓰지 않고, 읽을 수 있는 이전 슬롯만 `backup{n}`으로 옮긴다.

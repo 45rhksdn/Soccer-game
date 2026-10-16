@@ -1,4 +1,16 @@
 import {ensureDevelopment} from './development';
+import {isKnownTrait,npcTraits,normalizeTraits,TRAIT_LIMIT} from './traits';
+import {validScoutState,type ScoutState} from './scouting';
+export const SAVE_VERSION=5;
+const traitsValid=(t:unknown)=>Array.isArray(t)&&t.length<=TRAIT_LIMIT&&t.every(x=>typeof x==='string');
+/** v4 → v5: single trait → trait list (the existing trait is kept), NPC traits added deterministically. */
+function migrateV4(c:Career){
+  const d=c.development as unknown as {trait?:unknown,traits?:unknown,rival:{trait?:unknown,traits?:unknown}};
+  d.traits=Array.isArray(d.traits)?normalizeTraits(d.traits):isKnownTrait(d.trait)?[d.trait]:[];delete d.trait;
+  d.rival.traits=Array.isArray(d.rival.traits)?normalizeTraits(d.rival.traits):isKnownTrait(d.rival.trait)?[d.rival.trait]:[];delete d.rival.trait;
+  for(const club of c.world.clubs)for(const p of club.roster)p.traits??=p.id===c.development.rival.id?[...(d.rival.traits as string[])]:npcTraits(c.world.seed,p.id);
+  (c as {version:number}).version=5;
+}
 import {newWorld} from "./world";
 import type { Career } from "./career";
 const DB = "soccer-career-new-era";
@@ -38,8 +50,9 @@ export function validate(raw: unknown): Career {
     c.feed ??= [];
   }
   if ((c as {version:number}).version === 2) {(c as {version:number}).version=3;c.world=newWorld(c.seed,c.school,c.week);c.world.year=2026+Math.floor(c.week/52);}
-  if((c as {version:number}).version===3){c.version=4;ensureDevelopment(c);}
-  if (c.version !== 4) throw Error("지원되지 않는 저장 버전입니다.");
+  if((c as {version:number}).version===3){(c as {version:number}).version=4;ensureDevelopment(c);}
+  if((c as {version:number}).version===4&&c.development&&c.world?.clubs)migrateV4(c);
+  if (c.version !== SAVE_VERSION) throw Error("지원되지 않는 저장 버전입니다.");
   if (
     !c.player ||
     typeof c.player.name !== "string" ||
@@ -78,7 +91,7 @@ export function validate(raw: unknown): Career {
   )
     throw Error("경기 데이터가 손상되었습니다.");
   if(!c.world || !Array.isArray(c.world.clubs) || c.world.clubs.length!==24 || !c.world.clubs.some(club=>club.id===c.world.clubId) || !Array.isArray(c.world.fixtures) || !Array.isArray(c.world.tables))throw Error('축구 세계 저장이 손상되었습니다.');
-  if(!c.development || c.development.plan.length!==7 || !['천재','실전파','행운아'].includes(c.development.trait) || !Number.isFinite(c.development.wallet) || c.development.wallet<0 || !c.development.rival?.player)throw Error('육성 저장 데이터가 손상되었습니다.');
+  if(!c.development || c.development.plan.length!==7 || !traitsValid(c.development.traits) || !traitsValid(c.development.rival?.traits) || [c.development.experienceBank,c.development.rival?.experienceBank].some(v=>v!==undefined&&!(Number.isFinite(v)&&v>=0)) || c.world.clubs.some(club=>club.roster.some(p=>p.traits!==undefined&&!traitsValid(p.traits))) || (c.schoolRef!==undefined&&(typeof c.schoolRef?.id!=='string'||typeof c.schoolRef?.name!=='string')) ||!Number.isFinite(c.development.wallet) || c.development.wallet<0 || !c.development.rival?.player)throw Error('육성 저장 데이터가 손상되었습니다.');
   return c;
 }
 export function encode(c: Career) {
@@ -100,6 +113,16 @@ export function decode(s: string) {
     throw Error("저장 파일 검증 실패: 파일이 손상되었습니다.");
   return validate(JSON.parse(envelope.payload));
 }
+/** True when a stored slot value can be read back as a valid career. */
+export function isRestorableSave(raw: unknown) {
+  if (typeof raw !== "string") return false;
+  try {
+    decode(raw);
+    return true;
+  } catch {
+    return false;
+  }
+}
 let queue = Promise.resolve();
 export function save(slot: number, c: Career): Promise<void> {
   const data = encode(c);
@@ -108,11 +131,16 @@ export function save(slot: number, c: Career): Promise<void> {
     .then(async () => {
       const d = await db();
       const old = await get("slot" + slot);
+      // Unchanged state: only record the active slot, so the backup keeps the
+      // last *different* save instead of being overwritten by an identical copy.
+      const unchanged = old === data;
+      // Never replace a good backup with an unreadable slot.
+      const rotate = !unchanged && isRestorableSave(old);
       await new Promise<void>((res, rej) => {
         const t = d.transaction("saves", "readwrite");
         const store = t.objectStore("saves");
-        if (old) store.put(old, "backup" + slot);
-        store.put(data, "slot" + slot);
+        if (rotate) store.put(old, "backup" + slot);
+        if (!unchanged) store.put(data, "slot" + slot);
         store.put(slot, "activeSlot");
         t.oncomplete = () => res();
         t.onerror = () => rej(t.error);
@@ -126,14 +154,23 @@ export async function load(slot: number, backup = false) {
   const raw = await get((backup ? "backup" : "slot") + slot);
   return raw ? decode(String(raw)) : null;
 }
+/** Short, display-only description of a career for slot pickers. */
+export function summarize(c: Career) {
+  const club = c.world.clubs.find((x) => x.id === c.world.clubId);
+  return {
+    name: c.player.name, age: c.player.age, pos: c.player.pos, team: club?.name ?? "", year: c.world.year, week: c.week,
+    school: c.schoolRef?.name, traits: [...c.development.traits], retired: c.world.phase === "retired",
+  };
+}
+export type SlotInfo = Awaited<ReturnType<typeof slots>>[number];
 export async function slots() {
   return Promise.all(
     [1, 2, 3].map(async (slot) => {
       try {
         const c = await load(slot);
-        return { slot, name: c?.player.name, week: c?.week, broken: false };
+        return { slot, name: c?.player.name, week: c?.week, broken: false, summary: c ? summarize(c) : undefined, archived: await archiveName(slot) };
       } catch {
-        return { slot, name: "손상된 저장", week: 0, broken: true };
+        return { slot, name: "손상된 저장", week: 0, broken: true, summary: undefined, archived: await archiveName(slot) };
       }
     }),
   );
@@ -142,4 +179,78 @@ export async function slots() {
 export async function activeSlot() {
   const n = await get("activeSlot");
   return [1, 2, 3].includes(Number(n)) ? Number(n) : 1;
+}
+
+/** Scouting progress lives outside the career slots so it can never overwrite a career. */
+export async function loadScouting(): Promise<ScoutState | null> {
+  const v = await get("scouting");
+  return validScoutState(v) ? v : null;
+}
+export function saveScouting(s: ScoutState): Promise<void> {
+  const task = queue
+    .catch(() => {})
+    .then(async () => {
+      const d = await db();
+      await new Promise<void>((res, rej) => {
+        const t = d.transaction("saves", "readwrite");
+        t.objectStore("saves").put(s, "scouting");
+        t.oncomplete = () => res();
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      });
+    });
+  queue = task;
+  return task;
+}
+
+/**
+ * Before a new player replaces an occupied slot, keep the old career under
+ * `archive{n}`. Autosaves never touch it, so it survives until the next replacement.
+ */
+export async function archiveSlot(slot: number): Promise<boolean> {
+  const old = await get("slot" + slot);
+  if (!isRestorableSave(old)) return false;
+  const task = queue
+    .catch(() => {})
+    .then(async () => {
+      const d = await db();
+      await new Promise<void>((res, rej) => {
+        const t = d.transaction("saves", "readwrite");
+        t.objectStore("saves").put(old, "archive" + slot);
+        t.oncomplete = () => res();
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      });
+    });
+  queue = task;
+  await task;
+  return true;
+}
+export async function loadArchive(slot: number) {
+  const raw = await get("archive" + slot);
+  return raw ? decode(String(raw)) : null;
+}
+export async function archiveName(slot: number): Promise<string | undefined> {
+  try { return (await loadArchive(slot))?.player.name; } catch { return undefined; }
+}
+/** Swaps slot n and its archived player in one transaction, so neither career is lost. */
+export async function swapArchive(slot: number): Promise<void> {
+  const task = queue
+    .catch(() => {})
+    .then(async () => {
+      const d = await db();
+      const current = await get("slot" + slot), archived = await get("archive" + slot);
+      if (!isRestorableSave(archived)) throw Error("복원할 교체 전 선수가 없습니다.");
+      await new Promise<void>((res, rej) => {
+        const t = d.transaction("saves", "readwrite"), store = t.objectStore("saves");
+        store.put(archived, "slot" + slot);
+        if (isRestorableSave(current)) store.put(current, "archive" + slot); else store.delete("archive" + slot);
+        store.put(slot, "activeSlot");
+        t.oncomplete = () => res();
+        t.onerror = () => rej(t.error);
+        t.onabort = () => rej(t.error);
+      });
+    });
+  queue = task;
+  return task;
 }

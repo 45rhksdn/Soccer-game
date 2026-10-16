@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches-ignore: ['build/**']
+  pull_request:
+
+defaults:
+  run:
+    working-directory: Soccer_Career_New_Era
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Soccer_Career_New_Era/package-lock.json
+      - run: npm ci
+      - name: Type-check and production build
+        run: npm run build
+      - name: Unit, regression and balance tests
+        run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-build
+          path: Soccer_Career_New_Era/dist/
+      - name: Publish the playable build to branch build/<branch>
+        if: github.event_name == 'push' && !startsWith(github.ref_name, 'build/')
+        run: |
+          cd dist
+          git init -q
+          git checkout -q -b build
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Playable build of ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/build/${GITHUB_REF_NAME}
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Soccer_Career_New_Era/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Browser tests (desktop + iPhone-size Chromium, dev server)
+        run: npm run test:e2e
+      - name: Production build + offline PWA browser tests
+        run: npm run build && PWA_TEST=1 npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-reports
+          path: Soccer_Career_New_Era/reports/
+
+  webkit:
+    # Safari engine with an iPhone 13 profile. Informational: real iPhone Safari is still untested.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Soccer_Career_New_Era/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - name: Browser tests on WebKit (iPhone 13 profile)
+        run: WEBKIT=1 npx playwright test --project=iphone-webkit

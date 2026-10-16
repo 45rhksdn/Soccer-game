@@ -37,6 +37,11 @@ export default defineConfig({
       name: "mobile",
       use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },
     },
+    // Safari's engine (WebKit) with the iPhone 13 profile. Opt-in: WEBKIT=1 after
+    // `npx playwright install webkit`. Still not a real iPhone Safari test.
+    ...(process.env.WEBKIT
+      ? [{ name: "iphone-webkit", use: { ...devices["iPhone 13"] } }]
+      : []),
   ],
   reporter: [["list"], ["json", { outputFile: "reports/playwright.json" }]],
 });
