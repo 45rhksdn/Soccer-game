@@ -1,3 +1,4 @@
+import {traitNotice} from './traitPresentation';
 import {GrowthNotes,RivalPanel} from './WeeklyPanels';
 import {TraitList} from './TraitBadges';
 import {ScoutPanel} from './ScoutPanel';
@@ -625,7 +626,7 @@ export default function App() {
                           {userPerformance(m).stats.assists}
                         </p>
                         <p>패스 {userPerformance(m).stats.completed}/{userPerformance(m).stats.passes} · 전진 패스 {userPerformance(m).stats.progressivePasses ?? 0} · 키패스 {userPerformance(m).stats.keyPasses ?? 0} · 기대 도움 {(userPerformance(m).stats.expectedAssists ?? 0).toFixed(2)}</p>
-                        {(m.traitNotes??(m.traitBoost?['실전파 발동 · 이번 경기 능력치 ×1.3']:[])).map((t)=><p key={t} className="note">{t}</p>)}
+                        {(m.traitNotes??(m.traitBoost?['실전파 발동! 오늘은 몸놀림이 남다릅니다.']:[])).map((t)=><p key={t} className="note">{traitNotice(t)}</p>)}
                         <small className="muted">키패스는 동료의 슈팅으로 연결한 패스입니다. 동료가 놓쳐도 평점에 반영됩니다.</small>
                       </div>
                       <div className="rating">
@@ -784,8 +785,7 @@ export default function App() {
                         {competitionName(c)}
                       </span>
                       <h2>지난주 주요 뉴스</h2>
-                      <div className="headline-news">{c.development.news.filter(n=>n.day>=c.day-7).slice(0,4).map((n,i)=><p key={i}>{n.text}</p>)}{!c.development.news.some(n=>n.day>=c.day-7)&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
-                      <div className="trait-line"><span>보유 특성</span><TraitList traits={c.development.traits} empty="특성 없음"/></div>
+                      <div className="headline-news">{c.development.news.filter(n=>n.day>=c.day-7&&!n.text.startsWith('보유 특성')).slice(0,4).map((n,i)=><p key={i}>{traitNotice(n.text)}</p>)}{!c.development.news.some(n=>n.day>=c.day-7)&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
                     </div>
                     <div className="hero-number">
                       10

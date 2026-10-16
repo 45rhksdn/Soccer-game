@@ -66,7 +66,7 @@ export function applyDaily(c:Career,p:Player,type:Daily,trait:TraitInput,rival=f
 function trainDay(c:Career,rival:boolean,type:Daily,state:WeekBonus){
  const d=c.development,p=rival?d.rival.player:c.player,traits=rival?d.rival.traits:d.traits,name=p.name;
  const trains=isTrainingDay(p,type);
- let bonus=1;if(trains&&state.drive&&state.drive>1){bonus=state.drive;state.drive=undefined;news(c,`${name} · 라이벌 의식! 이번 주 첫 훈련 성장 ×${bonus}`);}
+ let bonus=1;if(trains&&state.drive&&state.drive>1){bonus=state.drive;state.drive=undefined;news(c,`${name} · 라이벌 의식! 훈련에 더욱 몰입합니다.`);}
  let text=applyDaily(c,p,type,traits,rival,bonus);if(bonus>1)text+=` · 라이벌 의식 ×${bonus}`;
  const f=focusBonus(traits);
  if(trains&&f&&!state.focusDone){const counts=state.focus??={};counts[type]=(counts[type]??0)+1;
@@ -183,7 +183,7 @@ export function configureTrait(c:Career,m:Match){
  const r=effect?matchAttributes(d.traits,gear,()=>random(c),{bigMatch:big}):{a:gear,boosted:false,news:[] as string[]};
  m.traitBoost=r.boosted;m.traitNotes=[...r.news];
  if(effect&&m.userOnPitch!==false)m.players[m.userId].a=r.a;
- if(m.benchEntry){m.benchEntry.a=sub===1?{...r.a}:Object.fromEntries(ATTRS.map(k=>[k,Math.min(100,r.a[k]*sub)])) as Attributes;if(sub>1)m.traitNotes.push(`슈퍼 조커 · 교체 투입 시 능력치 ×${sub}`);}
+ if(m.benchEntry){m.benchEntry.a=sub===1?{...r.a}:Object.fromEntries(ATTRS.map(k=>[k,Math.min(100,r.a[k]*sub)])) as Attributes;if(sub>1)m.traitNotes.push(`슈퍼 조커 · 교체 투입에 강한 선수`);}
  for(const t of r.news)news(c,t);
 }
 /** Formats exact insight gains for the growth history (e.g. "슈팅 +1 · 패스 +1"). */

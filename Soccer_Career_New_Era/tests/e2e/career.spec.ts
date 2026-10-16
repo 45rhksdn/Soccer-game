@@ -14,7 +14,7 @@ async function tapDays(page:Page,acts:string[]){for(const a of acts)await page.g
 const savedDay=(page:Page)=>page.evaluate(()=>new Promise<number>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const s=q.result.transaction('saves').objectStore('saves');const a=s.get('activeSlot');a.onsuccess=()=>{const r=s.get('slot'+(a.result??1));r.onsuccess=()=>{q.result.close();try{resolve(JSON.parse(JSON.parse(String(r.result)).payload).development.active?.cursor??0);}catch{resolve(-1);}};};};}));
 test('daily schedule → live action → growth/rival → reload mid-week and mid-match → slots and file restore',async({page},info)=>{
  test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await create(page);
- await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.getByText(/보유 특성/).first()).toBeVisible();
+ await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.locator('.career-hero')).not.toContainText('보유 특성');await expect(page.locator('.today-help')).toContainText('낮은 확률');
  await nav(page,'오늘의 일정');await tapDays(page,['패스훈련','달리기','슈팅훈련','휴식하기','드리블훈련']);
  await page.screenshot({path:`reports/${info.project.name}-daily.png`,fullPage:true});
  await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'12×',exact:true}).click();
