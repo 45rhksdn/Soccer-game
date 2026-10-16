@@ -14,7 +14,7 @@ import {WorldPanel} from './WorldPanels';
 import {teamName,competitionName,selection} from './career';
 import {clubOf} from './world';
 import {roleAbility} from './roles';
-import {userPerformance} from './engine';
+import {userPerformance,defend,tackleChance,DEFENSE_ACTIONS,type DefenseAction} from './engine';
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -187,13 +187,13 @@ export default function App() {
     if (!c?.match || c.match.ended || paused) return;
     const interval = setInterval(() => {
       const m = live.current?.match;
-      if (!m || m.ended || m.decision) return;
+      if (!m || m.ended || m.decision || m.defending) return;
       for (let i = 0; i < speed; i++) {
         step(m, 0.5);
-        if (m.decision || m.ended) break;
+        if (m.decision || m.defending || m.ended) break;
       }
       setTick((v) => v + 1);
-      if (m.decision || m.ended) persist(live.current!, currentSlot.current);
+      if (m.decision || m.defending || m.ended) persist(live.current!, currentSlot.current);
     }, 50);
     return () => clearInterval(interval);
   }, [c?.match, paused, speed]);
@@ -390,7 +390,7 @@ export default function App() {
         </div>
         <div className="version">
           <span className="dot" /> 오프라인 플레이 지원
-          <small>0.5 · 장비 · 은퇴 보상 · 32세 전성기</small>
+          <small>0.6 · 수비 선택 · 맞춤 이적 제안</small>
         </div>
       </aside>
       <div className="workspace">
@@ -576,7 +576,9 @@ export default function App() {
                         <span className="dot" />
                         {m.decision
                           ? "YOUR MOMENT"
-                          : paused
+                          : m.defending
+                            ? "DEFEND"
+                            : paused
                             ? "PAUSED"
                             : "LIVE"}
                       </div>
@@ -653,19 +655,53 @@ export default function App() {
                       <div className="section-title">
                         <div>
                           <span className="eyebrow">
-                            {m.decision ? "ON THE BALL" : "OFF THE BALL"}
+                            {m.decision ? "ON THE BALL" : m.defending ? "DEFENDING" : "OFF THE BALL"}
                           </span>
                           <h3>
                             {m.decision
                               ? "당신의 차례입니다."
-                              : "다음 기회를 준비하세요."}
+                              : m.defending
+                                ? `${m.players[m.ball.owner ?? m.userId].name}이(가) 공을 몰고 다가옵니다.`
+                                : m.guard
+                                  ? `${DEFENSE_ACTIONS[m.guard.kind].label} 중 · ${Math.max(0, Math.ceil(m.guard.until - m.clock))}초`
+                                  : "다음 기회를 준비하세요."}
                           </h3>
                         </div>
                         <span className="pill">
                           컨디션 {Math.round(m.players[m.userId].energy)}%
                         </span>
                       </div>
-                      {m.decision ? (
+                      {m.defending ? (
+                        <div className="action-grid defense-grid" role="group" aria-label="수비 선택">
+                          {(Object.keys(DEFENSE_ACTIONS) as DefenseAction[]).map((a) => (
+                            <button
+                              key={a}
+                              aria-label={`수비 ${DEFENSE_ACTIONS[a].label}`}
+                              onClick={() => {
+                                defend(m, a);
+                                setTick(tick + 1);
+                                persist(c!);
+                              }}
+                            >
+                              <span>{DEFENSE_ACTIONS[a].label}</span>
+                              <small>{a === "tackle" ? `성공 확률 ${Math.round(tackleChance(m) * 100)}% · ` : ""}{DEFENSE_ACTIONS[a].desc}</small>
+                              <ArrowUpRight size={17} />
+                            </button>
+                          ))}
+                          <button
+                            className="secondary"
+                            aria-label="수비 AI에게 맡기기"
+                            onClick={() => {
+                              defend(m, "none");
+                              setTick(tick + 1);
+                              persist(c!);
+                            }}
+                          >
+                            <span>자동 수비</span>
+                            <small>평소처럼 위치를 지키며 대응합니다.</small>
+                          </button>
+                        </div>
+                      ) : m.decision ? (
                         <div className="action-grid">
                           {availableActions(m).map((a) => (
                             <button
@@ -1200,7 +1236,7 @@ export default function App() {
               SOCCER CAREER <b>NEW ERA</b>
             </span>
             <span>한 명의 선수. 무한한 가능성.</span>
-            <small>CAREER BETA · 0.5</small>
+            <small>CAREER BETA · 0.6</small>
           </footer>
         </main>
       </div>

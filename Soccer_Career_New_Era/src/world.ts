@@ -1,4 +1,4 @@
-import {attributes,clamp,random,overall,type Attributes,type Position} from './engine';
+import {attributes,clamp,random,type Attributes,type Position} from './engine';
 import {roleAbility} from './roles';
 import {npcTraits,trainingGrowthMultiplier,lateBloom,abroadGrowthMultiplier,injuryChanceMultiplier,injuryWeeks,seedFrom,restRecoveryMultiplier,trainingFatigueMultiplier} from './traits';
 import {agingLoss,npcGrowthRate} from './aging';
@@ -37,7 +37,32 @@ export function startInternational(w:World,ability:number,age:number){if(clubOf(
 export function startNational(w:World,ability:number,age:number){if(age>=19&&ability>=66){w.phase='national';w.knockoutRound=0;w.opponentId=null;w.news.unshift('국가대표 발탁 · 국제 초청대회 출전');}else w.phase='offseason';}
 export function advanceCup(w:World,won:boolean,ability:number,age:number){if(won&&w.knockoutRound===0){w.knockoutRound=1;if(w.phase!=='national'){const candidates=w.clubs.filter(c=>c.id!==w.clubId&&c.id!==w.opponentId&&c.league===(w.phase==='cup'?clubOf(w).league:3));w.opponentId=candidates[Math.floor(random(w)*candidates.length)].id;}return;}if(won)w.achievements.unshift(`${w.year} ${w.phase==='cup'?'국내 컵':w.phase==='national'?'국제 초청대회':'대륙 클럽 컵'} 우승`);if(w.phase==='cup')startInternational(w,ability,age);else if(w.phase==='international')startNational(w,ability,age);else w.phase='offseason';}
 export function marketValue(ability:number,age:number,form:number,years:number){return Math.round(Math.max(50,(ability-35)**2*2*(age<24?1.35:age>31?.55:1)*(1+(form-6.5)*.12)*(.65+Math.min(3,years)*.12)));}
-export function generateOffers(w:World,p:{a:Attributes,pos:Position,age:number,energy:number},form:number){const ability=overall(p.a),current=clubOf(w),fee=current.league===0||w.contract.years<=0?0:marketValue(ability,p.age,form,w.contract.years);w.offers=[];if(p.age<19&&current.league===0)return;for(const club of w.clubs.filter(c=>c.league>0)){const peers=club.roster.filter(r=>r.pos===p.pos);const strength=peers.reduce((n,r)=>n+roleAbility(r.a,r.pos),0)/Math.max(1,peers.length);const fit=ability-strength;const youth=p.age<22&&ability>=strength-17;const isCurrent=club.id===w.clubId;const guaranteed=w.interestedClubIds?.includes(club.id);if(!isCurrent&&!guaranteed&&!youth&&fit< -9)continue;const salary=roleSalary(ability,club.league);if(club.budget<fee+salary*2&&!isCurrent&&!guaranteed)continue;w.offers.push({clubId:club.id,salary,years:2,fee:isCurrent?0:guaranteed?Math.max(0,Math.min(fee,club.budget-salary*2)):fee,issuedDay:w.currentDay??0,expiresDay:(w.currentDay??0)+14,role:fit>=0?'주전 경쟁':fit>=-7?'로테이션':'유망주 / 벤치',negotiated:false,status:'open'});}w.offers.sort((a,b)=>w.clubs.find(c=>c.id===a.clubId)!.league-w.clubs.find(c=>c.id===b.clubId)!.league);}
+/** A club's level for one position: mean role ability of its two best players there (the likely starters). */
+export function clubLevel(club:Club,pos:Position){const xs=club.roster.filter(r=>r.pos===pos).map(r=>roleAbility(r.a,pos)).sort((a,b)=>b-a).slice(0,2);if(!xs.length){const all=club.roster.filter(r=>r.pos!=='GK').map(r=>roleAbility(r.a,pos)).sort((a,b)=>b-a).slice(0,2);return all.reduce((n,x)=>n+x,0)/Math.max(1,all.length);}return xs.reduce((n,x)=>n+x,0)/xs.length;}
+/**
+ * Offer window by fit (= player's role ability − club level at that position).
+ * Clubs only bid for players who would roughly start or rotate there (min…max); under-22s may be
+ * signed as prospects a little below; clubs far weaker than the player do not bid.
+ */
+export const OFFER_FIT={min:-6,youthMin:-10,max:10,interestedMin:-12} as const;
+/** Offers follow the player's current position ability (0.6). */
+export function generateOffers(w:World,p:{a:Attributes,pos:Position,age:number,energy:number},form:number){
+  const ability=roleAbility(p.a,p.pos),current=clubOf(w),fee=current.league===0||w.contract.years<=0?0:marketValue(ability,p.age,form,w.contract.years);
+  w.offers=[];if(p.age<19&&current.league===0)return;
+  const make=(club:Club,fit:number,isCurrent:boolean,guaranteed:boolean):Offer=>{const salary=roleSalary(ability,club.league);return {clubId:club.id,salary,years:2,fee:isCurrent?0:guaranteed?Math.max(0,Math.min(fee,club.budget-salary*2)):fee,issuedDay:w.currentDay??0,expiresDay:(w.currentDay??0)+14,role:fit>=0?'주전 경쟁':fit>=-4?'로테이션':'유망주 / 벤치',negotiated:false,status:'open'};};
+  const pro=w.clubs.filter(c=>c.league>0).map(club=>({club,fit:ability-clubLevel(club,p.pos)}));
+  for(const {club,fit} of pro){
+    const isCurrent=club.id===w.clubId,guaranteed=!!w.interestedClubIds?.includes(club.id);
+    const inWindow=fit>=(p.age<22?OFFER_FIT.youthMin:OFFER_FIT.min)&&fit<=OFFER_FIT.max;
+    const interested=guaranteed&&fit>=OFFER_FIT.interestedMin&&fit<=OFFER_FIT.max+6;
+    if(!isCurrent&&!inWindow&&!interested)continue;
+    const salary=roleSalary(ability,club.league);if(club.budget<fee+salary*2&&!isCurrent&&!guaranteed)continue;
+    w.offers.push(make(club,fit,isCurrent,guaranteed));
+  }
+  // Never leave a professional player without a market: the two closest-level clubs that can afford it bid.
+  if(!w.offers.some(o=>o.clubId!==w.clubId))for(const {club,fit} of pro.filter(x=>x.club.id!==w.clubId&&x.club.budget>=roleSalary(ability,x.club.league)*2).sort((a,b)=>Math.abs(a.fit-2)-Math.abs(b.fit-2)).slice(0,2))w.offers.push(make(club,fit,false,false));
+  w.offers.sort((a,b)=>w.clubs.find(c=>c.id===a.clubId)!.league-w.clubs.find(c=>c.id===b.clubId)!.league);
+}
 export function negotiate(w:World,clubId:string){expireOffers(w);const o=w.offers.find(o=>o.clubId===clubId);if(!o||o.status!=='open'||o.negotiated)throw Error('협상 가능한 제안이 없습니다.');o.negotiated=true;const club=w.clubs.find(c=>c.id===clubId)!;if(random(w)<.68&&club.budget>=o.fee+o.salary*2.3){o.salary=Math.round(o.salary*1.15);w.news.unshift(`${club.name} · 연봉 15% 인상 수락`);}else{w.news.unshift(`${club.name} · 인상 거절, 기존 조건 유지`);}}
 export function acceptOffer(w:World,clubId:string,name:string){expireOffers(w);if(w.phase!=='offseason')throw Error('이적은 시즌 종료 후 가능합니다.');const o=w.offers.find(o=>o.clubId===clubId&&o.status==='open');if(!o)throw Error('유효한 제안이 아닙니다.');const buyer=w.clubs.find(c=>c.id===clubId)!,seller=clubOf(w);if(buyer.budget<o.fee+o.salary*o.years)throw Error('구단 예산이 부족합니다.');if(buyer.id!==seller.id){buyer.budget-=o.fee;seller.budget+=o.fee;w.ledger.push({year:w.year,from:buyer.id,to:seller.id,fee:o.fee,player:name});}w.clubId=buyer.id;w.contract={salary:o.salary,years:o.years};w.offers=[];w.news.unshift(`${name} · ${buyer.name}와 ${o.years}년 계약`);}
 export function advanceWorldYear(w:World){w.year++;for(const c of w.clubs){c.budget+= [0,2500,6000,16000][c.league];for(let i=0;i<c.roster.length;i++){const p=c.roster[i];if(p.id==='career-rival')continue;p.age++;p.years=Math.max(0,p.years-1);if(p.age>=(c.league===0?19:36)){c.roster[i]=rookie(w,c.league,p.pos,c.league===0?16:18);continue;}const bloom=lateBloom(p.traits),late=bloom&&p.age>=bloom.startAge&&p.age<bloom.startAge+6?.6:0,rate=npcGrowthRate(p.age)*trainingGrowthMultiplier(p.traits)*abroadGrowthMultiplier(p.traits,c.league);

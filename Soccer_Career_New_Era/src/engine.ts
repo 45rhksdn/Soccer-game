@@ -60,6 +60,9 @@ export type Stat = {
   expectedAssists?: number;
   /** Balls won back by the same player shortly after losing them (집념). */
   grit?: number;
+  /** 0.6 user defensive choices: successful press/contain/lane-cover windows, and tackles that missed. */
+  defensiveWins?: number;
+  failedTackles?: number;
 };
 /** Engine-side trait effects for one player. Absent = no effect and no extra state. */
 export type MatchFx = {
@@ -125,6 +128,8 @@ export type Ball = {
     success: boolean;
     xg: number;
     onTarget?: boolean;
+    /** 0.6 패스 길 차단: the user who cut out this pass (receives the ball instead of the nearest player). */
+    interceptor?: number;
   };
 };
 /**
@@ -172,9 +177,35 @@ export type Match = {
   replacedPlayers?: {rosterId:string,player:Footballer}[];
   exitReplacement?: {name:string,a:Attributes,energy:number,number:number,rosterId:string,fx?:MatchFx};
   rosterIds?: string[];
+  /** 0.6: waiting for the user's defensive choice (an opponent has the ball near the user). */
+  defending?: boolean;
+  /** 0.6: active defensive instruction and its window; success is judged when it ends. */
+  guard?: Guard | null;
+  /** 0.6: clock of the last defensive prompt (prompts are spaced by DEFENSE_PROMPT_GAP). */
+  defensePromptAt?: number;
   competition?: string;
   tactics?: [string,string];
 };
+// ── 0.6 defensive choices (interactive play only) ─────────────────────
+// When an opponent carries the ball close to the user, the live match pauses for a defensive
+// choice. finishMatch / auto mode never prompts, so simulated matches (and the 2,000-match
+// balance) are unchanged. Every effect is gated on `m.guard`, so no extra RNG is drawn otherwise.
+export type DefenseAction = "tackle" | "press" | "intercept" | "contain";
+export type Guard = { kind: Exclude<DefenseAction, "tackle">; until: number; target: number; shots: number; team: 0 | 1; /** ball x when the window started (지연 수비 judges the ground given up) */ x?: number };
+export const DEFENSE_ACTIONS: Record<DefenseAction, { label: string; desc: string }> = {
+  tackle: { label: "태클", desc: "즉시 공을 뺏으러 들어갑니다. 실패하면 제쳐지고 파울 위험이 큽니다." },
+  press: { label: "강한 압박", desc: "30초간 붙어서 실수를 유도합니다. 체력을 더 씁니다." },
+  intercept: { label: "패스 길 차단", desc: "30초간 패스 길목을 지켜 가로채기를 노립니다." },
+  contain: { label: "지연 수비", desc: "30초간 거리를 두고 버텨 돌파·슈팅을 어렵게 합니다." },
+};
+/** Distance (m) at which an opponent with the ball triggers a defensive choice. */
+export const DEFENSE_PROMPT_DISTANCE = 6;
+/** Game seconds between two defensive prompts, so play is not interrupted constantly. */
+export const DEFENSE_PROMPT_GAP = 300;
+/** Length of a press / intercept / contain window in game seconds. */
+export const GUARD_SECONDS = 30;
+/** 패스 길 차단: the user must be within this distance (m) of the passing lane. */
+export const INTERCEPT_LANE = 6;
 export const clamp = (n: number, a: number, b: number) =>
   Math.max(a, Math.min(b, n));
 export function random(s: { seed: number }) {
@@ -346,6 +377,84 @@ export function turnover(m: Match, loser: Footballer, winner: Footballer) {
     event(m, `${winner.name} · 집념! 잃은 공을 되찾음`);
   }
 }
+// ── 0.6 defensive choices ─────────────────────────────────────────────
+const userOn = (m: Match) => m.userOnPitch !== false && active(m.players[m.userId]);
+/** True when the live match should pause for a defensive choice. */
+function wantsDefense(m: Match, owner: Footballer) {
+  const u = m.players[m.userId];
+  return userOn(m) && owner.team !== u.team && owner.pos !== "GK" && !m.guard && !m.decision &&
+    dist(u, owner) < DEFENSE_PROMPT_DISTANCE && m.clock - (m.defensePromptAt ?? -Infinity) >= DEFENSE_PROMPT_GAP;
+}
+/** Success chance of the user's tackle on the ball carrier (shown on the button). */
+export function tackleChance(m: Match) {
+  const u = m.players[m.userId], o = m.ball.owner === null ? null : m.players[m.ball.owner];
+  if (!o) return 0;
+  return clamp(0.38 + (u.a.defending - o.a.control) / 150 + (u.a.strength - o.a.strength) / 500 - (dist(u, o) > 3 ? 0.08 : 0), 0.12, 0.75);
+}
+/** 지연 수비: attacking actions near the containing user are harder (dribble, shot). */
+function containFactor(m: Match, p: Footballer, kind: "dribble" | "shoot") {
+  const g = m.guard;
+  if (!g || g.kind !== "contain" || p.team !== g.team || !userOn(m) || dist(p, m.players[m.userId]) >= 7) return 1;
+  return kind === "dribble" ? 0.8 : 0.85;
+}
+/** Applies the user's defensive choice. `none` lets the AI keep defending as before. */
+export function defend(m: Match, action: DefenseAction | "none") {
+  if (!m.defending) return;
+  m.defending = false;
+  const u = m.players[m.userId], o = m.ball.owner === null ? null : m.players[m.ball.owner];
+  if (action === "none" || !o || o.team === u.team || !userOn(m)) return;
+  if (action === "tackle") {
+    insightAttempt(m, u, ["defending"]);
+    const temper = u.fx?.temper ?? 1;
+    if (random(m) < 0.2 * temper) {
+      u.stats.failedTackles = (u.stats.failedTackles ?? 0) + 1;
+      event(m, `${u.name} · 무리한 태클, 파울`);
+      if (random(m) < 0.3 * temper) {
+        u.yellow++;
+        event(m, `${u.name} · 경고`);
+        if (u.yellow >= 2) { u.red = true; event(m, `${u.name} · 퇴장`); }
+      }
+      m.cooldown = 3;
+      return;
+    }
+    if (random(m) < tackleChance(m)) {
+      u.stats.tackles++;
+      o.stats.losses++;
+      own(m, u);
+      turnover(m, o, u);
+      event(m, `${u.name} · 태클 성공! 공을 빼앗았다`);
+      m.cooldown = 1;
+    } else {
+      u.stats.failedTackles = (u.stats.failedTackles ?? 0) + 1;
+      u.x = clamp(u.x - direction(m, u.team) * 4, 1, 104);
+      o.x = clamp(o.x + direction(m, o.team) * 3, 2, 103);
+      m.ball.x = o.x; m.ball.y = o.y;
+      event(m, `${u.name} · 태클 실패, 제쳐졌다`);
+      m.cooldown = 1.5;
+    }
+    return;
+  }
+  if (action === "press") u.energy = Math.max(8, u.energy - 3);
+  m.guard = { kind: action, until: m.clock + GUARD_SECONDS, target: o.id, shots: m.shots[o.team], team: o.team, x: m.ball.x };
+  event(m, `${u.name} · ${DEFENSE_ACTIONS[action].label}`);
+}
+/** Ground (m) the attackers may gain during 지연 수비 for it to still count as a win. */
+export const CONTAIN_MAX_GAIN = 4;
+/** Ends the defensive window: a win if the ball came back without a shot; 지연 수비 also wins by holding the line (no shot, ≤ CONTAIN_MAX_GAIN m gained). */
+function updateGuard(m: Match) {
+  const g = m.guard;
+  if (!g) return;
+  const owner = m.ball.owner === null ? null : m.players[m.ball.owner];
+  const shot = m.shots[g.team] > g.shots, regained = !!owner && owner.team !== g.team;
+  if (!regained && m.clock < g.until && !shot) return;
+  m.guard = null;
+  const held = g.kind === "contain" && (m.ball.x - (g.x ?? m.ball.x)) * direction(m, g.team) <= CONTAIN_MAX_GAIN;
+  if (!shot && (regained || held) && userOn(m)) {
+    const u = m.players[m.userId];
+    u.stats.defensiveWins = (u.stats.defensiveWins ?? 0) + 1;
+    event(m, `${u.name} · 수비 성공 (${DEFENSE_ACTIONS[g.kind].label})`);
+  }
+}
 const boostFor = (m: Match, p: Footballer) => (m.assistBoost?.to === p.id ? m.assistBoost.mult : 1);
 export function pressure(m: Match, p: Footballer) {
   return m.players
@@ -418,9 +527,9 @@ export function actionChance(m: Match, action: Action) {
   const p = m.players.find((p) => p.id === m.ball.owner);
   if (!p) return 0;
   const pr = pressure(m, p), b = boostFor(m, p);
-  if (action === "shoot") return b === 1 ? shotQuality(m, p) : Math.min(0.95, shotQuality(m, p) * b);
+  if (action === "shoot") return (b === 1 ? shotQuality(m, p) : Math.min(0.95, shotQuality(m, p) * b)) * containFactor(m, p, "shoot");
   if (action === "dribble")
-    return Math.min(0.97, clamp(0.44 + p.a.dribbling / 180 - pr * 0.14, 0.12, 0.92) * b);
+    return Math.min(0.97, clamp(0.44 + p.a.dribbling / 180 - pr * 0.14, 0.12, 0.92) * b) * containFactor(m, p, "dribble");
   if (action === "hold")
     return Math.min(0.97, clamp(0.65 + p.a.strength / 260 - pr * 0.15, 0.15, 0.95) * b);
   const q = targets(m, p, action)[0]?.p;
@@ -491,7 +600,7 @@ export function act(m: Match, action: Action) {
   if (action === "shoot") {
     p.stats.shots++;
     m.shots[p.team]++;
-    const xg = boost === 1 ? shotQuality(m, p) : Math.min(0.95, shotQuality(m, p) * boost);
+    const xg = (boost === 1 ? shotQuality(m, p) : Math.min(0.95, shotQuality(m, p) * boost)) * containFactor(m, p, "shoot");
     m.xg[p.team] += xg;
     // Credit the creator at the shot, independent of the finisher's outcome.
     if (m.lastPass?.to === p.id && m.clock - m.lastPass.time < 90) {
@@ -578,10 +687,22 @@ export function act(m: Match, action: Action) {
     success: random(m) < chance,
     xg: 0,
   };
+  // 패스 길 차단: the user standing near the lane may cut the pass out.
+  const g = m.guard;
+  if (g?.kind === "intercept" && p.team === g.team && m.ball.flight.success && userOn(m)) {
+    const u = m.players[m.userId], dx = q.x - p.x, dy = q.y - p.y, l = dx * dx + dy * dy || 1;
+    const t = clamp(((u.x - p.x) * dx + (u.y - p.y) * dy) / l, 0, 1);
+    if (Math.hypot(p.x + dx * t - u.x, p.y + dy * t - u.y) < INTERCEPT_LANE &&
+      random(m) < clamp(0.35 + (u.a.positioning + u.a.decisions - p.a.vision - p.a.passing) / 300, 0.1, 0.55)) {
+      m.ball.flight.success = false;
+      m.ball.flight.interceptor = u.id;
+    }
+  }
   m.ball.owner = null;
 }
 export function step(m: Match, dt = 0.5, auto = false) {
-  if (m.ended || (m.decision && !auto)) return;
+  if (m.ended || ((m.decision || m.defending) && !auto)) return;
+  if (m.defending) defend(m, "none"); // auto mode (fast simulation) never waits for a defensive choice
   if (m.decision && auto) {
     act(m, chooseAction(m, m.players[m.userId]));
   }
@@ -591,6 +712,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
   m.nextAI -= dt;
   if (prev < 2700 && m.clock >= 2700) {
     m.half = 2;
+    m.guard = null;
     for (const p of m.players) p.energy = clamp(p.energy + 8, 0, 100);
     event(m, "하프타임 · 진영 교체");
     kickoff(m, 1);
@@ -618,7 +740,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
     const replacement=m.exitReplacement;
     slot.name=replacement?.name??'교체 선수';slot.a=replacement?.a??slot.a;slot.stats=emptyStats();slot.energy=replacement?.energy??100;slot.number=replacement?.number??19;slot.fx=replacement?.fx;
     if(m.rosterIds)m.rosterIds[m.userId]=replacement?.rosterId??'unknown';
-    m.userOnPitch=false;m.decision=false;event(m,'감독 교체 지시 · 오늘의 출전 종료');
+    m.userOnPitch=false;m.decision=false;m.defending=false;m.guard=null;event(m,'감독 교체 지시 · 오늘의 출전 종료');
   }
   const owner = m.ball.owner === null ? null : m.players[m.ball.owner];
   if (owner) m.possession[owner.team] += dt;
@@ -699,6 +821,15 @@ export function step(m: Match, dt = 0.5, auto = false) {
         tx = owner.x + d * 9;
         ty = owner.y + (p.y < 34 ? -10 : 10);
       }
+      // 0.6 defensive instruction overrides the off-ball setting while it lasts.
+      const g = m.guard, carrier = owner && g && owner.team === g.team ? owner : null;
+      if (carrier && g!.kind === "press") { tx = carrier.x; ty = carrier.y; p.mode = "press"; }
+      if (carrier && g!.kind === "contain") { tx = carrier.x - d * 3; ty = carrier.y + (34 - carrier.y) * 0.15; p.mode = "recover"; }
+      if (carrier && g!.kind === "intercept") {
+        const mate = m.players.filter((q) => q.team === carrier.team && q.id !== carrier.id && active(q) && q.pos !== "GK")
+          .sort((a, b) => dist(a, p) - dist(b, p))[0];
+        if (mate) { tx = carrier.x + (mate.x - carrier.x) * 0.45; ty = carrier.y + (mate.y - carrier.y) * 0.45; p.mode = "recover"; }
+      }
     }
     if (p.pos === "GK") {
       tx = d > 0 ? 5 : 100;
@@ -714,6 +845,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
     p.x = clamp(p.x + (tx - p.x) * ratio, 1, 104);
     p.y = clamp(p.y + (ty - p.y) * ratio, 1, 67);
   }
+  updateGuard(m);
   if (m.ball.flight) {
     const f = m.ball.flight;
     f.progress += dt / f.duration;
@@ -762,9 +894,11 @@ export function step(m: Match, dt = 0.5, auto = false) {
           if (from.fx?.playmaker && target.team === from.team && target.id !== from.id)
             m.assistBoost = { to: target.id, mult: 1 + from.fx.playmaker };
         } else {
-          const o = m.players
+          const cut = f.interceptor === undefined ? undefined : m.players[f.interceptor];
+          const o = cut && active(cut) ? cut : m.players
             .filter((p) => p.team !== from.team && active(p))
             .sort((a, b) => dist(a, m.ball) - dist(b, m.ball))[0];
+          if (cut) event(m, `${cut.name} · 패스 차단!`);
           o.stats.interceptions++;
           from.stats.losses++;
           own(m, o);
@@ -776,13 +910,18 @@ export function step(m: Match, dt = 0.5, auto = false) {
   } else if (owner) {
     m.ball.x = owner.x;
     m.ball.y = owner.y;
+    if (!auto && wantsDefense(m, owner)) {
+      m.defending = true;
+      m.defensePromptAt = m.clock;
+      return;
+    }
     if (m.cooldown <= 0) {
       const near = m.players
         .filter(
           (p) => p.team !== owner.team && active(p) && dist(p, owner) < 2.3,
         )
         .sort((a, b) => dist(a, owner) - dist(b, owner))[0];
-      if (near && random(m) < dt * 0.16) {
+      if (near && random(m) < dt * (m.guard?.kind === "press" && near.id === m.userId ? 0.3 : 0.16)) {
         insightAttempt(m,near,['defending']);
         const temper = near.fx?.temper ?? 1;
         if (random(m) < 0.16 * temper) {
@@ -822,6 +961,10 @@ export function finishMatch(m: Match) {
   if (!m.ended) throw Error("Match tick limit");
   return m;
 }
+/** Rating weight of a successful press / contain / lane cover window, and its cap per match. */
+export const DEFENSIVE_WIN_RATING = 0.04, DEFENSIVE_WIN_CAP = 0.24;
+/** Rating penalty of a missed or fouled user tackle, and its cap per match. */
+export const FAILED_TACKLE_RATING = 0.05, FAILED_TACKLE_CAP = 0.3;
 export function rating(p: Footballer) {
   const s = p.stats;
   const midfielder = p.pos === "CM";
@@ -839,6 +982,8 @@ export function rating(p: Footballer) {
     Math.min(.8, (s.tackles + s.interceptions) * (["CB", "LB", "RB"].includes(p.pos) ? .075 : midfielder ? .04 : .012)) +
     Math.min(1.3, s.saves * .13) +
     Math.min(.45, (s.grit ?? 0) * .15) +
+    // 0.6 defensive choices (user only; zero for every simulated player).
+    Math.min(DEFENSIVE_WIN_CAP, (s.defensiveWins ?? 0) * DEFENSIVE_WIN_RATING) - Math.min(FAILED_TACKLE_CAP, (s.failedTackles ?? 0) * FAILED_TACKLE_RATING) +
     ((p.pos==='GK'||['CB','LB','RB'].includes(p.pos)) && s.minutes>=60 && s.goalsConceded===0 ? .45 : 0) -
     (['GK','CB','LB','RB'].includes(p.pos) ? (s.goalsConceded??0)*.06 : 0) - turnovers - p.yellow * .15 - (p.red ? .7 : 0),
     3, 10,

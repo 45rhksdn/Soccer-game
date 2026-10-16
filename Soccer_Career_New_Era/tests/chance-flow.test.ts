@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {createMatch,attributes,step,act,shotQuality} from '../src/engine';
+import {createMatch,attributes,step,act,shotQuality,defend} from '../src/engine';
 import {writeFileSync} from 'node:fs';
 it('measures user midfield passes and the following shot',async()=>{
  const stats={matches:200,passes:0,completed:0,keyPasses:0,xA:0,assists:0,goodReceipts:0,shotsFromGoodReceipts:0,goalsFromGoodReceipts:0,qualityAtReceipt:0,qualityAtShot:0};
@@ -8,6 +8,7 @@ it('measures user midfield passes and the following shot',async()=>{
   let receipt:{id:number,time:number,quality:number}|undefined;
   for(let ticks=0;!m.ended&&ticks<15000;ticks++){
    if(m.decision)act(m,'forward');
+   if(m.defending)defend(m,'none'); // 0.6: live play also asks for defensive choices; leave them to the AI
    const flight=m.ball.flight, previousLast=m.lastPass;
    step(m,.5,false);
    if(flight?.kind==='pass'&&flight.from===m.userId&&m.lastPass!==previousLast&&m.lastPass?.from===m.userId){
