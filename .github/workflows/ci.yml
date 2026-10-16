@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches-ignore: ['build/**']
   pull_request:
 
 defaults:
@@ -11,6 +12,8 @@ defaults:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +31,15 @@ jobs:
         with:
           name: production-build
           path: Soccer_Career_New_Era/dist/
+      - name: Publish the playable build to branch build/<branch>
+        if: github.event_name == 'push' && !startsWith(github.ref_name, 'build/')
+        run: |
+          cd dist
+          git init -q
+          git checkout -q -b build
+          git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Playable build of ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:refs/heads/build/${GITHUB_REF_NAME}
 
   browser:
     runs-on: ubuntu-latest
