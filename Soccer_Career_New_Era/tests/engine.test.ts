@@ -8,6 +8,7 @@ import {
   availableActions,
   shotQuality,
   rating,
+  defend,
 } from "../src/engine";
 import { newCareer, train, settle } from "../src/career";
 import { encode, decode } from "../src/storage";
@@ -44,7 +45,7 @@ describe("deterministic engine", () => {
   it("user possession pauses clock until a legal decision", () => {
     const m = createMatch(20, user);
     let i = 0;
-    while (!m.decision && !m.ended && i++ < 10000) step(m);
+    while (!m.decision && !m.ended && i++ < 10000) { if (m.defending) defend(m, "none"); step(m); }
     expect(m.decision).toBe(true);
     const t = m.clock;
     step(m);

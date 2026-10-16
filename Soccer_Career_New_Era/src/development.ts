@@ -1,8 +1,8 @@
 import {ATTRS,LABELS,clamp,random,overall,createMatch,finishMatch,rating,type Attributes,type Attr,type Match} from './engine';
 import {grow,startCareerMatch,type Career,type Player} from './career';
-import {npcInjuryWeek,matchInjury,clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,nextOpponent,type Offer} from './world';
+import {npcInjuryWeek,matchInjury,clubLevel,clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,nextOpponent,type Offer} from './world';
 import {TRAIT_IDS,TRAIT_TEXT,rollTraits,trainingGrowthMultiplier,trainingFatigueMultiplier,injuryChanceMultiplier,injuryWeeks,insightChance,trainingLuckChance,matchAttributes,traitDef,seedFrom,restRecoveryMultiplier,rivalryDrive,focusBonus,lateBloom,matchFx,hasMatchEffect,trustGainMultiplier,abroadGrowthMultiplier,superSubMultiplier,type TraitId,type TraitInput} from './traits';
-import {ROLE_KEYS} from './roles';
+import {ROLE_KEYS,roleAbility} from './roles';
 import {applyAging} from './aging';
 import {matchAttributesOf,type EquipmentState} from './equipment';
 /** @deprecated use TRAIT_IDS / traits.ts. Kept so older imports keep compiling. */
@@ -34,7 +34,7 @@ export function ensureDevelopment(c:Career,opts:{traits?:string[]}={}){
  for(const k of ATTRS)rp.a[k]=clamp(rp.a[k]+(random(rng)-.5)*6,20,99);
  const userTraits=rollTraits(rng),rivalTraits=rollTraits(rng);
  c.development={traits:opts.traits?[...opts.traits]:userTraits,wallet:100,plan:['shooting','running','passing','rest','passing','rest','rest'],notes:[],news:[],interestIds:[],rival:{id:'career-rival',player:rp,school,clubId:'c'+school,traits:rivalTraits,retired:false,trainedWeek:-1,lastPlayedWeek:-1,history:[],interests:[],offers:[]}};
- if(rp.age>=19)c.development.rival.clubId=c.world.clubs.filter(x=>x.league>0&&x.id!==c.world.clubId).sort((a,b)=>Math.abs(overall(a.roster[0].a)-overall(rp.a))-Math.abs(overall(b.roster[0].a)-overall(rp.a)))[0].id;
+ if(rp.age>=19)c.development.rival.clubId=closestClub(c,rp).id;
  syncRival(c);news(c,`${rp.name} · 같은 나이, 같은 ${rp.pos} 포지션의 라이벌이 등장했습니다.`);news(c,c.development.traits.length?`보유 특성 ${c.development.traits.map(t=>`「${t}」`).join(' ')} · ${c.development.traits.map(t=>traitDef(t)?.summary??t).join(' / ')}`:'보유 특성 없음 · 순수한 노력으로 성장하는 선수');
 }
 export function syncRival(c:Career){
@@ -227,12 +227,16 @@ export function playRival(c:Career,main:Match){
   if(rp.stats.minutes>0&&!r.player.injuryWeeks){const weeks=matchInjury(c.seed^c.week,r.id,rp.energy,r.traits);if(weeks){r.player.injuryWeeks=weeks;news(c,`라이벌 ${r.player.name} · 경기 중 부상 · ${weeks}주 회복 필요`);}}if(v>=7.5)news(c,`라이벌 ${r.player.name} · 평점 ${v.toFixed(2)}의 활약!`,'rating');}
  syncRival(c);return score?{clubId:r.clubId,score}:undefined;
 }
+/** Clubs show interest only when their level at the player's position is within this many points of the player's own (0.6). */
+export const INTEREST_FIT=8;
+/** Professional club whose level at the player's position is closest to the player's ability. */
+function closestClub(c:Career,p:Player){const a=roleAbility(p.a,p.pos);return c.world.clubs.filter(x=>x.league>0&&x.id!==c.world.clubId).sort((x,y)=>Math.abs(clubLevel(x,p.pos)-a)-Math.abs(clubLevel(y,p.pos)-a))[0];}
 export function scoutInterest(c:Career){
  if(c.world.phase==='retired'||c.world.phase==='offseason')return;
  for(const rival of [false,true]){
   const p=rival?c.development.rival.player:c.player,ids=rival?c.development.rival.interests:c.development.interestIds;
   if(p.age<17||random(c)>.35)continue;
-  const candidates=c.world.clubs.filter(x=>x.league>0&&!ids.includes(x.id)&&x.id!==(rival?c.development.rival.clubId:c.world.clubId)&&Math.abs(overall(x.roster[0].a)-overall(p.a))<18&&x.budget>=roleSalary(overall(p.a),x.league)*2);
+  const candidates=c.world.clubs.filter(x=>x.league>0&&!ids.includes(x.id)&&x.id!==(rival?c.development.rival.clubId:c.world.clubId)&&Math.abs(clubLevel(x,p.pos)-roleAbility(p.a,p.pos))<=INTEREST_FIT&&x.budget>=roleSalary(roleAbility(p.a,p.pos),x.league)*2);
   if(!candidates.length)continue;const club=candidates[Math.floor(random(c)*candidates.length)];ids.push(club.id);news(c,`${club.name} · ${rival?'라이벌 ':''}${p.name}에게 관심! 졸업 가능한 시즌 종료 후 정식 제안 예정`,'interest');
  }
  c.world.interestedClubIds=[...c.development.interestIds];
@@ -243,6 +247,6 @@ export function announceOffers(c:Career){const d=c.development;c.world.currentDa
 export function renewSearch(c:Career){if(c.world.phase!=='offseason'||c.match)throw Error('시즌 종료 후 구직할 수 있습니다.');expireOffers(c.world);if(c.world.offers.length)throw Error('아직 유효한 제안이 있습니다.');announceOffers(c);}
 export function ageRival(c:Career){const r=c.development.rival;r.player.age=c.player.age;r.player.energy=100;r.player.fatigue=0;r.retired=c.player.age>=36;if(!r.retired)applyAging(r.player.a,r.traits,r.player.age);
  const choices=r.offers.filter(o=>o.clubId!==c.world.clubId&&(o.expiresDay??Infinity)>c.day);
- if(r.player.age>=19&&(c.world.clubs.find(x=>x.id===r.clubId)!.league===0||choices.length)){const best=choices.sort((a,b)=>b.salary-a.salary)[0];const club=best?c.world.clubs.find(x=>x.id===best.clubId)!:c.world.clubs.filter(x=>x.league>0&&x.id!==c.world.clubId).sort((a,b)=>Math.abs(overall(a.roster[0].a)-overall(r.player.a))-Math.abs(overall(b.roster[0].a)-overall(r.player.a)))[0];r.clubId=club.id;news(c,`${r.player.name} · ${club.name} 입단!`);}
+ if(r.player.age>=19&&(c.world.clubs.find(x=>x.id===r.clubId)!.league===0||choices.length)){const best=choices.sort((a,b)=>b.salary-a.salary)[0];const club=best?c.world.clubs.find(x=>x.id===best.clubId)!:closestClub(c,r.player);r.clubId=club.id;news(c,`${r.player.name} · ${club.name} 입단!`);}
  r.offers=[];if(c.player.age>=19){r.interests=[];c.development.interestIds=[];}c.world.interestedClubIds=[...c.development.interestIds];syncRival(c);
 }
