@@ -1,12 +1,11 @@
 import {ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledMatch,announceOffers,ageRival,news,syncRival,type Development} from './development';
 import {ROLE_KEYS,roleAbility} from './roles';
-import {newWorld,clubOf,nextOpponent,chooseLineup,selectionScore,advanceLeague,startPostseason,advanceCup,sortedTable,LEAGUES,generateOffers,advanceWorldYear,type World,type RosterPlayer} from './world';
-import {createMatch,userPerformance,emptyStats} from './engine';
+import {newWorld,clubOf,nextOpponent,chooseLineup,selectionScore,advanceLeague,startPostseason,advanceCup,sortedTable,LEAGUES,advanceWorldYear,type World,type RosterPlayer} from './world';
+import {createMatch,userPerformance} from './engine';
 import {
   ATTRS,
   attributes,
   clamp,
-  overall,
   random,
   rating,
   type Attributes,
@@ -194,6 +193,12 @@ export function grow(p: Player, keys: readonly string[], amount: number) {
   }
   return total;
 }
+/**
+ * Legacy 0.2 training (3 sessions per week with intensity). The game UI now uses
+ * the 7-day schedule in development.ts (applyDaily); this remains only because
+ * existing tests exercise growth limits through it. Note that the training-injury
+ * roll below exists only here, so the weekly schedule currently has no training injuries.
+ */
 export function train(c: Career, type: Training, intensity: number) {
   if (c.world?.phase === "retired") throw Error("은퇴한 커리어입니다.");
   if (c.match || c.trainingCount >= 3)

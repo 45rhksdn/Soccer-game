@@ -32,3 +32,17 @@ test('two school seasons, rival aging, offer expiry and renewed professional con
  }
  await playWeek(page);await nav(page,'라이벌');await expect(page.getByText(/19세/).first()).toBeVisible();await expect(page.locator('.save-state')).toHaveText('저장 완료');await page.reload();expect(errors).toEqual([]);
 });
+test('backup stays readable and distinct after restoring from a corrupted slot',async({page})=>{
+ const read=()=>page.evaluate(()=>new Promise<{slot:string,backup:string}>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const s=q.result.transaction('saves').objectStore('saves');const a=s.get('slot1'),b=s.get('backup1');a.transaction.oncomplete=()=>{q.result.close();resolve({slot:String(a.result),backup:String(b.result)});};};}));
+ await create(page);await playWeek(page);await expect(page.locator('.save-state')).toHaveText('저장 완료');
+ await page.evaluate(()=>new Promise<void>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const t=q.result.transaction('saves','readwrite');t.objectStore('saves').put('{broken','slot1');t.oncomplete=()=>{q.result.close();resolve();};};}));
+ await page.reload();await nav(page,'저장 관리');await page.locator('.save-card').first().getByRole('button',{name:'직전 백업 복원'}).click();await expect(page.getByRole('status')).toContainText('직전 백업을 복원했습니다.');await expect(page.locator('.save-state')).toHaveText('저장 완료');
+ // The corrupted slot must not have been rotated into the backup.
+ const first=await read();expect(first.backup.startsWith('{"format":"SCNE"')).toBe(true);
+ // After real progress, an idle autosave tick (5 s) must not replace the backup with an identical copy of the slot.
+ // The restored backup is the previous distinct save (here: full time, before results were applied).
+ const finish=page.getByRole('button',{name:'결과 반영 · 남은 일정 진행'});if(await finish.count())await finish.click();
+ await nav(page,'커리어 홈');await playWeek(page);await expect(page.locator('.save-state')).toHaveText('저장 완료');
+ const progressed=await read();expect(progressed.backup===progressed.slot).toBe(false);
+ await page.waitForTimeout(6000);const idle=await read();expect(idle.slot).toBe(progressed.slot);expect(idle.backup).toBe(progressed.backup);
+});

@@ -1,4 +1,4 @@
-import {ATTRS,LABELS,attributes,clamp,random,overall,createMatch,finishMatch,rating,type Attributes,type Attr,type Match} from './engine';
+import {ATTRS,LABELS,clamp,random,overall,createMatch,finishMatch,rating,type Attributes,type Attr,type Match} from './engine';
 import {grow,startCareerMatch,type Career,type Player} from './career';
 import {clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,nextOpponent,type Offer} from './world';
 export const TRAITS=['천재','실전파','행운아'] as const;
@@ -108,7 +108,7 @@ export function scoutInterest(c:Career){
   const p=rival?c.development.rival.player:c.player,ids=rival?c.development.rival.interests:c.development.interestIds;
   if(p.age<17||random(c)>.35)continue;
   const candidates=c.world.clubs.filter(x=>x.league>0&&!ids.includes(x.id)&&x.id!==(rival?c.development.rival.clubId:c.world.clubId)&&Math.abs(overall(x.roster[0].a)-overall(p.a))<18&&x.budget>=roleSalary(overall(p.a),x.league)*2);
-  if(!candidates.length)return;const club=candidates[Math.floor(random(c)*candidates.length)];ids.push(club.id);news(c,`${club.name} · ${rival?'라이벌 ':''}${p.name}에게 관심! 졸업 가능한 시즌 종료 후 정식 제안 예정`,'interest');
+  if(!candidates.length)continue;const club=candidates[Math.floor(random(c)*candidates.length)];ids.push(club.id);news(c,`${club.name} · ${rival?'라이벌 ':''}${p.name}에게 관심! 졸업 가능한 시즌 종료 후 정식 제안 예정`,'interest');
  }
  c.world.interestedClubIds=[...c.development.interestIds];
 }
