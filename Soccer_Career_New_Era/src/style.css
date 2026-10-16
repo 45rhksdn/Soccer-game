@@ -1899,3 +1899,37 @@ td strong {
 .player-slot .archive{font-size:12px}
 @media(max-width:1000px){.candidate-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.scout-columns{grid-template-columns:1fr}.player-slots{grid-template-columns:1fr}}
 @media(max-width:600px){.candidate-grid{grid-template-columns:1fr}.region-map{grid-auto-rows:48px;gap:5px}.create-mode .muted{margin-left:0;width:100%}}
+
+/* ── 0.4 오늘의 일정 ───────────────────────────────────── */
+.today{margin-top:18px;display:flex;flex-direction:column;gap:14px}
+.week-strip{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.week-strip li{border:1px solid #dfe5dc;border-radius:10px;padding:8px 4px;text-align:center;background:white;display:flex;flex-direction:column;gap:2px}
+.week-strip li span{font-weight:700;font-size:13px}
+.week-strip li small{font-size:11px;color:#667366;min-height:14px}
+.week-strip li.done{background:#eef5ea;color:#14633b}
+.week-strip li.today{border:2px solid var(--green);background:#f4f1df}
+.today-help{margin:0;font-size:13px;line-height:1.6}
+.today-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.today-tile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 6px;border:1px solid #cfd8cc;border-radius:14px;background:#f7faf5;color:#173d30;cursor:pointer;text-align:center;min-width:0}
+.today-tile strong{font-size:13px}
+.today-tile small{font-size:11px;color:#667366;line-height:1.35}
+.today-tile:hover:not(:disabled){background:#e3ecdf;border-color:var(--green)}
+.today-tile:active:not(:disabled){transform:scale(.97)}
+.today-tile:disabled{opacity:.45;cursor:not-allowed}
+.today-tile:focus-visible{outline:3px solid #cb754b;outline-offset:2px}
+.today-tile.rest,.today-tile.vacation{background:#f2f4fa}
+.match-today{border-radius:14px;padding:20px;background:var(--green);color:#f4f1df;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.match-today strong{font-size:22px}
+.match-today p{margin:0}
+.match-today .muted{color:#cfe0c8}
+.match-today .primary{background:#e3e9b9;color:#173d30;border-color:#e3e9b9}
+.today-result{border:1px solid #dfe5dc;border-radius:12px;padding:12px 14px;background:white;display:flex;flex-direction:column;gap:4px}
+.today-result p{margin:0;font-weight:600}
+.today-result small{color:#667366}
+.today-result.lucky{border:2px solid #cb754b;background:#fff4ea}
+.lucky-burst{align-self:flex-start;font-weight:900;font-size:20px;color:#b3541e;letter-spacing:.02em;animation:lucky-pop .5s ease-out}
+@keyframes lucky-pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.lucky-burst{animation:none}}
+.season-review{font-size:15px;line-height:1.7}
+@media(max-width:1000px){.today-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:600px){.today-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.week-strip{gap:4px}.week-strip li{padding:6px 2px}}

@@ -15,7 +15,9 @@ export type News={day:number,text:string,kind:'rating'|'lucky'|'insight'|'intere
 export type WeekNote={week:number,startDay:number,before:Attributes,after:Attributes,rivalBefore:Attributes,rivalAfter:Attributes,entries:string[]};
 /** Per-week trait state (라이벌 의식 multiplier waiting for the first training, 독학파 counters). */
 export type WeekBonus={drive?:number,focus?:Record<string,number>,focusDone?:boolean};
-export type WeekState={startDay:number,cursor:number,before:Attributes,rivalBefore:Attributes,entries:string[],matchDone:boolean,user?:WeekBonus,rival?:WeekBonus};
+export type WeekState={startDay:number,cursor:number,before:Attributes,rivalBefore:Attributes,entries:string[],matchDone:boolean,user?:WeekBonus,rival?:WeekBonus,
+ /** 'daily' = played one day at a time from the home screen (오늘의 일정); absent = whole-week plan. */
+ mode?:'daily'};
 export type Development={traits:string[],experienceBank?:number,wallet:number,plan:Daily[],active?:WeekState,notes:WeekNote[],news:News[],rival:{id:string,player:Player,school:number,clubId:string,traits:string[],experienceBank?:number,retired:boolean,trainedWeek:number,lastPlayedWeek:number,history:{week:number,rating:number,goals:number,club:string}[],interests:string[],offers:Offer[]},interestIds:string[]};
 export function news(c:Career,text:string,kind:News['kind']='career'){c.development.news.unshift({day:c.day,text,kind});c.development.news=c.development.news.slice(0,150);c.feed.unshift(text);c.feed=c.feed.slice(0,40);}
 export function ensureDevelopment(c:Career,opts:{traits?:string[]}={}){
@@ -72,7 +74,7 @@ function rivalryBonus(c:Career,rival:boolean){
  return other>0&&other>self?mult:undefined;
 }
 export function prepareWeek(c:Career,plan:Daily[]){
- ensureDevelopment(c);if(c.match||c.development.active)throw Error('진행 중인 주간 일정이 있습니다.');if(c.world.phase==='retired')throw Error('은퇴한 커리어입니다.');
+ ensureDevelopment(c);if(c.development.active?.mode==='daily')throw Error('이번 주는 오늘의 일정으로 진행 중입니다. 커리어 홈에서 하루씩 이어서 진행하세요.');if(c.match||c.development.active)throw Error('진행 중인 주간 일정이 있습니다.');if(c.world.phase==='retired')throw Error('은퇴한 커리어입니다.');
  if(plan.length!==7||plan.some(x=>!DAILY[x]))throw Error('7일 일정을 모두 선택해 주세요.');
  const matchDay=!['offseason','retired'].includes(c.world.phase);
  if(plan.filter((x,i)=>x==='vacation'&&(!matchDay||i!==5)).length*5>c.development.wallet)throw Error('예정된 휴양 비용이 잔액보다 많습니다.');
@@ -109,7 +111,49 @@ export function releaseExperience(c:Career,rival:boolean){
  for(const k of keys){p.a[k]=Math.min(100,p.a[k]+amount/keys.length);p.potential=Math.max(p.potential,p.a[k]);}
  holder.experienceBank=Math.max(0,holder.experienceBank!-amount);return amount;
 }
-export function afterScheduledMatch(c:Career){const a=c.development.active;if(a){a.entries.push(`경기 · 평점 ${c.history[0].rating.toFixed(2)}`);a.matchDone=true;a.cursor=6;advanceSchedule(c);}else finishWeek(c);}
+export function afterScheduledMatch(c:Career){const a=c.development.active;if(a){a.entries.push(`경기 · 평점 ${c.history[0].rating.toFixed(2)}`);a.matchDone=true;a.cursor=6;if(a.mode==='daily'){c.day=a.startDay+a.cursor;c.world.currentDay=c.day;return;}advanceSchedule(c);}else finishWeek(c);}
+
+// ── 오늘의 일정: the same week structure, advanced one day at a time ─────────
+export const WEEKDAYS=['월','화','수','목','금','토','일'] as const;
+/** Index of today within the current week (0 = 월 … 6 = 일). */
+export const todayIndex=(c:Career)=>c.development.active?.cursor??0;
+const hasMatchesThisWeek=(c:Career)=>!['offseason','retired'].includes(c.world.phase);
+/** Saturday of a week with fixtures, before the match has been played. */
+export function isMatchToday(c:Career){const a=c.development.active;return todayIndex(c)===5&&!a?.matchDone&&hasMatchesThisWeek(c);}
+function beginDailyWeek(c:Career){
+ const d=c.development;
+ if(d.active&&d.active.mode!=='daily')throw Error('진행 중인 주간 일정이 있습니다. 주간 일정 화면에서 마무리해 주세요.');
+ d.active??={startDay:c.day,cursor:0,before:{...c.player.a},rivalBefore:{...d.rival.player.a},entries:[],matchDone:false,user:{drive:rivalryBonus(c,false)},rival:{drive:rivalryBonus(c,true)},mode:'daily'};
+ return d.active;
+}
+export type TodayResult={day:number,type:Daily,text:string,lucky:boolean,gain:number,weekDone:boolean};
+/** Plays today with one activity; the day ends and growth/luck/injury rules apply exactly as in the weekly plan. */
+export function playToday(c:Career,type:Daily):TodayResult{
+ ensureDevelopment(c);
+ if(c.match)throw Error('진행 중인 경기가 있습니다.');
+ if(c.world.phase==='retired')throw Error('은퇴한 커리어입니다.');
+ if(!DAILY[type])throw Error('알 수 없는 일정입니다.');
+ if(type==='vacation'&&c.development.wallet<5)throw Error('휴양 비용 5만원이 부족합니다. 휴식을 선택해 주세요.');
+ if(isMatchToday(c))throw Error('오늘은 경기가 있는 날입니다.');
+ const d=c.development,a=beginDailyWeek(c),day=a.cursor;
+ c.day=a.startDay+day;c.world.currentDay=c.day;expireOffers(c.world);
+ d.plan[day]=type;
+ const before=overall(c.player.a),text=trainDay(c,false,type,a.user??={});
+ if(!d.rival.retired)trainDay(c,true,type,a.rival??={});
+ a.entries.push(text);a.cursor++;
+ const gain=overall(c.player.a)-before;let weekDone=false;
+ if(a.cursor>=7){d.rival.trainedWeek=c.week;finishWeek(c);weekDone=true;}
+ else{c.day=a.startDay+a.cursor;c.world.currentDay=c.day;}
+ return {day,type,text,lucky:text.includes('럭키!'),gain,weekDone};
+}
+/** Starts today's match (Saturday). After the result is applied the week continues on Sunday. */
+export function startTodayMatch(c:Career){
+ ensureDevelopment(c);
+ if(c.match)throw Error('이미 진행 중인 경기입니다.');
+ if(!isMatchToday(c))throw Error('오늘은 경기일이 아닙니다.');
+ const a=beginDailyWeek(c);c.day=a.startDay+a.cursor;c.world.currentDay=c.day;expireOffers(c.world);
+ startCareerMatch(c);
+}
 export function configureTrait(c:Career,m:Match){
  const d=c.development;m.insight={chance:luckChance(d.traits),gains:{},events:[]};
  // Engine-side trait effects (플레이메이커 · 분위기 메이커 · 집념) for every player in this match.

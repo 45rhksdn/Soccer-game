@@ -2,6 +2,8 @@ import {WeekPlanner,GrowthNotes,RivalPanel} from './WeeklyPanels';
 import {TraitList} from './TraitBadges';
 import {ScoutPanel} from './ScoutPanel';
 import {PlayerSlots} from './PlayerSlots';
+import {TodayPanel} from './TodayPanel';
+import {playToday,startTodayMatch,type TodayResult} from './development';
 import {careerFromCandidate,newScoutState,nextList,type ScoutState} from './scouting';
 import {WorldPanel} from './WorldPanels';
 import {teamName,competitionName,selection} from './career';
@@ -74,7 +76,8 @@ export default function App() {
     [createMode, setCreateMode] = useState<"scout" | "manual">("scout"),
     [targetSlot, setTargetSlot] = useState(1),
     [scout, setScout] = useState<ScoutState | null>(null),
-    [scoutSchool, setScoutSchool] = useState<string | null>(null);
+    [scoutSchool, setScoutSchool] = useState<string | null>(null),
+    [today, setToday] = useState<TodayResult | null>(null);
   const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
   useEffect(() => {
     storage
@@ -204,6 +207,7 @@ export default function App() {
       }
       setSlot(n);
       setC(value);
+      setToday(null);
       setCreating(false);
       setTab("home");
       inform(backup ? "직전 백업을 복원했습니다." : "커리어를 불러왔습니다.");
@@ -576,9 +580,17 @@ export default function App() {
                       </div>
                       <button
                         className="primary"
-                        onClick={() => {update(settle);setTab("home");setPaused(false);}}
+                        onClick={() => {
+                          // The season ends inside settle (last league/cup/national match): go straight to the season summary.
+                          let seasonEnded = false;
+                          update((n) => { const was = n.world.phase; settle(n); seasonEnded = was !== "offseason" && n.world.phase === "offseason"; });
+                          setTab(seasonEnded ? "season" : "home");
+                          if (seasonEnded) inform("시즌이 끝났습니다. 시즌 결산을 확인하세요.");
+                          setPaused(false);
+                          setToday(null);
+                        }}
                       >
-                        결과 반영 · 남은 일정 진행 <ArrowRight size={17} />
+                        {c?.development.active?.mode === "daily" ? "결과 반영" : "결과 반영 · 남은 일정 진행"} <ArrowRight size={17} />
                       </button>
                     </section>
                   ) : (
@@ -720,7 +732,6 @@ export default function App() {
                       <h2>지난주 주요 뉴스</h2>
                       <div className="headline-news">{c.development.news.filter(n=>n.day>=c.day-7).slice(0,4).map((n,i)=><p key={i}>{n.text}</p>)}{!c.development.news.some(n=>n.day>=c.day-7)&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
                       <div className="trait-line"><span>보유 특성</span><TraitList traits={c.development.traits} empty="특성 없음"/></div>
-                      <button className="primary cream" onClick={()=>go("training")}>이번주 일정 진행 <ArrowRight size={18}/></button>
                     </div>
                     <div className="hero-number">
                       10
@@ -730,6 +741,13 @@ export default function App() {
                     </div>
                     <div className="hero-pattern" />
                   </section>
+                  <TodayPanel
+                    c={c}
+                    last={today}
+                    onTrain={(t) => update((n) => setToday(playToday(n, t)))}
+                    onMatch={() => { setToday(null); update(startTodayMatch); }}
+                    onWeekly={() => go("training")}
+                  />
                   <div className="metrics">
                     {[
                       {
@@ -800,7 +818,7 @@ export default function App() {
                         </div>
                       </div>
                       <button className="primary full" onClick={()=>go(c.world.phase==='offseason'?'season':c.world.phase==='retired'?'career':'training')}>{c.world.phase==='offseason'?'시즌 결산 · 다음 시즌':c.world.phase==='retired'?'은퇴 기록 보기':'주간 일정에서 경기 준비'}</button>
-                      <small className="center muted">경기는 7일 일정의 토요일에 진행합니다.</small>
+                      <small className="center muted">경기는 매주 토요일입니다. 커리어 홈의 오늘의 일정이나 주간 일정으로 진행하세요.</small>
                     </section>
                     <GrowthNotes c={c}/>
                   </div>
