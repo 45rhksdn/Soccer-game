@@ -2120,3 +2120,23 @@ td strong {
 .match-actions .action-grid .dribble-pad .pad-cell{border-radius:12px;background:#ffffff26}
 .dribble-pad .mini span{background:#fff1a8}
 .match-actions .action-card .tile-icon,.match-actions .action-card svg.tile-icon{color:#fff;stroke:#fff}
+
+/* 0.8.2: one simple style for attack and defense — white tile, black text */
+.match-actions .action-grid .action-card,.match-actions .action-grid .action-card.defense,.match-actions .action-grid .action-card.attack{
+  background:#fff;color:#111;border:1px solid #e2e4df;box-shadow:0 1px 3px #0000000f}
+.match-actions .action-grid .action-card:hover{filter:none;background:#fafaf8}
+.match-actions .action-grid .action-card.selected{background:#fff;box-shadow:0 0 0 2px #111}
+.match-actions .action-card strong{color:#111}
+.match-actions .action-card small{color:#5d625c}
+.match-actions .action-card .tile-icon,.match-actions .action-card svg.tile-icon{color:#111;stroke:#111;background:#f1f2ef}
+.match-actions .chance-bar.dark .track{background:#ecedea}
+.match-actions .chance-bar.dark .fill{background:#111}
+.match-actions .chance-bar.dark .label{color:#222}
+.match-actions .action-grid .dribble-pad .pad-cell{background:#f1f2ef;color:#111}
+.match-actions .action-grid .dribble-pad .pad-cell:hover{background:#e6e7e3}
+.match-actions .action-grid .dribble-pad .pad-close{background:#f1f2ef;color:#111}
+.match-actions .dribble-pad .mini{background:#dcdeda}
+.match-actions .dribble-pad .mini span{background:#111}
+.match-actions .dribble-pad .pad-center{color:#111}
+.match-actions .dribble-pad small{color:#5d625c}
+.chance-bar.light .fill{background:#111}.chance-bar.light .track{background:#ecedea}.chance-bar.light .label{color:#222}
