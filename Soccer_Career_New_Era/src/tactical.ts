@@ -25,12 +25,23 @@ export function attackAllowed(m:Match,a:Action,opts:AttackOptions={}){
  if(a==='dribble'&&opts.vector)return Number.isFinite(opts.vector.x)&&Number.isFinite(opts.vector.y)&&Math.hypot(opts.vector.x,opts.vector.y)>0;
  return a==='dribble'||a==='hold';
 }
+/** Share of long-pass skill in a pass of this length (0 = short-pass skill only, 1 = long-pass skill only). */
+export const longPassWeight=(d:number)=>clamp((d-8)/32,0,1);
+/**
+ * 깨달음 targets for a pass: the skill that decides this pass, in the same proportion as the success
+ * formula (short ≤ 8 m: 짧은 패스, ≥ 40 m: 긴 패스, between: mixed), plus 예측력 (one third, as before).
+ * Built as six equally likely slots so the engine still draws exactly one random number.
+ */
+export function passInsightKeys(d:number):Attr[]{
+ const long=Math.round(4*longPassWeight(d));
+ return [...Array(4-long).fill('passing'),...Array(long).fill('longPassing'),'anticipation','anticipation'] as Attr[];
+}
 export function attackKeys(a:Action):Attr[]{
  if(a==='longShot')return ['longShot','finishing'];
  if(a==='curl')return ['curve','finishing'];
  if(a==='shoot'||a==='closeShot')return ['shooting','finishing'];
  if(a==='dribble')return ['dribbling','speed','anticipation'];
- if(a==='hold')return ['strength','control'];
+ if(a==='hold')return ['strength']; // only strength decides a hold
  return ['passing','longPassing','anticipation'];
 }
 /** Unpressured shot envelope: low attributes 5–15%, max long shot 10–35%. */
@@ -77,7 +88,7 @@ export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  }else if(a==='hold')base=.55+.35*p.a.strength/100;
  else{
    const target=m.players.find(q=>q.id===opts.targetId);if(!target||target.team!==p.team||target.id===p.id||!active(target))return 0;
-   const d=distance(p,target),longWeight=clamp((d-8)/32,0,1);
+   const d=distance(p,target),longWeight=longPassWeight(d);
    const skill=p.a.passing*(1-longWeight)+p.a.longPassing*longWeight;
    // 0.7.1: an unpressured short pass is safe (skill 60 ≈ 89 %, 95 ≈ 97 %); length, a forward or
    // through ball, an intercepting defender in the lane and pressure on the passer lower it.

@@ -1,4 +1,4 @@
-import { attackChance, attackAllowed, attackKeys, defenseChance, shotBlockAt, type AttackOptions } from "./tactical";
+import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, type AttackOptions } from "./tactical";
 /** Weight of an open shooting lane when attackers pick their receiving spot near goal. */
 export const SHOT_LANE_WEIGHT = 3;
 /** Pure seeded football simulation. No DOM, timers, or external services. Pitch 105 x 68m. */
@@ -564,7 +564,9 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
     boost = boostFor(m, p);
   if(m.beatenBoost?.to===p.id)m.beatenBoost=undefined;
   if (m.assistBoost?.to === p.id) m.assistBoost = null; // one action only, never stacks
-  insightAttempt(m,p,attackKeys(action==='shoot'&&Math.hypot((d>0?105:0)-p.x,34-p.y)>22?'longShot':action));
+  // 깨달음 grows exactly the attributes that decide this action (a pass: by its length).
+  const passTo=["pass","safe","forward","through"].includes(action)?(options.targetId===undefined?targets(m,p,action)[0]?.p:m.players.find(q=>q.id===options.targetId)):undefined;
+  insightAttempt(m,p,passTo?passInsightKeys(dist(p,passTo)):attackKeys(action==='shoot'&&Math.hypot((d>0?105:0)-p.x,34-p.y)>22?'longShot':action));
   m.decision = false;
   m.nextAI = 2.5;
   if (["shoot","closeShot","longShot","curl"].includes(action)) {

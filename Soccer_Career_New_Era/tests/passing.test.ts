@@ -30,3 +30,20 @@ it('length, a forward or through ball and pressure lower the chance',()=>{
   // One close marker costs a pass less than it costs a dribble (4 + up to 8 points, not 5 + 12).
   expect(pass(60,10)-pass(60,10,{marker:1})).toBeLessThan(.12);
 });
+
+it('깨달음 from a pass grows the skill that decided it: short → 짧은 패스, long → 긴 패스 (+ 예측력)',async()=>{
+  const {passInsightKeys,attackKeys,longPassWeight}=await import('../src/tactical');
+  expect(new Set(passInsightKeys(6))).toEqual(new Set(['passing','anticipation']));
+  expect(new Set(passInsightKeys(45))).toEqual(new Set(['longPassing','anticipation']));
+  const mid=passInsightKeys(24);expect(mid.filter(k=>k==='longPassing').length).toBe(Math.round(4*longPassWeight(24)));
+  for(const d of [5,15,24,33,50]){const k=passInsightKeys(d);expect(k).toHaveLength(6);expect(k.filter(x=>x==='anticipation')).toHaveLength(2);}
+  expect(attackKeys('hold')).toEqual(['strength']);
+  // In a match: a short pass with a guaranteed insight only ever grows 짧은 패스 or 예측력.
+  const {act}=await import('../src/engine');
+  const grown=new Set<string>();
+  for(let seed=1;seed<=40;seed++){const {m,target}=scene(60,6);m.seed=seed;m.decision=true;m.insight={chance:1,gains:{},events:[]};act(m,'pass',{targetId:target});for(const k of Object.keys(m.insight.gains))grown.add(k);}
+  expect([...grown].sort()).toEqual(['anticipation','passing']);
+  const long=new Set<string>();
+  for(let seed=1;seed<=40;seed++){const {m,target}=scene(60,45,{ahead:true});m.seed=seed;m.decision=true;m.insight={chance:1,gains:{},events:[]};act(m,'pass',{targetId:target});for(const k of Object.keys(m.insight.gains))long.add(k);}
+  expect([...long].sort()).toEqual(['anticipation','longPassing']);
+});
