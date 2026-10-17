@@ -156,12 +156,15 @@ export default function App() {
   const inform = (s: string) => {
     setNotice(s);
   };
+  const saveRevision = useRef(0);
   async function persist(state: Career, target = slot) {
+    const revision = ++saveRevision.current;
     setSaved("저장 중…");
     try {
       await storage.save(target, state);
-      setSaved("저장 완료");
+      if (revision === saveRevision.current) setSaved("저장 완료");
     } catch (e) {
+      if (revision !== saveRevision.current) return;
       setSaved("저장 실패");
       inform(
         "저장에 실패했습니다. 저장 관리에서 JSON 파일을 내보내 주세요. " +
@@ -232,6 +235,8 @@ export default function App() {
     try {
       const n = structuredClone(c);
       fn(n);
+      ++saveRevision.current;
+      setSaved("저장 중…");
       if(n.match&&!c.match){setPaused(false);setTab("home");}
       setC(n);
     } catch (e) {
@@ -1407,3 +1412,4 @@ function Create({
     </>
   );
 }
+

@@ -14,6 +14,9 @@ async function tapDays(page:Page,acts:string[]){for(const a of acts)await page.g
 const savedDay=(page:Page)=>page.evaluate(()=>new Promise<number>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const s=q.result.transaction('saves').objectStore('saves');const a=s.get('activeSlot');a.onsuccess=()=>{const r=s.get('slot'+(a.result??1));r.onsuccess=()=>{q.result.close();try{resolve(JSON.parse(JSON.parse(String(r.result)).payload).development.active?.cursor??0);}catch{resolve(-1);}};};};}));
 test('daily schedule → live action → growth/rival → reload mid-week and mid-match → slots and file restore',async({page},info)=>{
  test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await create(page);
+ // An actual defensive decision pauses the clock before the first attacking possession.
+ const defense=page.getByRole('group',{name:'수비 선택'});
+ await page.addLocatorHandler(defense,async()=>{await defense.getByRole('button',{name:'수비 압박하기',exact:true}).click();});
  await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.locator('.career-hero')).not.toContainText('보유 특성');for(const t of ['컨디션','피로도','잔액'])await expect(page.locator('.today-help')).toContainText(t);await expect(page.locator('.today-help')).not.toContainText('확률');
  await nav(page,'오늘의 일정');await tapDays(page,['패스훈련','속력훈련','공격훈련','휴식하기','드리블훈련']);
  await page.screenshot({path:`reports/${info.project.name}-daily.png`,fullPage:true});
@@ -39,7 +42,7 @@ test('two school seasons, rival aging, offer expiry and renewed professional con
   if(season===1){await nav(page,'이적 · 계약');await expect(page.getByRole('button',{name:'계약 수락',exact:true}).first()).toBeVisible();
    // Let 15 offseason days pass one at a time: offers older than 14 days must disappear.
    await nav(page,'오늘의 일정');for(let day=0;day<15;day++)await page.getByRole('button',{name:'오늘 휴식하기'}).click();
-   await nav(page,'이적 · 계약');await expect(page.getByRole('button',{name:'계약 수락',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'새 계약 구직'}).click();await page.getByRole('button',{name:'연봉 15% 인상 협상'}).first().click();await page.getByRole('button',{name:'계약 수락',exact:true}).first().click();await nav(page,'시즌 · 리그');}
+   await nav(page,'이적 · 계약');await expect(page.getByRole('button',{name:'계약 수락',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'새 계약 구직'}).click();await page.getByRole('button',{name:'연봉 인상',exact:true}).first().click();await page.getByRole('button',{name:'계약 수락',exact:true}).first().click();await nav(page,'시즌 · 리그');}
   await page.getByRole('button',{name:'다음 시즌 시작',exact:true}).click();await nav(page,'커리어 홈');
  }
  await playWeek(page);await nav(page,'라이벌');await expect(page.getByText(/19세/).first()).toBeVisible();await expect(page.locator('.save-state')).toHaveText('저장 완료');await page.reload();expect(errors).toEqual([]);
@@ -111,3 +114,4 @@ test('오늘의 일정: one tap per day, match-day screen, then Sunday ends the 
  await page.screenshot({path:`reports/${info.project.name}-today.png`,fullPage:true});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
+

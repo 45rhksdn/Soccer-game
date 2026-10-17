@@ -64,3 +64,4 @@ export function RivalCompare({c}:{c:Career}){
   <p className="muted eg-foot">{me.ovr>=rival.ovr?'지금은 당신이 앞서 있습니다. 격차를 지켜내세요.':'라이벌이 앞서 있습니다. 이번 주 훈련으로 따라잡으세요.'}</p>
  </section>;
 }
+

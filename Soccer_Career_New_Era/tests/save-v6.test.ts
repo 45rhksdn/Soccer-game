@@ -13,14 +13,14 @@ const fixture=(n:string)=>readFileSync(new URL(`./fixtures/${n}`,import.meta.url
 const raw=(n:string)=>JSON.parse(JSON.parse(fixture(n)).payload);
 
 it('real v5 saves (0.4, daily week and live match) load as v6 without losing anything',()=>{
-  expect(SAVE_VERSION).toBe(7);
+  expect(SAVE_VERSION).toBe(8);
   for(const name of ['v5-daily.json','v5-live-match.json']){
     const before=raw(name),c=decode(fixture(name));
-    expect(before.version).toBe(5);expect(c.version).toBe(7);expect(typeof c.id).toBe('string');
+    expect(before.version).toBe(5);expect(c.version).toBe(8);expect(typeof c.id).toBe('string');
     expect(c.player).toMatchObject(before.player);expect(c.development.traits).toMatchObject(before.development.traits);
     expect(c.development.rival.player).toMatchObject(before.development.rival.player);expect(c.development.rival.traits).toMatchObject(before.development.rival.traits);
     expect(c.development.rival.history).toMatchObject(before.development.rival.history);
-    expect(c.history).toMatchObject(before.history);expect(c.world.records).toMatchObject(before.world.records);expect(c.world.clubs).toMatchObject(before.world.clubs);
+    expect(c.history).toMatchObject(before.history);expect(c.world.records).toMatchObject(before.world.records);for(const old of before.world.clubs){const {name,...rest}=old;expect(c.world.clubs.find(x=>x.id===old.id)).toMatchObject(rest);}
     expect(c.development.active).toMatchObject(before.development.active);expect(c.match).toMatchObject(before.match);expect(c.schoolRef).toMatchObject(before.schoolRef);
     expect(c.development.equipment).toBeUndefined();
     // The same old save always maps to the same id (backups and archives of it cannot be rewarded twice).
@@ -38,7 +38,7 @@ it('a migrated v5 save continues: the daily schedule resumes and the live match 
 });
 
 it('older chains still work: v4 fixtures go v4 → v5 → v6',()=>{
-  for(const name of ['v4-weeks.json','v4-live-match.json']){const c=decode(fixture(name));expect(c.version).toBe(7);expect(c.id).toMatch(/^legacy-/);expect(c.player.name).toBe(raw(name).player.name);}
+  for(const name of ['v4-weeks.json','v4-live-match.json']){const c=decode(fixture(name));expect(c.version).toBe(8);expect(c.id).toMatch(/^legacy-/);expect(c.player.name).toBe(raw(name).player.name);}
 });
 
 it('round trip with every 0.5 field (equipment, injuries, id) is lossless',()=>{

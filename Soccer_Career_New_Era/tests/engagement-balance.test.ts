@@ -33,3 +33,4 @@ for(const pos of ['ST','CM','CB','GK'] as const)
     expect(r.rate).toBeGreaterThan(.25);expect(r.rate).toBeLessThan(.7);
     expect(r.firstSeasonSigs).toBe(0);
   },600000);
+

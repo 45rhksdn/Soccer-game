@@ -1004,3 +1004,4 @@ export function userPerformance(m:Match):Footballer {
  const p=m.players[m.userId];
  return {...p,energy:m.userFinalEnergy??p.energy,stats:m.userFinalStats??(m.userOnPitch===false?emptyStats():p.stats)};
 }
+

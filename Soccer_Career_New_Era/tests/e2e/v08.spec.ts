@@ -67,3 +67,4 @@ test('dribble and pass tiles also show a gauge bar',async({page})=>{
   await load(page,fixture());const attack=page.getByRole('group',{name:'공격 선택'});
   for(const name of [/드리블/,/^패스/]){const tile=attack.getByRole('button',{name});await expect(tile.locator('.chance-bar .fill')).toHaveCount(1);await expect(tile).toContainText(/확률/);await expect(tile).not.toContainText(/득점 ·|앞으로 ·|추천 동료|방향 선택|동료 선택/);}
 });
+

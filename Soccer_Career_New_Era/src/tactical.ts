@@ -134,3 +134,4 @@ export const CHANCE_BANDS=[{max:.2,label:'매우 낮은 확률'},{max:.4,label:'
 /** Band index 0 (매우 낮은) … 4 (매우 높은) for a probability 0–1. */
 export const chanceLevel=(p:number)=>CHANCE_BANDS.findIndex(b=>p<b.max);
 export const chanceLabel=(p:number)=>CHANCE_BANDS[chanceLevel(p)].label;
+

@@ -1,3 +1,9 @@
+# v0.9 최신 검증
+
+로컬 및 GitHub 158개 테스트 전부 통과. GitHub 2,000경기 2.7695골·24.074슈팅, TypeScript/프로덕션 빌드 통과. Chromium dev 52개, production PWA 54개 통과. WebKit 커리어 테스트의 수비 선택 대기 처리를 보완하고 해당 흐름도 통과했다. 미드필더 기대 도움 게이트 통과, 장기 커리어 최고점 32세. 상세 측정과 브라우저 CI 상태는 [reports/v09-validation.md](reports/v09-validation.md)를 참고한다. 아래는 과거 버전의 검증 이력이다.
+
+---
+
 # Test Report — 0.7 마무리 (2026-10-17, Claude)
 
 | 검사 | 결과 |
@@ -273,3 +279,4 @@ Node 24, TypeScript, Vite 6.4.4, Vitest 3.2.7, Playwright, Linux Chromium 153. �
 - 2,000경기: 평균 합산 4.231골, 27.3975슈팅, 0:0 28경기, 최대 합산 12골. 홈/원정 평균 1.939/2.292. 포지션 평균 GK6.572/LB6.523/CB6.468/RB6.530/CM6.863/LW6.874/ST6.993/RW6.856. 평균 격차 0.525. 기존 목표 범위 통과.
 - TypeScript/프로덕션 빌드 통과.
 - 최종 빌드 Playwright PC/모바일 크기 Chromium 8개 통과 (42.1초). 실제 Safari는 여전히 미검증.
+

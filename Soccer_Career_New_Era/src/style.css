@@ -2141,6 +2141,9 @@ td strong {
 .match-actions .dribble-pad small{color:#5d625c}
 .chance-bar.light .fill{background:#111}.chance-bar.light .track{background:#ecedea}.chance-bar.light .label{color:#222}
 
+.transfer-agent,.transfer-toolbar{display:flex;gap:16px;flex-wrap:wrap;margin:18px 0}.transfer-agent h2,.transfer-agent p{flex-basis:100%}.transfer-agent label,.transfer-toolbar label{display:flex;flex-direction:column;gap:8px;max-width:100%}.transfer-agent select,.transfer-toolbar select{padding:10px;max-width:100%;background:var(--card,#fff);color:inherit;border:1px solid #cbd8cd;border-radius:8px}.negotiation-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.save-card h2{font-size:22px}.save-card p{overflow-wrap:anywhere}@media(max-width:600px){.negotiation-options{grid-template-columns:1fr}.transfer-agent select{width:100%}}
+
+
 /* 0.8.3: popup design C — white medal card with black text (lucky / insight / goal) */
 .popup-backdrop{background:#0a1d15b3}
 .growth-popup,.growth-popup.lucky,.growth-popup.insight,.growth-popup.goal{
@@ -2194,3 +2197,5 @@ td strong {
 .rc-legend i.me{background:#111}.rc-legend i.them{background:#a9ada6}
 .eg-more summary{cursor:pointer;font-size:13px;font-weight:700;color:#4b5049;padding:4px 0}
 .eg-more[open]{display:flex;flex-direction:column;gap:12px}
+
+.transfer-page,.transfer-page .card,.transfer-page .page-heading>div{min-width:0}.transfer-page .page-heading{display:block}.transfer-page .page-heading h1{word-break:keep-all}.transfer-page .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:600px){.transfer-page .metrics{grid-template-columns:1fr}.transfer-page .transfer-agent label{width:100%;min-width:0}.transfer-page select{width:100%;min-width:0}.transfer-page .page-heading h1{font-size:27px}}

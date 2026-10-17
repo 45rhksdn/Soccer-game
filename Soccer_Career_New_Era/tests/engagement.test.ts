@@ -119,3 +119,4 @@ it('save round trip keeps deeds, signatures, mission record and the live match m
   expect(back.development.missions).toEqual({done:2,total:3});expect(back.match?.mission).toEqual(c.match?.mission);
   expect(SIGNATURES.every(s=>s.target>0)).toBe(true);
 });
+

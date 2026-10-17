@@ -9,6 +9,7 @@ import {seedFrom} from './traits';
 import {overall,userPerformance,type Match,type MatchMission,type Position,type SignatureAction,type Stat} from './engine';
 import {news} from './development';
 import {clubOf} from './world';
+import {leagueLevel} from './leagues';
 import type {Career} from './career';
 
 // ── 감독 미션 ───────────────────────────────────────────────────────────
@@ -39,7 +40,7 @@ export function createMission(c:Career):MatchMission{
  const pool=POOL[GROUP[c.player.pos]],seed=seedFrom((c.seed^c.week)>>>0,`mission:${c.world.year}`);
  const [stat,base,label,cmp='min']=pool[seed%pool.length];
  // Higher leagues ask a little more (attackers shoot more, defenders face more attacks).
- const target=cmp==='min'&&base>=2&&clubOf(c.world).league>=2?base+1:base;
+ const target=cmp==='min'&&base>=2&&leagueLevel(clubOf(c.world).league)>=70?base+1:base;
  return {id:`${c.week}:${stat}`,label:label(target),stat,target,cmp};
 }
 export function missionValue(stat:string,s:Stat){
@@ -152,3 +153,4 @@ export function rivalNews(c:Career){
  if(d.rivalAhead!==undefined&&ahead!==d.rivalAhead)news(c,ahead?`능력치 역전! OVR에서 라이벌 ${r.player.name}을 앞질렀습니다.`:`라이벌 ${r.player.name}이 OVR에서 당신을 앞질렀습니다. 다시 따라잡을 차례입니다.`);
  d.rivalAhead=ahead;
 }
+
