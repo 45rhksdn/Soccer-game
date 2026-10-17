@@ -2,7 +2,7 @@ name: WebKit career regression
 on:
   push:
     branches: ['codex/v0.9-world-transfers']
-    paths: ['Soccer_Career_New_Era/tests/e2e/career.spec.ts', '.github/workflows/webkit-career.yml']
+    paths: ['Soccer_Career_New_Era/tests/e2e/career.spec.ts', '.github/workflows/webkit-career.yml', 'Soccer_Career_New_Era/src/TransferPanel.tsx', 'Soccer_Career_New_Era/src/style.css', 'Soccer_Career_New_Era/tests/e2e/v09.spec.ts']
 jobs:
   career:
     runs-on: ubuntu-latest
@@ -18,8 +18,9 @@ jobs:
           cache: npm
           cache-dependency-path: Soccer_Career_New_Era/package-lock.json
       - run: npm ci
-      - run: npx playwright install --with-deps webkit
+      - run: npx playwright install --with-deps webkit chromium
       - run: WEBKIT=1 npx playwright test tests/e2e/career.spec.ts --grep 'daily schedule' --project=iphone-webkit
+      - run: WEBKIT=1 npx playwright test tests/e2e/v09.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

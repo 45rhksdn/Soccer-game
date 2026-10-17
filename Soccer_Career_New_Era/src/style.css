@@ -2197,3 +2197,5 @@ td strong {
 .rc-legend i.me{background:#111}.rc-legend i.them{background:#a9ada6}
 .eg-more summary{cursor:pointer;font-size:13px;font-weight:700;color:#4b5049;padding:4px 0}
 .eg-more[open]{display:flex;flex-direction:column;gap:12px}
+
+.transfer-page,.transfer-page .card,.transfer-page .page-heading>div{min-width:0}.transfer-page .page-heading{display:block}.transfer-page .page-heading h1{word-break:keep-all}.transfer-page .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:600px){.transfer-page .metrics{grid-template-columns:1fr}.transfer-page .transfer-agent label{width:100%;min-width:0}.transfer-page select{width:100%;min-width:0}.transfer-page .page-heading h1{font-size:27px}}

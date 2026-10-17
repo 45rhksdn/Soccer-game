@@ -9,8 +9,8 @@ export function TransferPanel({c,update}:{c:Career,update:(f:(c:Career)=>void)=>
  const target=w.clubs.find(x=>x.id===w.targetClubId),stepping=w.clubs.filter(x=>x.league>0&&x.id!==w.clubId&&Math.abs(clubLevel(x,p.pos)-ability)<5).sort((a,b)=>b.development-a.development)[0];
  const offers=w.offers.filter(o=>o.status==='open'&&(o.expiresDay??Infinity)>c.day&&(filter<0||w.clubs.find(x=>x.id===o.clubId)!.league===filter)).sort((a,b)=>{const score=(o:typeof a)=>{const cl=w.clubs.find(x=>x.id===o.clubId)!;return w.priority==='연봉'?o.salary:w.priority==='성장'?cl.development:w.priority==='우승'?cl.reputation:-Math.abs(ability-clubLevel(cl,p.pos)-3);};return score(b)-score(a);});
  const sign=(id:string)=>{const cl=w.clubs.find(x=>x.id===id)!;if(confirm(`${cl.name}의 계약 조건을 수락할까요?`))update(n=>{acceptOffer(n.world,id,n.player.name);n.development.interestIds=[];n.world.news.unshift(n.development.rival.clubId===id?'라이벌과 같은 유니폼! 새로운 주전 경쟁이 시작됩니다.':'새 구단에서 새로운 도전을 시작합니다.');});};
- return <>
- <div className="page-heading"><div className="eyebrow">WORLD TRANSFER DESK</div><h1>다음 유니폼을 선택하세요</h1><p>11개 프로 리그 · 가상 구단 · 금액 단위 만원 · 제안 유효기간 14일</p></div>
+ return <div className="transfer-page">
+ <div className="page-heading"><div><div className="eyebrow">WORLD TRANSFER DESK</div><h1>다음 유니폼을 선택하세요</h1><p>11개 프로 리그 · 가상 구단 · 금액 단위 만원 · 제안 유효기간 14일</p></div></div>
  <div className="metrics"><section className="card metric"><div>현재 구단</div><strong style={{fontSize:20}}>{club.name}</strong><small>{LEAGUES[club.league]}</small></section><section className="card metric"><div>현재 출전 계획</div><strong style={{fontSize:20}}>{selection(c).role}</strong><small>계약 역할: {w.contract.role??'미지정'}{(w.contract.trialMatches??0)>0?` · 도전 기회 ${w.contract.trialMatches}경기 남음`:''}</small></section><section className="card metric"><div>연봉 / 남은 계약</div><strong style={{fontSize:20}}>{w.contract.salary.toLocaleString()} / {w.contract.years}년</strong></section></div>
  {w.loan&&<section className="card"><h3>임대 중</h3><p>{w.clubs.find(x=>x.id===w.loan!.parentId)?.name}에서 임대 · {w.loan.returnYear}시즌 종료 후 자동 복귀</p></section>}
  <section className="card transfer-agent"><h2>에이전트와 커리어 계획</h2><label>가장 중요한 조건 <select aria-label="이적 우선순위" value={w.priority??'출전'} onChange={e=>update(n=>{n.world.priority=e.target.value as typeof w.priority;})}>{['출전','성장','연봉','우승'].map(v=><option key={v}>{v}</option>)}</select></label><label>꿈의 구단 <select aria-label="목표 구단" value={w.targetClubId??''} onChange={e=>update(n=>{n.world.targetClubId=e.target.value||undefined;})}><option value="">정하지 않음</option>{LEAGUE_DATA.filter(l=>l.id>0).map(l=><optgroup key={l.id} label={l.name}>{w.clubs.filter(x=>x.league===l.id&&x.id!==w.clubId).map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</optgroup>)}</select></label>
@@ -24,5 +24,5 @@ export function TransferPanel({c,update}:{c:Career,update:(f:(c:Career)=>void)=>
  {w.phase==='offseason'&&!offers.length&&<p>이 조건의 유효한 제안이 없습니다.</p>}
  <div className="note">출전 역할은 예상입니다. 실제 선발은 능력·체력·전술·최근 활약과 경쟁자에 따라 달라집니다. 주전 도전 합의는 첫 3경기 동안 컨디션이 좋고 경쟁자와 실력이 비슷할 때 선발 기회를 우선 부여합니다. 협상은 제안당 한 번, 거절되면 기존 조건이 유지됩니다. 리그는 대표 6개 가상 구단의 축약 시즌이며 공식 라이선스 데이터가 아닙니다.</div>
  <section className="card"><h2>축구 세계 소식</h2>{w.news.slice(0,10).map((text,i)=><p key={i}>{text}</p>)}</section>
- </>;
+ </div>;
 }
