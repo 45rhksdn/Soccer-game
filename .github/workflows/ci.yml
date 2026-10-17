@@ -26,7 +26,11 @@ jobs:
       - name: Type-check and production build
         run: npm run build
       - name: Unit, regression and balance tests
-        run: npm test
+        shell: bash
+        # On failure the key lines are re-emitted as annotations, so they can be read from the checks API.
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee vitest.log || { grep -E "FAIL|Error|×|failed|Unhandled|Timeout|exited|AssertionError|expected" vitest.log | tail -25 | sed 's/^/::error::/'; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: production-build
