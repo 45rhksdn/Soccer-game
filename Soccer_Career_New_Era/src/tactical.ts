@@ -125,3 +125,9 @@ export function matchCommentary(m:Match){
  }
  return m.log.at(-1)?.text??'선수들이 전술 대형을 정비하며 기회를 살핍니다.';
 }
+
+/** 0.8: in-game probabilities are shown as words, never as numbers. */
+export const CHANCE_BANDS=[{max:.2,label:'매우 낮은 확률'},{max:.4,label:'낮은 확률'},{max:.6,label:'중간 확률'},{max:.8,label:'높은 확률'},{max:Infinity,label:'매우 높은 확률'}] as const;
+/** Band index 0 (매우 낮은) … 4 (매우 높은) for a probability 0–1. */
+export const chanceLevel=(p:number)=>CHANCE_BANDS.findIndex(b=>p<b.max);
+export const chanceLabel=(p:number)=>CHANCE_BANDS[chanceLevel(p)].label;

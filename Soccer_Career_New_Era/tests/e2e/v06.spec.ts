@@ -21,7 +21,7 @@ test('live match: an opponent near me with the ball asks for a defensive choice;
   }
   if(!(await defense.count())){test.skip(true,'not selected or no defensive moment');return;}
   await expect(page.locator('.live-badge')).toContainText('수비 선택');
-  await expect(defense.getByRole('button',{name:'수비 스탠딩 태클'})).toContainText('성공 확률');
+  await expect(defense.getByRole('button',{name:'수비 스탠딩 태클'})).toContainText(/(매우 낮은|낮은|중간|높은|매우 높은) 확률/);expect(await defense.innerText()).not.toMatch(/\d+(\.\d+)?\s*%/);
   await page.screenshot({path:`reports/${info.project.name}-defense.png`,fullPage:false});
   const clock=await page.locator('.scoreboard small, .score small').first().innerText().catch(()=>'');
   await page.waitForTimeout(600);expect(await page.locator('.scoreboard small, .score small').first().innerText().catch(()=>'')).toBe(clock); // paused while choosing

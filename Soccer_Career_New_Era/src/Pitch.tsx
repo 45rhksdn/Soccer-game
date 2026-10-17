@@ -1,54 +1,88 @@
 import { useEffect, useRef } from "react";
-import type { Match } from "./engine";
+import { direction, type Match } from "./engine";
+
+// 0.8: the live match is drawn vertically and always shows the user's team attacking upward,
+// so the whole pitch fits one phone screen. The home-page ambient pitch stays horizontal.
+const PITCH_L = 105, PITCH_W = 68;
+type View = { w: number; h: number; s: number; ox: number; oy: number; vertical: boolean; up: boolean };
+function view(vertical: boolean, up: boolean): View {
+  const w = vertical ? 650 : 1000, h = vertical ? 1000 : 650, pad = 30;
+  const s = vertical ? Math.min((w - pad * 2) / PITCH_W, (h - pad * 2) / PITCH_L) : Math.min((w - pad * 2) / PITCH_L, (h - pad * 2) / PITCH_W);
+  const fw = (vertical ? PITCH_W : PITCH_L) * s, fh = (vertical ? PITCH_L : PITCH_W) * s;
+  return { w, h, s, ox: (w - fw) / 2, oy: (h - fh) / 2, vertical, up };
+}
+/** Engine metres → canvas pixels. */
+function toCanvas(v: View, x: number, y: number): [number, number] {
+  if (!v.vertical) return [v.ox + x * v.s, v.oy + y * v.s];
+  return v.up ? [v.ox + y * v.s, v.oy + (PITCH_L - x) * v.s] : [v.ox + (PITCH_W - y) * v.s, v.oy + x * v.s];
+}
+/** Canvas pixels → engine metres. */
+function toEngine(v: View, cx: number, cy: number): [number, number] {
+  const u = (cx - v.ox) / v.s, w = (cy - v.oy) / v.s;
+  if (!v.vertical) return [u, w];
+  return v.up ? [PITCH_L - w, u] : [w, PITCH_W - u];
+}
+/** The user's team attacks toward the top of the vertical pitch. */
+const attacksUp = (m: Match) => direction(m, m.players[m.userId].team) > 0;
+/** A direction on screen (right = +x, down = +y) as an engine movement vector. */
+export function screenToEngineVector(m: Match, sx: number, sy: number) {
+  return attacksUp(m) ? { x: -sy, y: sx } : { x: sy, y: -sx };
+}
+
 export function Pitch({
   match,
   ambient = false,
-  selectable=false,onPlayer,
+  vertical = !!match,
+  selectable = false,
+  onPlayer,
+  dribble = false,
+  onDribble,
 }: {
   match?: Match | null;
   ambient?: boolean;
-  selectable?:boolean;onPlayer?:(id:number)=>void;
+  vertical?: boolean;
+  selectable?: boolean;
+  onPlayer?: (id: number) => void;
+  /** Dribble mode: tapping the pitch picks the direction. */
+  dribble?: boolean;
+  onDribble?: (vector: { x: number; y: number }) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const v = view(vertical, match ? attacksUp(match) : true);
   useEffect(() => {
     const c = ref.current!;
     const ctx = c.getContext("2d")!;
     let raf = 0;
     const draw = () => {
-      const w = 1000,
-        h = 650;
-      c.width = w;
-      c.height = h;
-      ctx.fillStyle = "#22664e";
-      ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < 10; i++) {
-        ctx.fillStyle = i % 2 ? "#286e54" : "#24674f";
-        ctx.fillRect(35 + i * 93, 35, 93, 580);
-      }
-      const X = (x: number) => 35 + (x / 105) * 930,
-        Y = (y: number) => 35 + (y / 68) * 580;
-      ctx.strokeStyle = "#b5d6b68a";
+      c.width = v.w;
+      c.height = v.h;
+      ctx.fillStyle = "#1d5c46";
+      ctx.fillRect(0, 0, v.w, v.h);
+      const P = (x: number, y: number) => toCanvas(v, x, y);
+      const rect = (x1: number, y1: number, x2: number, y2: number, fill?: string) => {
+        const [a, b] = P(x1, y1), [cc, d] = P(x2, y2);
+        const x = Math.min(a, cc), y = Math.min(b, d), w = Math.abs(cc - a), h = Math.abs(d - b);
+        if (fill) { ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); } else ctx.strokeRect(x, y, w, h);
+      };
+      // Mowing stripes across the length.
+      for (let i = 0; i < 10; i++) rect(i * 10.5, 0, (i + 1) * 10.5, PITCH_W, i % 2 ? "#286e54" : "#24674f");
+      ctx.strokeStyle = "#cfe3cbb0";
       ctx.lineWidth = 2;
-      ctx.strokeRect(35, 35, 930, 580);
-      ctx.beginPath();
-      ctx.moveTo(500, 35);
-      ctx.lineTo(500, 615);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.ellipse(500, 325, 81, 78, 0, 0, 7);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(500, 325, 3, 0, 7);
-      ctx.fillStyle = "#c5dcb6";
-      ctx.fill();
-      for (const right of [false, true]) {
-        ctx.strokeRect(right ? 819 : 35, 153, 146, 344);
-        ctx.strokeRect(right ? 916 : 35, 246, 49, 158);
-        ctx.fillStyle = "#e5e9da66";
-        ctx.fillRect(right ? 965 : 23, 294, 12, 62);
-        ctx.beginPath();
-        ctx.arc(right ? 867 : 133, 325, 3, 0, 7);
-        ctx.fill();
+      rect(0, 0, PITCH_L, PITCH_W);
+      const [h1x, h1y] = P(52.5, 0), [h2x, h2y] = P(52.5, PITCH_W);
+      ctx.beginPath(); ctx.moveTo(h1x, h1y); ctx.lineTo(h2x, h2y); ctx.stroke();
+      const [cx, cy] = P(52.5, 34);
+      ctx.beginPath(); ctx.arc(cx, cy, 9.15 * v.s, 0, 7); ctx.stroke();
+      ctx.fillStyle = "#d8e8cf";
+      ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 7); ctx.fill();
+      for (const end of [0, PITCH_L]) {
+        const inward = end === 0 ? 1 : -1;
+        rect(end, 13.84, end + inward * 16.5, 54.16);
+        rect(end, 24.84, end + inward * 5.5, 43.16);
+        rect(end, 30.34, end - inward * 1.6, 37.66, "#eef2e3aa");
+        const [px, py] = P(end + inward * 11, 34);
+        ctx.fillStyle = "#d8e8cf";
+        ctx.beginPath(); ctx.arc(px, py, 3, 0, 7); ctx.fill();
       }
       const players =
         match?.players ??
@@ -61,64 +95,85 @@ export function Pitch({
           red: false,
           injured: false,
         }));
+      const userTeam = match ? match.players[match.userId].team : 0;
       for (const p of players) {
         if (p.red || p.injured) continue;
-        const x = X(p.x),
-          y = Y(p.y),
+        const [x, y] = P(p.x, p.y),
           user = match ? p.id === match.userId && match.userOnPitch !== false : p.id === 9;
         ctx.beginPath();
         ctx.ellipse(x + 2, y + 7, 11, 6, 0, 0, 7);
         ctx.fillStyle = "#09271b60";
         ctx.fill();
         if (user) {
-          ctx.strokeStyle = "#e9f58a";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(x, y, 19, 0, 7);
-          ctx.stroke();
-          ctx.fillStyle = "#e9f58a";
-          ctx.beginPath();
-          ctx.moveTo(x, y - 23);
-          ctx.lineTo(x - 5, y - 31);
-          ctx.lineTo(x + 5, y - 31);
-          ctx.fill();
+          ctx.strokeStyle = "#f4f78a";
+          ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(x, y, 20, 0, 7); ctx.stroke();
+          ctx.fillStyle = "#f4f78a";
+          ctx.beginPath(); ctx.moveTo(x, y - 24); ctx.lineTo(x - 6, y - 33); ctx.lineTo(x + 6, y - 33); ctx.fill();
         }
-        if(selectable&&match&&p.team===match.players[match.userId].team&&p.id!==match.userId){ctx.strokeStyle="#f9df64";ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,22,0,7);ctx.stroke();}
+        if (selectable && match && p.team === userTeam && p.id !== match.userId) {
+          ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(x, y, 23, 0, 7); ctx.stroke();
+        }
         ctx.beginPath();
         ctx.arc(x, y, 15, 0, 7);
-        ctx.fillStyle = p.team === 0 ? "#f2f1db" : "#e79562";
+        ctx.fillStyle = p.team === userTeam ? "#f2f1db" : "#e79562";
         ctx.fill();
-        ctx.fillStyle = p.team === 0 ? "#183c2e" : "#40251c";
+        ctx.fillStyle = p.team === userTeam ? "#183c2e" : "#40251c";
         ctx.font = "bold 15px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(String(p.number), x, y + 0.5);
-        if(match){ctx.font="bold 12px sans-serif";ctx.fillStyle="#fff";ctx.strokeStyle="#123428";ctx.lineWidth=3;ctx.strokeText(match.players[p.id].name,x,y+27);ctx.fillText(match.players[p.id].name,x,y+27);}
+        if (match) {
+          ctx.font = "bold 12px sans-serif"; ctx.fillStyle = "#fff"; ctx.strokeStyle = "#123428"; ctx.lineWidth = 3;
+          ctx.strokeText(match.players[p.id].name, x, y + 27); ctx.fillText(match.players[p.id].name, x, y + 27);
+        }
       }
-      const b = match?.ball ?? { x: 53, y: 33 };
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "#19352b";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(X(b.x), Y(b.y), 5, 0, 7);
-      ctx.fill();
-      ctx.stroke();
-      if (ambient) {
-        ctx.fillStyle = "#08271c44";
-        ctx.fillRect(0, 0, w, h);
+      // Dribble mode: eight arrows around the user; any tap on the pitch sets the direction.
+      if (dribble && match) {
+        const u = match.players[match.userId], [ux, uy] = P(u.x, u.y);
+        ctx.fillStyle = "#ffd84ae6"; ctx.strokeStyle = "#1b3a2c"; ctx.lineWidth = 2;
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4, r = 46, ax = ux + Math.cos(a) * r, ay = uy + Math.sin(a) * r;
+          ctx.save(); ctx.translate(ax, ay); ctx.rotate(a);
+          ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, -9); ctx.lineTo(-3, 0); ctx.lineTo(-7, 9); ctx.closePath();
+          ctx.fill(); ctx.stroke(); ctx.restore();
+        }
       }
+      const b = match?.ball ?? { x: 53, y: 33 }, [bx, by] = P(b.x, b.y);
+      ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#19352b"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(bx, by, 5, 0, 7); ctx.fill(); ctx.stroke();
+      if (ambient) { ctx.fillStyle = "#08271c44"; ctx.fillRect(0, 0, v.w, v.h); }
       raf = requestAnimationFrame(draw);
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [match, ambient,selectable]);
+  }, [match, ambient, selectable, dribble, v.vertical, v.up]);
+  const clickable = (selectable || dribble) && !!match;
   return (
     <canvas
       ref={ref}
-      onClick={e=>{if(!selectable||!match)return;const r=e.currentTarget.getBoundingClientRect(),x=((e.clientX-r.left)/r.width*1000-35)/930*105,y=((e.clientY-r.top)/r.height*650-35)/580*68;const q=match.players.filter(p=>p.team===match.players[match.userId].team&&p.id!==match.userId&&!p.red&&!p.injured).sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];if(q&&Math.hypot(q.x-x,q.y-y)<5)onPlayer?.(q.id);}}
-      className="pitch"
+      onClick={(e) => {
+        if (!clickable || !match) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const cx = ((e.clientX - r.left) / r.width) * v.w, cy = ((e.clientY - r.top) / r.height) * v.h;
+        if (dribble) {
+          const u = match.players[match.userId], [ux, uy] = toCanvas(v, u.x, u.y);
+          const sx = cx - ux, sy = cy - uy;
+          if (Math.hypot(sx, sy) < 8) return; // a tap on the player itself is not a direction
+          onDribble?.(screenToEngineVector(match, sx, sy));
+          return;
+        }
+        const [x, y] = toEngine(v, cx, cy);
+        const q = match.players
+          .filter((p) => p.team === match.players[match.userId].team && p.id !== match.userId && !p.red && !p.injured)
+          .sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0];
+        if (q && Math.hypot(q.x - x, q.y - y) < 5) onPlayer?.(q.id);
+      }}
+      className={`pitch${v.vertical ? " vertical" : ""}${clickable ? " clickable" : ""}`}
       role="img"
-      aria-label="22명 선수와 공의 위치를 표시하는 실시간 축구 경기장"
+      aria-label={dribble ? "경기장을 눌러 드리블 방향을 정하세요" : "22명 선수와 공의 위치를 표시하는 실시간 축구 경기장 (우리 팀은 위쪽으로 공격)"}
+      data-orientation={v.vertical ? "vertical" : "horizontal"}
     />
   );
 }

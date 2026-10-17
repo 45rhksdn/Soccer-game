@@ -149,7 +149,8 @@ export default function App() {
   const currentSlot = useRef(slot);
   currentSlot.current = slot;
   useEffect(() => {
-    window.scrollTo(0, 0);
+    // The live match scrolls its own board into view (MatchInteraction).
+    if (!(c?.match && tab === "home")) window.scrollTo(0, 0);
   }, [tab, creating, !!c?.match]);
   const inform = (s: string) => {
     setNotice(s);
@@ -599,7 +600,7 @@ export default function App() {
                         <small>AWAY</small>
                       </div>
                     </div>
-                    <MatchInteraction m={m} onChange={()=>{setTick(v=>v+1);persist(c!);}}/>
+                    <MatchInteraction m={m} onChange={()=>{setTick(v=>v+1);persist(c!);}} toolbar={
                     <div className="match-toolbar">
                       <button
                         className="secondary"
@@ -632,6 +633,7 @@ export default function App() {
                         빠른 시뮬레이션 <ArrowRight size={16} />
                       </button>
                     </div>
+                    }/>
                   </section>
                   {m.userOnPitch===false&&!m.ended&&<div className="note">{m.benchEntry?`벤치 대기 · ${m.benchEntry.minute}분 교체 투입 예정`:m.userFinalStats?"교체 아웃 · 남은 경기를 관전합니다.":"이번 경기는 결장입니다. 경기를 관전하거나 빠르게 진행할 수 있습니다."}</div>}
                   {m.ended ? (
