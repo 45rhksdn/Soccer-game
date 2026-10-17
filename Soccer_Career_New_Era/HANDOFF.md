@@ -1,3 +1,35 @@
+# 작업 중단 / Claude 인수인계 — 2026-10-17 16:18 KST 요청
+
+사용자 요청으로 **현재 수정까지만 저장하고 중단**한다. 추가 개발·병합·배포를 진행하지 않았다.
+
+- 이어갈 브랜치: `codex/v0.7-tactical-training`, **PR #6**: https://github.com/45rhksdn/Soccer-game/pull/6
+- 기반: `claude/v0.6-defense-offers`의 `358ede2567cab39ac578fe9c920c9742c219a83d`. Claude 원본 브랜치는 변경하지 않았다.
+- 직전 기능 커밋 `0720084426088c68f03cfeaeb7c6e82f92a6c2c3`; 이 문서를 포함한 최신 브랜치 HEAD가 인수인계 기준이다.
+- 운영 게임은 기존 v0.5 그대로다. **v0.7 미배포**, PR 초안 유지. Work Site checkout에 배포 준비용 복사본이 있지만 push/save/deploy하지 않았다. GitHub 최신 소스를 기준으로 이어갈 것.
+
+## 마지막으로 수정한 부분
+
+1. 골 팝업: 빠른 진행의 여러 득점을 한 창에 모으고 확인 여부를 저장한다. StrictMode 초기 로드 중복에 의한 재노출을 막고 재접속 테스트를 추가했다.
+2. 패스/움직임 AI: 슈팅을 받을 동료를 실제 성공 확률로 평가, 자유 공간 지원, 동시 위치 갱신으로 팀 배열 순서 편향 완화. 드리블 후 도움 연결 유지.
+3. 장기 Vitest 루프에 event-loop yield 추가하여 RPC timeout을 방지했다.
+4. 마지막 회귀 테스트에서 슈팅 경로의 먼 수비수 차단 효과 누락을 발견해 `tactical.ts` 공통 판정으로 복구했다. 수비 경로 3m 안의 차단 강도에 따라 기본 슛 확률을 최대 40% 줄인 뒤 기존 근접 압박을 적용한다. 표시 확률과 AI 평가도 동일 규칙이다.
+
+## 반드시 먼저 해결할 미완료 테스트
+
+최종 로컬 `npm test -- tests/midfielder.test.ts tests/tactical.test.ts tests/chance-flow.test.ts`: **18 통과 / 1 실패**. 경로 차단 복구 후 200경기 CM 기대 도움은 **3.847**로 기준 `>5` 미달 (키패스 45, 도움 4). `chance-flow.test.ts` 기준을 낮추지 않았다. 빌드는 통과했다. 다음 작업은 패스 대상/동료 공간 판단과 공격 전개를 개선하고 이 테스트를 재검증하는 것. `reports/chance-flow.json`은 최신 실패 측정이다.
+
+## Claude가 다음에 할 일
+
+1. `reports/v07-validation.md`와 `TEST_REPORT.md`를 읽고 최신 CI 확인. 직전 실행 `39013002276`은 인수인계 시 전체 실행 중이었고, 새 전술/팝업 smoke는 Chromium(PC·모바일) 및 WebKit 모두 통과했다. 마지막 경로 차단 복구는 그 이후 변경이므로 **최종 전체 통과로 간주하지 말 것**.
+2. 최신 HEAD에서 `npm ci`, `npm run build`, `npm test`(기본 2,000경기), Playwright PC/모바일 + PWA + WebKit 실행. 실패한 부분만 수정하고 기록.
+3. `reports/balance.json`은 마지막 차단 복구 **이전** 200경기 결과다. 경기당 득점·슈팅, CM 키패스/기대 도움, 포지션 평점 차이 및 32세 성장 곡선을 최종 규칙으로 재측정해야 한다.
+4. 지도는 지역 대표 표식 → 학교 목록이다. 요청의 학교별 실제 좌표 표식은 남아 있다. 팝업 참고 이미지는 전달되지 않아 자체 고전 창 디자인을 사용했다.
+5. 검증 후 PR 협업 병합 및 기존 게임 URL 배포. 실제 iPhone Safari 기기 검증은 아직 없다.
+
+아래는 구현 상세와 이전 인수인계 기록이다.
+
+---
+
 # v0.7 Codex checkpoint — 2026-10-17
 
 최신 기준: Claude v0.6 `358ede2` (PR #5). 이 변경은 별도 `codex/v0.7-tactical-training` 브랜치에 둡니다. Claude 브랜치를 덮어쓰지 않습니다.

@@ -50,7 +50,18 @@ export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  // Separate crowd penalty (5 points each) from distance/quality pressure (up to 12 points).
  const penalty=near.count*.05+proximity*opponent*.12;
  let base=0;
- if(['shoot','closeShot','longShot','curl'].includes(a))base=baseShotChance(m,p,a);
+ if(['shoot','closeShot','longShot','curl'].includes(a)){
+   base=baseShotChance(m,p,a);
+   // A defender farther than the close-pressure radius can still block the shot.
+   const dx=(direction(m,p.team)>0?105:0)-p.x,dy=34-p.y,l=dx*dx+dy*dy||1;
+   let block=0;
+   for(const o of m.players){
+     if(o.team===p.team||o.pos==='GK'||!active(o))continue;
+     const t=((o.x-p.x)*dx+(o.y-p.y)*dy)/l;
+     if(t>.08&&t<.95)block=Math.max(block,clamp(1-Math.hypot(o.x-p.x-t*dx,o.y-p.y-t*dy)/3,0,1));
+   }
+   base*=1-.4*block;
+ }
  else if(a==='dribble'){
    base=.35+.49*Math.pow(p.a.dribbling/100,1.4)+.07*p.a.speed/100+.07*p.a.anticipation/100;
    const v=opts.vector??{x:direction(m,p.team),y:0},len=Math.hypot(v.x,v.y)||1,dx=v.x/len*4,dy=v.y/len*4;
