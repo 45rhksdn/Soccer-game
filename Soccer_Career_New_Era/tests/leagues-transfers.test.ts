@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {newCareer} from '../src/career';
+import {newCareer,selection} from '../src/career';
 import {attributes} from '../src/engine';
 import {newWorld,generateOffers,offerDetails,negotiate,acceptOffer,requestLoan,returnFromLoan,expandWorld,advanceLeague,lightweight,clubOf,advanceWorldYear,clubLevel} from '../src/world';
 import {LEAGUE_DATA,WORLD_CLUB_COUNT} from '../src/leagues';
@@ -39,3 +39,5 @@ it('loan preserves parent contract, expires normally, and returns once after a s
 it('new leagues complete multiple deterministic seasons with balanced transfer books',async()=>{
  const a=newWorld(93,0),b=structuredClone(a);for(let y=0;y<3;y++){for(const w of [a,b]){for(let round=0;round<10;round++)advanceLeague(w,[1,1]);expect(w.tables.every(t=>t.played===10)).toBe(true);const before=w.clubs.reduce((n,c)=>n+c.budget,0);advanceWorldYear(w);expect(w.clubs.reduce((n,c)=>n+c.budget,0)-before).toBe(LEAGUE_DATA.reduce((n,l)=>n+l.income*6,0));}expect(a).toEqual(b);await new Promise(r=>setTimeout(r,0));}
 });
+
+it('playing-time negotiation gives a bounded real opportunity without boosting match skills',()=>{const c=career();c.world.clubId='c6';const club=clubOf(c.world);club.coach.preference='현재 실력';for(const p of club.roster){p.a=attributes(70);p.energy=100;p.form=6.5;}c.player.a=attributes(69);expect(selection(c).index).toBe(-1);c.world.contract.trialMatches=3;expect(selection(c).index).toBeGreaterThanOrEqual(0);expect(c.player.a.passing).toBe(69);c.world.contract.trialMatches=0;expect(selection(c).index).toBe(-1);c.world.contract.trialMatches=3;c.player.a=attributes(40);expect(selection(c).index).toBe(-1);});

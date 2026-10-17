@@ -5,6 +5,7 @@ import {matchInjury,npcRecovery,clearInjuries,newWorld,clubOf,nextOpponent,choos
 import {createMatch,userPerformance} from './engine';
 import {injuryChanceMultiplier,injuryWeeks,matchFx,trustGainMultiplier,seedFrom} from './traits';
 import {matchAttributesOf} from './equipment';
+import {createMission,settleMission,recordDeeds,deedsOf,rivalNews,type MissionState,type Signature} from './engagement';
 import {growthAgeFactor,experienceAgeFactor,applyAging,EXPERIENCE_KEYS} from './aging';
 import {
   ATTRS,
@@ -254,12 +255,15 @@ export function train(c: Career, type: Training, intensity: number) {
   c.feed = c.feed.slice(0, 30);
   return gain;
 }
-export function settle(c: Career) {
+/** 0.9: what settle earned besides the match record (shown by the UI). */
+export type SettleResult={mission?:MissionState,signatures:Signature[]};
+export function settle(c: Career):SettleResult {
   const m = c.match;
   if (!m?.ended) throw Error("경기가 아직 진행 중입니다.");
   if (c.history.some((r) => r.id === c.week))
     throw Error("이미 반영된 경기입니다.");
-  ensureDevelopment(c);const insight=applyInsights(c,m);
+  ensureDevelopment(c);deedsOf(c); // older saves seed the deeds from the history before this match is added
+  const insight=applyInsights(c,m);
   const rivalResult=playRival(c,m);
   const p = userPerformance(m),
     r = rating(p),
@@ -287,6 +291,7 @@ export function settle(c: Career) {
     gain,
   });
   if(appeared&&r>=7.5)news(c,`${c.player.name} · 평점 ${r.toFixed(2)}의 맹활약!`,'rating');
+  const mission=settleMission(c,m),signatures=recordDeeds(c,p.stats);rivalNews(c);
   if(c.world && m.competition){
     for(const [i,fp] of m.players.entries()){
       const id=m.rosterIds?.[i];const rp=c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===id);
@@ -297,6 +302,7 @@ export function settle(c: Career) {
     for(const replaced of m.replacedPlayers??[]){const rp=c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===replaced.rosterId);if(rp){rp.energy=replaced.player.energy;rp.form=rating(replaced.player);rp.goals+=replaced.player.stats.goals;rp.appearances++;}}
 
     const w=c.world;
+    if(w.phase!=='national'&&(w.contract.trialMatches??0)>0)w.contract.trialMatches!--;
     if(w.phase==='league'){advanceLeague(w,m.score,rivalResult);if(w.round===10)startPostseason(w,roleAbility(c.player.a,c.player.pos),c.player.age);}
     else {if(w.phase==='national'&&appeared){w.nationalCaps++;w.nationalGoals+=p.stats.goals;}
       const won=m.score[0]===m.score[1]?random(w)<.5:m.score[0]>m.score[1];
@@ -313,6 +319,7 @@ export function settle(c: Career) {
     `경기 종료 · 평점 ${appeared?r.toFixed(1):"출전 없음"} · 감독 신뢰 ${c.player.trust.toFixed(0)}`,
   );
   c.match = null;afterScheduledMatch(c,insight);
+  return {mission,signatures};
 }
 
 export function selection(c:Career){
@@ -321,11 +328,12 @@ export function selection(c:Career){
  // Selection and the match use match-day attributes (base + equipment).
  const gear=matchAttributesOf(c);
  const hero:RosterPlayer&{secondary:Position}={id:'hero',name:p.name,pos:p.pos,secondary:p.secondary,age:p.age,a:gear,potential:p.potential,energy:p.energy,form:recent.length?recent.reduce((n,r)=>n+r.rating,0)/recent.length:6.5,goals:0,appearances:0,years:0};
- const lineup=chooseLineup(club,p.injuryWeeks?undefined:hero),index=lineup.findIndex(x=>x.id==='hero');
+ const lineup=chooseLineup(club,p.injuryWeeks?undefined:hero);let index=lineup.findIndex(x=>x.id==='hero');
  const targetIndex=Math.max(0,lineup.findIndex(x=>x.slotPos===p.pos));
  const competitor=lineup[targetIndex];
  const yourScore=selectionScore(gear,p.pos,p.pos,p.age,p.energy,hero.form,club.coach,p.secondary);
  const rivalScore=selectionScore(competitor.a,competitor.pos,p.pos,competitor.age,competitor.energy,competitor.form,club.coach);
+ if(!p.injuryWeeks&&index<0&&(c.world.contract.trialMatches??0)>0&&p.energy>=70&&yourScore>=rivalScore-3){lineup[targetIndex]={...hero,slotPos:p.pos};index=targetIndex;}
  return {lineup,hero,index,targetIndex,yourScore,rivalScore,role:p.injuryWeeks?'부상 결장':index>=0?'선발':yourScore>=rivalScore-16?'교체 대기':'명단 제외'};
 }
 export function startCareerMatch(c:Career){
@@ -335,6 +343,7 @@ export function startCareerMatch(c:Career){
  const w=c.world,own=clubOf(w),other=nextOpponent(w),plan=selection(c);
  const m=createMatch(c.seed+c.week*7919,{name:c.player.name,pos:c.player.pos,a:matchAttributesOf(c),energy:c.player.energy},other.strength);
  m.competition=competitionName(c);m.tactics=[own.coach.style,other.club?.coach.style??'역습'];
+ m.mission=createMission(c);
  if(w.phase==='national'){m.userOnPitch=!c.player.injuryWeeks;if(!m.userOnPitch)m.players[m.userId].name='대표팀 동료';configureTrait(c,m);c.match=m;return;}
  const lineup=plan.lineup;const opposition=other.club?chooseLineup(other.club):null;
  for(let t=0;t<2;t++)for(let i=0;i<11;i++){

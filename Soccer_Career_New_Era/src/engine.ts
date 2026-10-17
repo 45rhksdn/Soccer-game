@@ -69,6 +69,10 @@ export type Stat = {
   /** 0.6 user defensive choices: successful press/contain/lane-cover windows, and tackles that missed. */
   defensiveWins?: number;
   failedTackles?: number;
+  /** 0.9 시그니처 도전: successful dribbles and goals by shot type (user-chosen 중거리 슛 / 감아차기). */
+  dribbles?: number;
+  longShotGoals?: number;
+  curlGoals?: number;
 };
 /** Engine-side trait effects for one player. Absent = no effect and no extra state. */
 export type MatchFx = {
@@ -80,7 +84,12 @@ export type MatchFx = {
   grit?: { energy: number; window: number };
   /** Multiplier on the chance that my challenge is a foul, and on the booking chance. */
   temper?: number;
+  /** 0.9 시그니처: success multiplier bonus per action (0.06 = ×1.06). User only. */
+  signature?: Partial<Record<SignatureAction, number>>;
 };
+export type SignatureAction = "closeShot" | "longShot" | "curl" | "dribble" | "pass" | "tackle" | "slide" | "press";
+/** 0.9 감독 미션: one pre-match objective for the user (see engagement.ts). */
+export type MatchMission = { id: string; label: string; stat: string; target: number; cmp: "min" | "max" };
 export const emptyStats = (): Stat => ({
   minutes: 0,
   goals: 0,
@@ -137,6 +146,8 @@ export type Ball = {
     onTarget?: boolean;
     /** 0.6 패스 길 차단: the user who cut out this pass (receives the ball instead of the nearest player). */
     interceptor?: number;
+    /** 0.9: the shot the player chose (counts 중거리 슛 / 감아차기 goals). */
+    shotType?: Action;
   };
 };
 /**
@@ -195,6 +206,7 @@ export type Match = {
   goals?: {id:number;time:number;scorer:string;assister:string|null;team:number}[];
   competition?: string;
   tactics?: [string,string];
+  mission?: MatchMission;
 };
 // ── 0.6 defensive choices (interactive play only) ─────────────────────
 // When an opponent carries the ball close to the user, the live match pauses for a defensive
@@ -601,6 +613,7 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
       success: onTarget && random(m) < xg / targetChance,
       onTarget,
       xg,
+      shotType: action,
     };
     m.ball.owner = null;
     event(m, `${p.name}, ${ACTIONS[action]}! 골문을 노립니다!`);
@@ -611,7 +624,7 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
       const vector=options.vector??{x:d,y:0},length=Math.hypot(vector.x,vector.y)||1;
       p.x=clamp(p.x+vector.x/length*(action==="dribble"?4:1),1,104);
       p.y=clamp(p.y+vector.y/length*(action==="dribble"?4:1),1,67);
-      if(action==="dribble"){p.energy=Math.max(0,p.energy-1);own(m,p);event(m,`${p.name}, 수비를 피해 공간으로 치고 나갑니다!`);}
+      if(action==="dribble"){p.energy=Math.max(0,p.energy-1);p.stats.dribbles=(p.stats.dribbles??0)+1;own(m,p);event(m,`${p.name}, 수비를 피해 공간으로 치고 나갑니다!`);}
       m.ball.x = p.x;
       m.ball.y = p.y;
     } else {
@@ -851,6 +864,8 @@ export function step(m: Match, dt = 0.5, auto = false) {
           m.score[from.team]++;
           for (const defender of m.players) if(defender.team!==from.team && active(defender)) defender.stats.goalsConceded=(defender.stats.goalsConceded??0)+1;
           from.stats.goals++;
+          if (f.shotType === "curl") from.stats.curlGoals = (from.stats.curlGoals ?? 0) + 1;
+          else if (f.shotType === "longShot") from.stats.longShotGoals = (from.stats.longShotGoals ?? 0) + 1;
           const assister = m.lastPass?.to === from.id && m.clock - m.lastPass.time < 90 ? m.players[m.lastPass.from] : null;
           if (assister) assister.stats.assists++;
           (m.goals??=[]).push({id:(m.goals?.length??0)+1,time:m.clock,scorer:from.name,assister:assister?.name??null,team:from.team});
@@ -989,3 +1004,4 @@ export function userPerformance(m:Match):Footballer {
  const p=m.players[m.userId];
  return {...p,energy:m.userFinalEnergy??p.energy,stats:m.userFinalStats??(m.userOnPitch===false?emptyStats():p.stats)};
 }
+

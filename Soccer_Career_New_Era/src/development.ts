@@ -1,3 +1,4 @@
+import {signatureFx,type DeedKey} from './engagement';
 import {ATTRS,LABELS,clamp,random,overall,createMatch,finishMatch,rating,type Attributes,type Attr,type Match} from './engine';
 import {grow,startCareerMatch,type Career,type Player} from './career';
 import {npcInjuryWeek,matchInjury,clubLevel,clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,marketValue,offerDetails,nextOpponent,type Offer} from './world';
@@ -24,7 +25,9 @@ export type WeekState={startDay:number,cursor:number,before:Attributes,rivalBefo
  mode?:'daily'};
 export type Development={traits:string[],experienceBank?:number,wallet:number,
  /** Bought / equipped items (equipment.ts). Absent in saves older than 0.5. */
- equipment?:EquipmentState,plan:Daily[],active?:WeekState,notes:WeekNote[],news:News[],rival:{id:string,player:Player,school:number,clubId:string,traits:string[],experienceBank?:number,retired:boolean,trainedWeek:number,lastPlayedWeek:number,history:{week:number,rating:number,goals:number,club:string}[],interests:string[],offers:Offer[]},interestIds:string[]};
+ equipment?:EquipmentState,
+ /** 0.9 (engagement.ts): career deeds for 시그니처 도전, earned signatures, 감독 미션 record, OVR lead over the rival. Absent in older saves. */
+ deeds?:Partial<Record<DeedKey,number>>,signatures?:string[],missions?:{done:number,total:number},rivalAhead?:boolean,plan:Daily[],active?:WeekState,notes:WeekNote[],news:News[],rival:{id:string,player:Player,school:number,clubId:string,traits:string[],experienceBank?:number,retired:boolean,trainedWeek:number,lastPlayedWeek:number,history:{week:number,rating:number,goals:number,club:string}[],interests:string[],offers:Offer[]},interestIds:string[]};
 export function news(c:Career,text:string,kind:News['kind']='career'){c.development.news.unshift({day:c.day,text,kind});c.development.news=c.development.news.slice(0,150);c.feed.unshift(text);c.feed=c.feed.slice(0,40);}
 export function ensureDevelopment(c:Career,opts:{traits?:string[]}={}){
  if(c.development)return;
@@ -175,7 +178,8 @@ export function configureTrait(c:Career,m:Match){
  const d=c.development;m.insight={chance:insightChance(d.traits),gains:{},events:[],base:{...c.player.a}};
  // Engine-side trait effects (플레이메이커 · 분위기 메이커 · 집념) for every player in this match.
  m.rosterIds?.forEach((id,i)=>{if(id==='hero')return;const rp=id===d.rival.id?{traits:d.rival.traits}:c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===id);const fx=matchFx(rp?.traits);if(fx)m.players[i].fx=fx;});
- const userFx=matchFx(d.traits);if(userFx){if(m.userOnPitch!==false)m.players[m.userId].fx=userFx;if(m.benchEntry)m.benchEntry.fx=userFx;}
+ // 0.9 시그니처: the user's earned signature bonuses ride on the same per-player effects.
+ const sig=signatureFx(c),traitFx=matchFx(d.traits),userFx=sig?{...traitFx,signature:sig}:traitFx;if(userFx){if(m.userOnPitch!==false)m.players[m.userId].fx=userFx;if(m.benchEntry)m.benchEntry.fx=userFx;}
  const big=c.world.phase!=='league'; // cups, continental and national-team matches
  const rivalSlot=m.rosterIds?.indexOf(d.rival.id)??-1;if(rivalSlot>=0){m.rivalInsight={playerId:rivalSlot,chance:insightChance(d.rival.traits),gains:{},events:[],base:{...d.rival.player.a}};if(hasMatchEffect(d.rival.traits,big))m.players[rivalSlot].a=matchAttributes(d.rival.traits,m.players[rivalSlot].a,()=>random(c),{bigMatch:big}).a;}
  // NPC traits use a per-player hashed RNG so they never shift the career's own random stream.

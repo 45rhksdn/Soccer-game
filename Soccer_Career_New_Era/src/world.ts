@@ -14,7 +14,7 @@ export type Standing={id:string,played:number,won:number,draw:number,lost:number
 export type Offer={clubId:string,salary:number,years:number,fee:number,role:string,negotiated:boolean,status:'open'|'rejected',reason?:string,competition?:{name:string,ability:number}[],expectedStarts?:string,kind?:'transfer'|'loan',loanAllowed?:boolean,issuedDay?:number,expiresDay?:number};
 export type SeasonRecord={year:number,club:string,league:string,rank:number,appearances:number,minutes:number,goals:number,assists:number,rating:number,champion:string};
 export type ScoutReport={clubId:string,stage:'관찰'|'면담'|'공식 관심',observations:number,lastWeek:number,reason:string,reserved?:number};
-export type Contract={salary:number,years:number,role?:string,loanAllowed?:boolean};
+export type Contract={salary:number,years:number,role?:string,loanAllowed?:boolean,trialMatches?:number};
 export type World={targetClubId?:string,priority?:'출전'|'성장'|'연봉'|'우승',scouting?:ScoutReport[],loan?:{parentId:string,parentContract:Contract,returnYear:number},loyalty?:{clubId:string,seasons:number},currentDay?:number,interestedClubIds?:string[],seed:number,year:number,clubId:string,clubs:Club[],round:number,fixtures:Fixture[][],tables:Standing[],phase:'league'|'cup'|'international'|'national'|'offseason'|'retired',knockoutRound:number,opponentId:string|null,nationalCaps:number,nationalGoals:number,offers:Offer[],contract:Contract,wealth:number,records:SeasonRecord[],achievements:string[],news:string[],ledger:{year:number,from:string,to:string,fee:number,player:string}[],currentSeasonStart:number,nextId:number};
 const POS:Position[]=['GK','LB','CB','CB','RB','CM','CM','CM','LW','ST','RW','GK','LB','CB','RB','CM','CM','LW','ST','RW'];
 export const lineupSlots=(coach:Coach):Position[]=>coach.formation==='4-4-2'?['GK','LB','CB','CB','RB','LW','CM','CM','RW','ST','ST']:POS.slice(0,11);
@@ -89,7 +89,7 @@ export function negotiate(w:World,clubId:string,choice:Negotiation='salary'){
  o.negotiated=true;const club=w.clubs.find(c=>c.id===clubId)!;
  if(choice==='short'){o.years=1;o.salary=Math.round(o.salary*.9);w.news.unshift(`${club.name} · 연봉을 조정하고 1년 계약 수락`);}
  else if(choice==='loan'){o.loanAllowed=true;o.salary=Math.round(o.salary*.95);w.news.unshift(`${club.name} · 향후 임대 요청 허용 합의`);}
- else if(choice==='role'){if(o.expectedStarts==='낮음'){w.news.unshift(`${club.name} · 주전 약속은 어려워 기존 역할 유지`);}else{o.role='주전 도전 계획';o.salary=Math.round(o.salary*.95);w.news.unshift(`${club.name} · 프리시즌 주전 경쟁 계획 합의 (선발 보장 아님)`);}}
+ else if(choice==='role'){if(o.expectedStarts==='낮음'){w.news.unshift(`${club.name} · 주전 약속은 어려워 기존 역할 유지`);}else{o.role='주전 도전 계획';o.salary=Math.round(o.salary*.95);w.news.unshift(`${club.name} · 첫 3경기 주전 경쟁 계획 합의 (컨디션과 실력 격차 조건)`);}}
  else if(random(w)<.68&&club.budget>=o.fee+o.salary*1.15*o.years){o.salary=Math.round(o.salary*1.15);w.news.unshift(`${club.name} · 연봉 인상 수락`);}else w.news.unshift(`${club.name} · 인상 거절, 기존 조건 유지`);
 }
 export function acceptOffer(w:World,clubId:string,name:string){
@@ -102,7 +102,7 @@ export function acceptOffer(w:World,clubId:string,name:string){
  }else if(w.loan)throw Error('임대 복귀 후 완전 이적할 수 있습니다.');
  if(buyer.id!==seller.id&&o.fee>0){buyer.budget-=o.fee;seller.budget+=o.fee;w.ledger.push({year:w.year,from:buyer.id,to:seller.id,fee:o.fee,player:name});}
  if(buyer.id!==seller.id&&!w.loan)w.loyalty={clubId:buyer.id,seasons:0};
- w.clubId=buyer.id;w.contract={salary:o.salary,years:o.years,role:o.role,loanAllowed:o.loanAllowed};w.offers=[];w.interestedClubIds=[];w.scouting=[];
+ w.clubId=buyer.id;w.contract={salary:o.salary,years:o.years,role:o.role,loanAllowed:o.loanAllowed,trialMatches:o.role==='주전 도전 계획'?3:0};w.offers=[];w.interestedClubIds=[];w.scouting=[];
  w.news.unshift(`${name} · ${buyer.name} ${o.kind==='loan'?'1시즌 임대':o.years+'년 계약'} · ${o.role}`);
 }
 export function requestLoan(w:World,p:{a:Attributes,pos:Position,age:number,energy:number}){

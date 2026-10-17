@@ -54,7 +54,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Tactical interaction and popup smoke tests
-        run: npx playwright test tests/e2e/v09.spec.ts tests/e2e/v08.spec.ts
+        run: npx playwright test tests/e2e/v09.spec.ts tests/e2e/engagement.spec.ts tests/e2e/v08.spec.ts
       - name: Browser tests (desktop + iPhone-size Chromium, dev server)
         run: npm run test:e2e
       - name: Production build + offline PWA browser tests
@@ -82,6 +82,6 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps webkit
       - name: Tactical interaction and popup smoke tests on WebKit
-        run: WEBKIT=1 npx playwright test tests/e2e/v09.spec.ts tests/e2e/v08.spec.ts --project=iphone-webkit
+        run: WEBKIT=1 npx playwright test tests/e2e/v09.spec.ts tests/e2e/engagement.spec.ts tests/e2e/v08.spec.ts --project=iphone-webkit
       - name: Browser tests on WebKit (iPhone 13 profile)
         run: WEBKIT=1 npx playwright test --project=iphone-webkit

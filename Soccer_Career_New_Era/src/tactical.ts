@@ -1,5 +1,5 @@
 /** Pure action rules. Percentages shown by the UI are the exact engine probabilities. */
-import {clamp,direction,type Match,type Footballer,type Action,type Attr,type DefenseAction} from './engine';
+import {clamp,direction,type Match,type Footballer,type Action,type Attr,type DefenseAction,type SignatureAction} from './engine';
 export type AttackOptions={targetId?:number;vector?:{x:number;y:number}};
 export const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.hypot(a.x-b.x,a.y-b.y);
 const active=(p:Footballer)=>!p.red&&!p.injured;
@@ -102,7 +102,9 @@ export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  }
  const boost=m.beatenBoost?.to===p.id&&m.clock<=m.beatenBoost.until?m.beatenBoost.amount:0;
  const playmaker=m.assistBoost?.to===p.id?m.assistBoost.mult:1;
- return clamp(base*(.8+p.energy/500)*playmaker-penalty+boost,0,.99);
+ // 0.9 시그니처 (user only): a small multiplier on the action's base chance.
+ const sig=p.fx?.signature?.[passing?'pass':a as SignatureAction]??0;
+ return clamp(base*(1+sig)*(.8+p.energy/500)*playmaker-penalty+boost,0,.99);
 }
 export function defenseChance(m:Match,a:DefenseAction,predicted=false):number{
  const u=m.players[m.userId],o=m.ball.owner===null?null:m.players[m.ball.owner];
@@ -111,7 +113,8 @@ export function defenseChance(m:Match,a:DefenseAction,predicted=false):number{
  const gap=distance(u,o),skill=a==='slide'?u.a.sliding:a==='press'?u.a.marking:u.a.defending;
  const opponent=(o.a.control*.45+o.a.dribbling*.4+o.a.strength*.15)/100;
  const base=a==='slide'?.15+.32*skill/100+.10*u.a.strength/100:a==='press'?.49+.28*skill/100+.10*u.a.strength/100-gap*.018:.38+.32*skill/100+.10*u.a.strength/100-gap*.035;
- return clamp(base*(.8+u.energy/500)-opponent*.12+(predicted?u.a.anticipation/100*.10:0),.02,.95);
+ const sig=u.fx?.signature?.[a as SignatureAction]??0;
+ return clamp(base*(1+sig)*(.8+u.energy/500)-opponent*.12+(predicted?u.a.anticipation/100*.10:0),.02,.95);
 }
 export function matchCommentary(m:Match){
  const u=m.players[m.userId],o=m.ball.owner===null?null:m.players[m.ball.owner];
@@ -131,3 +134,4 @@ export const CHANCE_BANDS=[{max:.2,label:'매우 낮은 확률'},{max:.4,label:'
 /** Band index 0 (매우 낮은) … 4 (매우 높은) for a probability 0–1. */
 export const chanceLevel=(p:number)=>CHANCE_BANDS.findIndex(b=>p<b.max);
 export const chanceLabel=(p:number)=>CHANCE_BANDS[chanceLevel(p)].label;
+
