@@ -1,4 +1,6 @@
-import { attackChance, attackAllowed, attackKeys, defenseChance, nearbyOpponents, type AttackOptions } from "./tactical";
+import { attackChance, attackAllowed, attackKeys, defenseChance, shotBlockAt, type AttackOptions } from "./tactical";
+/** Weight of an open shooting lane when attackers pick their receiving spot near goal. */
+export const SHOT_LANE_WEIGHT = 3;
 /** Pure seeded football simulation. No DOM, timers, or external services. Pitch 105 x 68m. */
 export const ATTRS = [
   "shooting",
@@ -756,6 +758,8 @@ export function step(m: Match, dt = 0.5, auto = false) {
             const y=clamp(ty+offset,5,63);
             let risk=Math.abs(offset)*.035;
             for(const q of m.players)if(q.id!==p.id&&q.id!==attack.id&&active(q))risk+=Math.max(0,1-Math.hypot(q.x-tx,q.y-y)/(q.team===p.team?7:9))*(q.team===p.team?.7:1);
+            // Near goal, prefer a spot with an open shooting lane (the receiver will shoot from there).
+            if(Math.hypot((d>0?105:0)-tx,34-y)<30)risk+=shotBlockAt(m,p.team,tx,y)*SHOT_LANE_WEIGHT;
             if(risk<bestRisk){bestRisk=risk;bestY=y;}
           }
           p.laneOffset={until:m.clock+12,value:bestY-ty};

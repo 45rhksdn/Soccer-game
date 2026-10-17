@@ -1,6 +1,6 @@
 import {it,expect} from 'vitest';
 import {newCareer,startCareerMatch,trustChange} from '../src/career';
-import {attributes,createMatch,finishMatch,random} from '../src/engine';
+import {attributes,createMatch,finishMatch,random,step} from '../src/engine';
 import {applyDaily,configureTrait} from '../src/development';
 import {TRAIT_DEFS,matchAttributes,hasMatchEffect,luckChance,insightChance,trainingLuckChance,injuryChanceMultiplier,injuryWeeks,trainingFatigueMultiplier,abroadGrowthMultiplier,trustGainMultiplier,superSubMultiplier,matchFx} from '../src/traits';
 
@@ -84,9 +84,11 @@ it('슈퍼 조커: bench entry attributes ×1.15 (capped at 100), with a notice'
 
 it('다혈질: about 1.5× the fouls in real matches; players without it are unaffected',()=>{
   const fouls=(temper:boolean)=>{let n=0;for(let s=1;s<=40;s++){const m=createMatch(s,{name:'u',pos:'CM',a:attributes(60),energy:100});
-    m.players.forEach((p,i)=>{p.name=`P${i}`;if(temper&&p.team===0)p.fx=matchFx(['다혈질']);});finishMatch(m);
-    n+=m.log.filter(e=>/^P(\d+) · 파울/.test(e.text)&&Number(/^P(\d+)/.exec(e.text)![1])<11).length;}return n;};
+    m.players.forEach((p,i)=>{p.name=`P${i}`;if(temper&&p.team===0)p.fx=matchFx(['다혈질']);});
+    // The match log keeps only the last 120 lines (0.7 adds pass commentary), so collect fouls while the match runs.
+    const seen=new Set<object>();
+    while(!m.ended){step(m,.5,true);for(const e of m.log)if(!seen.has(e)){seen.add(e);if(/^P(\d+) · 파울/.test(e.text)&&Number(/^P(\d+)/.exec(e.text)![1])<11)n++;}}}return n;};
   const calm=fouls(false),hot=fouls(true);
   expect(hot/calm).toBeGreaterThan(1.25);expect(hot/calm).toBeLessThan(1.8);
-  console.log(`    team-0 fouls in 40 matches: ${calm} → ${hot} with 다혈질`);
+  console.log(`    team-0 fouls in 40 matches (all, not just the last log lines): ${calm} → ${hot} with 다혈질`);
 });

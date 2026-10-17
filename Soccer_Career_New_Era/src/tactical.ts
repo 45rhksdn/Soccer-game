@@ -42,6 +42,17 @@ export function baseShotChance(m:Match,p:Footballer,a:Action){
  const angle=clamp(1-Math.abs(34-p.y)/60,.45,1);
  return (low+(high-low)*quality)*angle;
 }
+/** How strongly the nearest outfield defender stands in the shooting lane from (x, y) to goal (0 = open, 1 = fully blocked). */
+export function shotBlockAt(m:Match,team:number,x:number,y:number){
+ const dx=(direction(m,team)>0?105:0)-x,dy=34-y,l=dx*dx+dy*dy||1;
+ let block=0;
+ for(const o of m.players){
+   if(o.team===team||o.pos==='GK'||!active(o))continue;
+   const t=((o.x-x)*dx+(o.y-y)*dy)/l;
+   if(t>.08&&t<.95)block=Math.max(block,clamp(1-Math.hypot(o.x-x-t*dx,o.y-y-t*dy)/3,0,1));
+ }
+ return block;
+}
 export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  if(!attackAllowed(m,a,opts))return 0;
  const p=m.players[m.ball.owner!],near=nearbyOpponents(m,p),q=near.nearest;
@@ -53,14 +64,7 @@ export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  if(['shoot','closeShot','longShot','curl'].includes(a)){
    base=baseShotChance(m,p,a);
    // A defender farther than the close-pressure radius can still block the shot.
-   const dx=(direction(m,p.team)>0?105:0)-p.x,dy=34-p.y,l=dx*dx+dy*dy||1;
-   let block=0;
-   for(const o of m.players){
-     if(o.team===p.team||o.pos==='GK'||!active(o))continue;
-     const t=((o.x-p.x)*dx+(o.y-p.y)*dy)/l;
-     if(t>.08&&t<.95)block=Math.max(block,clamp(1-Math.hypot(o.x-p.x-t*dx,o.y-p.y-t*dy)/3,0,1));
-   }
-   base*=1-.4*block;
+   base*=1-.4*shotBlockAt(m,p.team,p.x,p.y);
  }
  else if(a==='dribble'){
    base=.35+.49*Math.pow(p.a.dribbling/100,1.4)+.07*p.a.speed/100+.07*p.a.anticipation/100;
