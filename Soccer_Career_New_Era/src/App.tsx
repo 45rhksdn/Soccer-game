@@ -97,12 +97,23 @@ export default function App() {
     setPopup({ kind: "insight", text: INSIGHT_NEWS, resume: !paused && !c!.match!.ended });
     setPaused(true);
   });
-  useEffect(()=>{
-    const m=c?.match;if(!m||popup)return;
-    const goal=m.goals?.find(g=>g.id>(m.goalNoticeSeen??0));
-    if(!goal)return;
-    m.goalNoticeSeen=goal.id;
-    setPopup({kind:'goal',text:`${goal.scorer} 골!\n${goal.assister?`${goal.assister} 도움`:'도움 없음'}`,resume:!paused&&!m.ended});
+  // Keep acknowledgements outside mutable match snapshots as well: initial
+  // StrictMode loads and restoring a cloned state must not reopen a dismissed goal.
+  const goalSeen = useRef({ key: "", id: 0 });
+  useEffect(() => {
+    const m = c?.match;
+    if (!m || popup) return;
+    const key = `${c.id ?? c.seed}:${c.world.year}:${c.week}`;
+    if (goalSeen.current.key !== key) goalSeen.current = { key, id: 0 };
+    const seen = Math.max(m.goalNoticeSeen ?? 0, goalSeen.current.id);
+    const goals = m.goals?.filter(g => g.id > seen) ?? [];
+    if (!goals.length) return;
+    const last = Math.max(...goals.map(g => g.id));
+    goalSeen.current.id = last;
+    m.goalNoticeSeen = last;
+    setPopup({ kind: 'goal', text: goals.map(goal =>
+      `${goal.scorer} 골!\n${goal.assister ? `${goal.assister} 도움` : '도움 없음'}`
+    ).join('\n\n'), resume: !paused && !m.ended });
     setPaused(true);
   });
   const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];

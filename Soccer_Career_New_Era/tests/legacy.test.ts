@@ -11,9 +11,10 @@ const profile={name:'은퇴선수',age:16,pos:'CM' as const,secondary:'ST' as co
 const plan:Daily[]=['passing','running','rest','shooting','rest','rest','rest'];
 
 /** Plays a whole career (weekly runner) until retirement; returns the number of seasons. */
-function playToRetirement(c:ReturnType<typeof newCareer>){
+async function playToRetirement(c:ReturnType<typeof newCareer>){
   let seasons=0,guard=0;
   while(c.world.phase!=='retired'&&guard++<3000){
+    if(guard%10===0)await new Promise(r=>setTimeout(r,0));
     if(c.world.phase==='offseason'){
       if((c.player.age>=18&&clubOf(c.world).league===0)||(clubOf(c.world).league>0&&c.world.contract.years===0)){
         const offer=c.world.offers.find(o=>o.status==='open');
@@ -84,11 +85,11 @@ it('v5 saves get a stable id: the same old save always maps to the same id, diff
   const bad=structuredClone(a1);(bad as {id:unknown}).id=42;expect(()=>validate(bad)).toThrow('손상');
 });
 
-it('integration: scouted player → full career → retirement → reward → stronger next generation → second retirement',()=>{
+it('integration: scouted player → full career → retirement → reward → stronger next generation → second retirement',async()=>{
   let legacy=emptyLegacy();
   const cand=generateCandidates(4242,'gyeonggi-maetan',0)[0];
   const c=careerFromCandidate(cand,4242,undefined,'gen-1');
-  const seasons=playToRetirement(c);
+  const seasons=await playToRetirement(c);
   expect(c.world.phase).toBe('retired');expect(c.player.age).toBe(36);expect(seasons).toBeGreaterThanOrEqual(cand.age===16?20:19);
   expect(c.world.records.length).toBeGreaterThanOrEqual(18);
   const saved=decode(encode(c));expect(saved).toEqual(c);

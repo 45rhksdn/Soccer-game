@@ -113,6 +113,7 @@ export type Footballer = {
   red: boolean;
   injured: boolean;
   mode: "shape" | "press" | "support" | "attack" | "recover";
+  laneOffset?: {until:number;value:number};
   fx?: MatchFx;
 };
 export type Ball = {
@@ -439,11 +440,11 @@ export function defend(m: Match, action: DefenseAction | "none") {
   else m.beatenBoost={to:o.id,amount:selected==='slide'?.20:.10,until:m.clock+30};
   event(m,`${o.name}, ${u.name}을 제치고 전진합니다!`);
   m.nextAI=.1;m.cooldown=.2;
-  if(selected==='slide'&&random(m)<.30*(u.fx?.temper??1)){
+  if(selected==='slide'&&random(m)<.18*(u.fx?.temper??1)){
     event(m,`${u.name}, 늦은 슬라이딩! 파울, 프리킥입니다.`);
     const card=random(m);
-    if(card<.04){u.red=true;event(m,`${u.name} · 레드카드, 퇴장`);}
-    else if(card<.45){u.yellow++;if(u.yellow>=2)u.red=true;event(m,`${u.name} · ${u.red?'두 번째 경고, 퇴장':'옐로우카드'}`);}
+    if(card<.02){u.red=true;event(m,`${u.name} · 레드카드, 퇴장`);}
+    else if(card<.25){u.yellow++;if(u.yellow>=2)u.red=true;event(m,`${u.name} · ${u.red?'두 번째 경고, 퇴장':'옐로우카드'}`);}
     m.cooldown=3;
   }
 }
@@ -488,29 +489,8 @@ function laneRisk(m: Match, p: Footballer, q: Footballer) {
     }, 0);
 }
 export function shotQuality(m: Match, p: Footballer) {
-  const d = direction(m, p.team),
-    gx = d > 0 ? 105 : 0,
-    r = Math.hypot(gx - p.x, 34 - p.y),
-    angle = Math.max(0.18, 1 - Math.abs(34 - p.y) / 37);
-  // A goal-facing defender can block a shot even when outside close-pressure range.
-  const dx=gx-p.x,dy=34-p.y,length2=dx*dx+dy*dy;
-  let block=0;
-  for(const q of m.players){
-    if(q.team===p.team || q.pos==='GK' || !active(q))continue;
-    const u=((q.x-p.x)*dx+(q.y-p.y)*dy)/(length2||1);
-    if(u>.08 && u<.95)block=Math.max(block,Math.max(0,1-Math.hypot(q.x-p.x-u*dx,q.y-p.y-u*dy)/3));
-  }
-  return clamp(
-    ((Math.exp(-r / 20) *
-      0.40 *
-      angle *
-      (0.65 + p.a.shooting / 100) *
-      (0.9 + p.a.composure / 300)) /
-      (1 + pressure(m, p) * 0.35)) *
-      (0.6 + p.energy / 250) * (1-.4*block) * clamp(1+(50-(m.players.find(q=>q.team!==p.team&&q.pos==="GK")?.a.defending??50))/180,.7,1.25),
-    0.008,
-    0.65,
-  );
+  // Evaluate a receiving teammate with the same rules used when they shoot.
+  return attackChance({...m, ball: {...m.ball, owner:p.id}}, 'shoot');
 }
 function targets(m: Match, p: Footballer, act: Action) {
   const d = direction(m, p.team);
@@ -525,10 +505,10 @@ function targets(m: Match, p: Footballer, act: Action) {
           ? 0
           : (q.x - p.x) * d * (act === "through" ? 0.9 : 0.55)) -
         dist(p, q) * 0.18 -
-        pressure(m, q) * 7 -
-        laneRisk(m, p, q) * 22 +
+        pressure(m, q) * 16 -
+        laneRisk(m, p, q) * 26 +
         (q.pos === "GK" ? -10 : 0) +
-        (act === "safe" ? 0 : shotQuality(m,q) * 38 * (.5+p.a.vision/100)),
+        (act === "safe" ? 0 : shotQuality(m,q) * 65 * (.5+p.a.vision/100)),
     }))
     .sort((a, b) => b.score - a.score);
 }
@@ -550,7 +530,7 @@ export function chooseAction(m: Match, p: Footballer): Action {
   for (const a of acts) {
     let utility = actionChance(m, a);
     if (a === "shoot")
-      utility = actionChance(m,a) * 7.5 + (distance < 22 ? .85 : distance < 35 ? .15 : -.32);
+      utility = actionChance(m,a) * 7.5 + (distance < 22 ? .65 : distance < 35 ? .15 : -.32) - (actionChance(m,a)<.04?1:0);
     if (a === "forward") utility += 0.12;
     if (a === "through") utility += p.a.vision / 550;
     if (a === "safe") utility -= 0.05;
@@ -737,6 +717,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
   if (owner) m.possession[owner.team] += dt;
   // Keep the attacking shape while a pass travels, rather than returning to kickoff anchors.
   const attack = owner ?? (m.ball.flight?.kind === "pass" ? {...m.players[m.ball.flight.from],id:-1,x:m.ball.flight.x,y:m.ball.flight.y} : null);
+  const movement:{p:Footballer;x:number;y:number}[]=[];
   for (const p of m.players) {
     if (!active(p)) continue;
     p.stats.minutes += dt / 10;
@@ -767,6 +748,20 @@ export function step(m: Match, dt = 0.5, auto = false) {
         }else if(p.pos==='CM'){
           ty=clamp(ty+Math.sin(phase)*5+(34-ty)*(progress>65?.2:0),7,61);
         }else if(['LB','RB'].includes(p.pos)&&progress>55&&m.tactics?.[p.team]!=='수비')tx+=d*5;
+        // Seek a free receiving lane before the pass, rather than camping between defenders.
+        if(p.pos!=='GK'&&['ST','CM','LW','RW'].includes(p.pos)){
+          if(!p.laneOffset||m.clock>=p.laneOffset.until){
+          let bestY=ty,bestRisk=Infinity;
+          for(const offset of [-12,-6,0,6,12]){
+            const y=clamp(ty+offset,5,63);
+            let risk=Math.abs(offset)*.035;
+            for(const q of m.players)if(q.id!==p.id&&q.id!==attack.id&&active(q))risk+=Math.max(0,1-Math.hypot(q.x-tx,q.y-y)/(q.team===p.team?7:9))*(q.team===p.team?.7:1);
+            if(risk<bestRisk){bestRisk=risk;bestY=y;}
+          }
+          p.laneOffset={until:m.clock+12,value:bestY-ty};
+          }
+          ty+=p.laneOffset.value;
+        }
         // Separate support lanes instead of stacking players on a single anchor.
         for(const q of m.players)if(q.team===p.team&&q.id!==p.id&&active(q)){
           const gap=dist(p,q);if(gap>0&&gap<5){tx+=(p.x-q.x)/gap*(5-gap)*.5;ty+=(p.y-q.y)/gap*(5-gap)*.7;}
@@ -775,7 +770,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
         const nearest = m.players
           .filter((q) => q.team === p.team && q.pos !== "GK" && active(q))
           .sort((a, b) => dist(a, attack) - dist(b, attack))
-          .slice(0, 2);
+          .slice(0, 1);
         if (nearest.includes(p)) {
           p.mode = "press";
           tx = attack.x;
@@ -833,9 +828,9 @@ export function step(m: Match, dt = 0.5, auto = false) {
         (owner?.id === p.id ? 0.68 : 1) *
         dt;
     const ratio = Math.min(1, v / (distance || 1));
-    p.x = clamp(p.x + (tx - p.x) * ratio, 1, 104);
-    p.y = clamp(p.y + (ty - p.y) * ratio, 1, 67);
+    movement.push({p,x:clamp(p.x+(tx-p.x)*ratio,1,104),y:clamp(p.y+(ty-p.y)*ratio,1,67)});
   }
+  for(const {p,x,y} of movement){p.x=x;p.y=y;}
   updateGuard(m);
   if (m.ball.flight) {
     const f = m.ball.flight;

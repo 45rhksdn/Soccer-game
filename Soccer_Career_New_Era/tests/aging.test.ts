@@ -46,11 +46,12 @@ it('user, rival and NPCs age with the same model',()=>{
   void ageRival;
 });
 
-it('long career (16 → 35): the peak is reached around 32 and is not far above the top league',()=>{
+it('long career (16 → 35): the peak is reached around 32 and is not far above the top league',async()=>{
   const c=newCareer(profile,1,4321);c.development.traits=[];
   const plan:Daily[]=['shooting','running','passing','rest','dribbling','rest','rest'];
   const byAge:Record<number,number>={};const top:number[]=[],top5:number[]=[];let guard=0;
   while(c.world.phase!=='retired'&&guard++<3000){
+    if(guard%10===0)await new Promise(r=>setTimeout(r,0));
     if(c.world.phase==='offseason'){
       byAge[c.player.age]=roleAbility(c.player.a,c.player.pos);
       const best=c.world.clubs.filter(x=>x.league===3).flatMap(x=>x.roster).filter(p=>p.pos!=='GK').map(p=>roleAbility(p.a,p.pos)).sort((a,b)=>b-a);top.push(best[0]);top5.push(best.slice(0,5).reduce((a,b)=>a+b,0)/5);

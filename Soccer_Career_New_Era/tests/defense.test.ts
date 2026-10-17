@@ -40,15 +40,15 @@ it('tackle: wins the ball at about the shown chance; a miss is recorded',()=>{
   expect(failed).toBe(tries-won);
 });
 
-it('rating: defensive wins add a capped bonus, missed tackles a capped penalty; balance of choices stays moderate',()=>{
+it('rating: defensive wins add a capped bonus, missed tackles a capped penalty; balance of choices stays moderate',async()=>{
   const p=createMatch(2,user()).players[3];p.stats={...emptyStats(),minutes:90};const base=rating(p);
   expect(rating({...p,stats:{...p.stats,defensiveWins:2}})-base).toBeCloseTo(.08,8);
   expect(rating({...p,stats:{...p.stats,defensiveWins:30}})-base).toBeCloseTo(DEFENSIVE_WIN_CAP,8);
   expect(base-rating({...p,stats:{...p.stats,failedTackles:30}})).toBeCloseTo(FAILED_TACKLE_CAP,8);
   // Average rating of a live player choosing a defence vs leaving it to the AI: a reward, not a game breaker.
-  const mean=(c:DefenseAction|'none')=>{let n=0;for(let seed=1;seed<=30;seed++){const m=createMatch(seed,user());playLive(m,c);n+=rating(m.players[m.userId]);}return n/30;};
-  const none=mean('none');
-  for(const c of ['press','slide','predict','tackle'] as const){const d=mean(c)-none;console.log(`    ${c} rating Δ ${d.toFixed(3)}`);expect(Math.abs(d)).toBeLessThan(c==='slide'||c==='predict'?.65:.35);}
+  const mean=async(c:DefenseAction|'none')=>{let n=0;for(let seed=1;seed<=30;seed++){await new Promise(r=>setTimeout(r,0));const m=createMatch(seed,user());playLive(m,c);n+=rating(m.players[m.userId]);}return n/30;};
+  const none=await mean('none');
+  for(const c of ['press','slide','predict','tackle'] as const){const d=(await mean(c))-none;console.log(`    ${c} rating Δ ${d.toFixed(3)}`);expect(Math.abs(d)).toBeLessThan(c==='slide'||c==='predict'?.65:.35);}
 });
 
 it('a pending defensive choice and an active guard survive save/load in a career match',()=>{

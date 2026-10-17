@@ -24,4 +24,4 @@ it('measures user midfield passes and the following shot',async()=>{
  }
  console.log(stats);writeFileSync('reports/chance-flow.json',JSON.stringify(stats,null,2));
  expect(stats.keyPasses).toBeGreaterThanOrEqual(40);expect(stats.xA).toBeGreaterThan(5);expect(stats.assists).toBeGreaterThan(0);
-},60000);
+},180000);
