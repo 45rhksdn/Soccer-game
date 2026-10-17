@@ -106,6 +106,7 @@ export default function App() {
     const key = `${c.id ?? c.seed}:${c.world.year}:${c.week}`;
     if (goalSeen.current.key !== key) goalSeen.current = { key, id: 0 };
     const seen = Math.max(m.goalNoticeSeen ?? 0, goalSeen.current.id);
+    m.goalNoticeSeen = seen;
     const goals = m.goals?.filter(g => g.id > seen) ?? [];
     if (!goals.length) return;
     const last = Math.max(...goals.map(g => g.id));
@@ -436,7 +437,14 @@ export default function App() {
           </div>
         </header>
         <main>
-          {popup && <GrowthPopup info={popup} onClose={() => { if (popup.resume) setPaused(false); setPopup(null); }} />}
+          {popup && <GrowthPopup info={popup} onClose={() => {
+            if (popup.kind === "goal" && c?.match) {
+              c.match.goalNoticeSeen = Math.max(c.match.goalNoticeSeen ?? 0, goalSeen.current.id);
+              void persist(c);
+            }
+            if (popup.resume) setPaused(false);
+            setPopup(null);
+          }} />}
           {notice && (
             <div className="toast" role="status">
               {notice}
