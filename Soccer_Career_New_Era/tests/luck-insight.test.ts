@@ -52,7 +52,7 @@ it('insight news hides the stat; exact gains go to the growth history and the at
   finishMatch(c.match!);settle(c);
   expect(c.player.a.vision).toBeGreaterThanOrEqual(before.vision+2);
   const news=c.development.news.filter(x=>x.kind==='insight');expect(news).toHaveLength(1);expect(news[0].text).toBe(INSIGHT_NEWS);expect(news[0].text).toBe('경기 중에 깨달음을 얻었다!');
-  expect(c.development.active!.entries.at(-1)).toContain('깨달음 패스 +1 · 시야 +2');
+  expect(c.development.active!.entries.at(-1)).toContain('깨달음 짧은 패스 +1 · 시야 +2');
 });
 
 it('insight at 100: no gain once the permanent value is 100',()=>{

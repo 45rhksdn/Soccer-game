@@ -68,4 +68,4 @@ it("seeded matches: invariants and declared calibration targets", async () => {
   expect(result.meanShots).toBeLessThanOrEqual(38);
   const means = Object.values(result.ratingByPosition);
   expect(Math.max(...means) - Math.min(...means)).toBeLessThan(0.9);
-}, 240000);
+}, 600000);

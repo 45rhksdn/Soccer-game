@@ -77,7 +77,7 @@ export type CareerPreset={a?:Attributes,potential?:number,learning?:number,trait
  /** Account-wide max-potential increase from retirements (legacy.ts); only raises the top of the random range. */
  potentialBonus?:number};
 export type Career = {
-  version: 6;
+  version: 7;
   /** Stable player id (0.5): same across backups/archives of this player, different for every new player. */
   id?: string;
   schoolRef?: SchoolRef;
@@ -137,7 +137,7 @@ export function newCareer(
     a.vision += 5;
   }
   const c = {
-    version: 6,
+    version: 7,
     id: preset.id ?? `p-${seedFrom(seed >>> 0, `${p.name}|${p.pos}|${school}`).toString(36)}`,
     world: newWorld(seed,school),
     seed: r.seed,

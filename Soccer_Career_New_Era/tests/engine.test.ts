@@ -105,11 +105,12 @@ describe("deterministic engine", () => {
     const c = newCareer(player, 0);
     const raw = { ...c, version: 1 };
     const migrated = decode(encode(raw as any));
-    expect(migrated.version).toBe(6);
+    expect(migrated.version).toBe(7);
   });
-  it("100 week progression stays finite and within potential", () => {
+  it("100 week progression stays finite and within potential", async () => {
     const c = newCareer(player, 0);
     for (let i = 0; i < 100; i++) {
+      if(i%10===0)await new Promise(r=>setTimeout(r,0));
       train(c, "passing", 1);
       train(c, "rest", 1);
       c.match = finishMatch(createMatch(i, { ...user, a: c.player.a }));
@@ -119,10 +120,11 @@ describe("deterministic engine", () => {
     expect(c.player.a.passing).toBeLessThanOrEqual(c.player.potential);
     expect(Number.isFinite(c.player.trust)).toBe(true);
   });
-  it("team ability changes actual results across paired seeds", () => {
+  it("team ability changes actual results across paired seeds", async () => {
     let strong = 0,
       weak = 0;
     for (let i = 1; i <= 80; i++) {
+      if(i%10===0)await new Promise(r=>setTimeout(r,0));
       const m = createMatch(i, user, 35);
       for (const p of m.players) if (p.team === 0) p.a = attributes(75);
       finishMatch(m);
