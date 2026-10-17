@@ -18,14 +18,14 @@ export function growthAgeFactor(curve:string|undefined,age:number){
   return table.find(([max])=>age<=max)![1];
 }
 /** Match-experience growth (game-reading attributes) by age: it keeps working through the peak years. */
-export const EXPERIENCE_KEYS:readonly Attr[]=['vision','decisions','composure','positioning'];
+export const EXPERIENCE_KEYS:readonly Attr[]=['vision','decisions','composure','positioning','anticipation'];
 export const experienceAgeFactor=(age:number)=>age<20?.6:age<25?.8:age<=PEAK_AGE?1:.3;
 
 /** Yearly decline after the peak: first-year loss and the extra loss added for each further year. */
 export const DECLINE:{keys:readonly Attr[],first:number,step:number}[]=[
   {keys:['speed','acceleration','stamina'],first:1.2,step:.6},
-  {keys:['strength','shooting','passing','dribbling','control','defending'],first:.45,step:.3},
-  {keys:['vision','decisions','composure','positioning'],first:.15,step:.15},
+  {keys:['strength','shooting','passing','dribbling','control','defending','longShot','finishing','curve','longPassing','sliding','marking'],first:.45,step:.3},
+  {keys:['vision','decisions','composure','positioning','anticipation'],first:.15,step:.15},
 ];
 /** First age at which the decline applies (33, or earlier with 조기 노화). */
 export const declineStart=(t:TraitInput)=>PEAK_AGE+1-agingShift(t).yearsEarlier;

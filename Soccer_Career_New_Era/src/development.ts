@@ -11,7 +11,7 @@ export type Trait=TraitId;
 export {TRAIT_TEXT};
 /** Base chance of a training injury on a day that ends with fatigue ≥ TRAINING_INJURY_FATIGUE. */
 export const TRAINING_INJURY_CHANCE=.02,TRAINING_INJURY_FATIGUE=60;
-export const DAILY={shooting:{label:'슈팅훈련',keys:['shooting','composure','positioning']},running:{label:'달리기',keys:['speed','acceleration','stamina']},passing:{label:'패스훈련',keys:['passing','vision','decisions']},dribbling:{label:'드리블훈련',keys:['dribbling','control','acceleration']},defending:{label:'수비훈련',keys:['defending','positioning','strength']},rest:{label:'휴식하기',keys:[]},vacation:{label:'휴양하기 · 5만원',keys:[]}} as const;
+export const DAILY={shooting:{label:'공격훈련',keys:['shooting','longShot','finishing','curve']},running:{label:'속력훈련',keys:['speed','acceleration','stamina']},passing:{label:'패스훈련',keys:['passing','longPassing','vision']},dribbling:{label:'드리블훈련',keys:['dribbling','control','acceleration']},defending:{label:'수비훈련',keys:['defending','sliding','marking']},reading:{label:'책 읽기',keys:['anticipation']},rest:{label:'휴식하기',keys:[]},vacation:{label:'휴양하기 · 5만원',keys:[]}} as const;
 export type Daily=keyof typeof DAILY;
 /** News texts for 럭키 (training) and 깨달음 (match). Exact values live in the growth history, not here. */
 export const LUCKY_NEWS='훈련 중 무언가를 느꼈다!',INSIGHT_NEWS='경기 중에 깨달음을 얻었다!';
@@ -54,7 +54,10 @@ export function applyDaily(c:Career,p:Player,type:Daily,trait:TraitInput,rival=f
  if(p.injuryWeeks||p.energy<20){p.energy=clamp(p.energy+30,0,100);p.fatigue=Math.max(0,p.fatigue-25);return `${name} · 컨디션 부족으로 휴식 전환`;}
  const lucky=random(c)<trainingLuckChance(trait,p.age),efficiency=clamp(1-p.fatigue*.008,.2,1),environment=rival?(c.world.clubs.find(x=>x.id===d.rival.clubId)?.development??1):clubOf(c.world).development;
  const league=(rival?c.world.clubs.find(x=>x.id===d.rival.clubId):clubOf(c.world))?.league??0;
- const before=overall(p.a),gained=grow(p,DAILY[type].keys,.24*environment*efficiency*trainingGrowthMultiplier(trait)*abroadGrowthMultiplier(trait,league)*(lucky?10:1)*bonus);
+ const pool=DAILY[type].keys;
+ const chosen=(type==='defending'||type==='shooting')?pool.filter(()=>random(c)<.55):pool;
+ const keys=chosen.length?chosen:[pool[Math.floor(random(c)*pool.length)]];
+ const before=overall(p.a),gained=grow(p,keys,(type==='defending'?.07:type==='shooting'?.06:.24)*environment*efficiency*trainingGrowthMultiplier(trait)*abroadGrowthMultiplier(trait,league)*(lucky?10:1)*bonus);
  const bloom=lateBloom(trait);if(bloom&&p.age<bloom.startAge){const holder=rival?d.rival:d;holder.experienceBank=Math.min(bloom.cap,(holder.experienceBank??0)+gained*bloom.bankRate);}
  p.energy=clamp(p.energy-12,0,100);p.fatigue=clamp(p.fatigue+12*trainingFatigueMultiplier(trait),0,100);p.trust=clamp(p.trust+.2*trustGainMultiplier(trait),0,100);
  let hurt=false;if(p.fatigue>=TRAINING_INJURY_FATIGUE&&random(c)<TRAINING_INJURY_CHANCE*injuryChanceMultiplier(trait)){p.injuryWeeks=injuryWeeks(trait,1);hurt=true;}

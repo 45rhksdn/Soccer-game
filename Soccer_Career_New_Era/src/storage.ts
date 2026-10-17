@@ -3,7 +3,16 @@ import {isKnownTrait,npcTraits,normalizeTraits,TRAIT_LIMIT} from './traits';
 import {validScoutState,type ScoutState} from './scouting';
 import {validEquipment} from './equipment';
 import {emptyLegacy,recordRetirement,validLegacy,type Legacy} from './legacy';
-export const SAVE_VERSION=6;
+import {ATTRS,type Attributes} from "./engine";
+export const SAVE_VERSION=7;
+const NEW_ATTRIBUTES={longShot:"shooting",finishing:"composure",curve:"shooting",longPassing:"passing",sliding:"defending",marking:"defending",anticipation:"decisions"} as const;
+/** Recursively upgrade attribute snapshots, NPCs, live players, substitutes and insight bases. No RNG. */
+function migrateV6(value:unknown){
+ if(!value||typeof value!=="object")return;
+ const v=value as Record<string,unknown>;
+ if(typeof v.shooting==="number"&&typeof v.defending==="number"&&typeof v.passing==="number")for(const [k,old] of Object.entries(NEW_ATTRIBUTES))v[k]??=v[old];
+ for(const child of Object.values(v))if(child&&typeof child==="object")migrateV6(child);
+}
 const traitsValid=(t:unknown)=>Array.isArray(t)&&t.length<=TRAIT_LIMIT&&t.every(x=>typeof x==='string');
 /** v4 → v5: single trait → trait list (the existing trait is kept), NPC traits added deterministically. */
 function migrateV4(c:Career){
@@ -66,6 +75,7 @@ export function validate(raw: unknown): Career {
   if((c as {version:number}).version===3){(c as {version:number}).version=4;ensureDevelopment(c);}
   if((c as {version:number}).version===4&&c.development&&c.world?.clubs)migrateV4(c);
   if((c as {version:number}).version===5)migrateV5(c);
+  if((c as {version:number}).version===6){migrateV6(c);(c as {version:number}).version=7;}
   if (c.version !== SAVE_VERSION) throw Error("지원되지 않는 저장 버전입니다.");
   if (
     !c.player ||
@@ -84,7 +94,7 @@ export function validate(raw: unknown): Career {
   for (const v of Object.values(c.player.a))
     if (!Number.isFinite(v) || v < 0 || v > 100)
       throw Error("능력치 데이터가 손상되었습니다.");
-  if (Object.keys(c.player.a).length !== 13)
+  if (ATTRS.some(k=>!Number.isFinite(c.player.a[k])))
     throw Error("능력치가 누락되었습니다.");
   for (const n of [
     c.seed,

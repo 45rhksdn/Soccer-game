@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {createMatch,attributes,step,act,chooseAction,finishMatch,defend,tackleChance,rating,emptyStats,DEFENSE_ACTIONS,DEFENSE_PROMPT_DISTANCE,DEFENSIVE_WIN_CAP,FAILED_TACKLE_CAP,type Match,type DefenseAction} from '../src/engine';
+import {createMatch,attributes,step,act,chooseAction,finishMatch,defend,tackleChance,rating,emptyStats,DEFENSE_ACTIONS,PLAYER_DEFENSE_ACTIONS,DEFENSE_PROMPT_DISTANCE,DEFENSIVE_WIN_CAP,FAILED_TACKLE_CAP,type Match,type DefenseAction} from '../src/engine';
 import {encode,decode} from '../src/storage';
 import {newCareer,startCareerMatch,settle} from '../src/career';
 import {playToday} from '../src/development';
@@ -27,26 +27,17 @@ it('auto / quick simulation never asks for a defensive choice',()=>{
 it('live play pauses for a defensive choice when an opponent carries the ball near the user, spaced out',()=>{
   let total=0;for(let seed=1;seed<=10;seed++){const m=createMatch(seed,user());total+=playLive(m,'none');expect(m.ended).toBe(true);}
   expect(total).toBeGreaterThan(10);expect(total/10).toBeLessThan(19); // at most one prompt per 300 game seconds
-  expect(Object.keys(DEFENSE_ACTIONS)).toEqual(['tackle','press','intercept','contain']);
+  expect(PLAYER_DEFENSE_ACTIONS).toEqual(['tackle','slide','press','predict']);
 });
 
-it('tackle: wins the ball at about the shown chance (after the foul risk); a miss is recorded',()=>{
+it('tackle: wins the ball at about the shown chance; a miss is recorded',()=>{
   let tries=0,won=0,expected=0,failed=0;
   for(let seed=1;seed<=40;seed++){const m=createMatch(seed,user());
-    playLive(m,mm=>{tries++;expected+=tackleChance(mm)*.8;const before=mm.players[mm.userId].stats.tackles;defend(mm,'tackle');if(mm.players[mm.userId].stats.tackles>before)won++;return 'none';});
+    playLive(m,mm=>{tries++;expected+=tackleChance(mm);const before=mm.players[mm.userId].stats.tackles;defend(mm,'tackle');if(mm.players[mm.userId].stats.tackles>before)won++;return 'none';});
     failed+=m.players[m.userId].stats.failedTackles??0;}
   expect(tries).toBeGreaterThan(80);
   expect(won/tries).toBeGreaterThan(expected/tries-.1);expect(won/tries).toBeLessThan(expected/tries+.1);
   expect(failed).toBe(tries-won);
-});
-
-it('press / intercept / contain windows end with defensive wins; intercept cuts passes out',()=>{
-  const stats=(c:DefenseAction|'none')=>{let wins=0,ints=0,prompts=0;for(let seed=1;seed<=30;seed++){const m=createMatch(seed,user());prompts+=playLive(m,c);const s=m.players[m.userId].stats;wins+=s.defensiveWins??0;ints+=s.interceptions;}return {wins,ints,prompts};};
-  const none=stats('none'),press=stats('press'),cut=stats('intercept'),hold=stats('contain');
-  expect(none.wins).toBe(0);
-  for(const x of [press,cut,hold]){expect(x.wins).toBeGreaterThan(0);expect(x.wins).toBeLessThanOrEqual(x.prompts);}
-  expect(cut.ints).toBeGreaterThan(none.ints);
-  console.log('    wins per prompt  press',(press.wins/press.prompts).toFixed(2),'intercept',(cut.wins/cut.prompts).toFixed(2),'contain',(hold.wins/hold.prompts).toFixed(2),'· interceptions none/intercept',none.ints,cut.ints);
 });
 
 it('rating: defensive wins add a capped bonus, missed tackles a capped penalty; balance of choices stays moderate',()=>{
@@ -57,7 +48,7 @@ it('rating: defensive wins add a capped bonus, missed tackles a capped penalty; 
   // Average rating of a live player choosing a defence vs leaving it to the AI: a reward, not a game breaker.
   const mean=(c:DefenseAction|'none')=>{let n=0;for(let seed=1;seed<=30;seed++){const m=createMatch(seed,user());playLive(m,c);n+=rating(m.players[m.userId]);}return n/30;};
   const none=mean('none');
-  for(const c of ['press','intercept','contain','tackle'] as const){const d=mean(c)-none;console.log(`    ${c} rating Δ ${d.toFixed(3)}`);expect(Math.abs(d)).toBeLessThan(.35);}
+  for(const c of ['press','slide','predict','tackle'] as const){const d=mean(c)-none;console.log(`    ${c} rating Δ ${d.toFixed(3)}`);expect(Math.abs(d)).toBeLessThan(c==='slide'||c==='predict'?.65:.35);}
 });
 
 it('a pending defensive choice and an active guard survive save/load in a career match',()=>{

@@ -1,3 +1,4 @@
+import { attackChance, attackAllowed, attackKeys, defenseChance, nearbyOpponents, type AttackOptions } from "./tactical";
 /** Pure seeded football simulation. No DOM, timers, or external services. Pitch 105 x 68m. */
 export const ATTRS = [
   "shooting",
@@ -13,28 +14,31 @@ export const ATTRS = [
   "decisions",
   "vision",
   "composure",
+  "longShot", "finishing", "curve", "longPassing", "sliding", "marking", "anticipation",
 ] as const;
 export type Attr = (typeof ATTRS)[number];
 export type Attributes = Record<Attr, number>;
 export const LABELS: Record<Attr, string> = {
-  shooting: "슈팅",
-  passing: "패스",
+  shooting: "근거리 슛",
+  passing: "짧은 패스",
   dribbling: "드리블",
   control: "볼 컨트롤",
   speed: "스피드",
   acceleration: "가속도",
   stamina: "체력",
   strength: "몸싸움",
-  defending: "수비",
+  defending: "스탠딩 태클",
   positioning: "위치선정",
   decisions: "판단력",
   vision: "시야",
   composure: "침착성",
+  longShot:"중거리 슛", finishing:"골 결정력", curve:"커브", longPassing:"긴 패스", sliding:"슬라이딩 태클", marking:"대인마크", anticipation:"예측력",
 };
 export type Position = "ST" | "CM" | "CB" | "LW" | "RW" | "LB" | "RB" | "GK";
 export type Action =
-  "safe" | "forward" | "through" | "dribble" | "shoot" | "hold";
+  "safe" | "forward" | "through" | "dribble" | "shoot" | "hold" | "closeShot" | "longShot" | "curl" | "pass";
 export const ACTIONS: Record<Action, string> = {
+  closeShot:"근거리 슛", longShot:"중거리 슛", curl:"감아차기", pass:"패스",
   safe: "안전한 패스",
   forward: "전진 패스",
   through: "스루패스",
@@ -183,6 +187,9 @@ export type Match = {
   guard?: Guard | null;
   /** 0.6: clock of the last defensive prompt (prompts are spaced by DEFENSE_PROMPT_GAP). */
   defensePromptAt?: number;
+  beatenBoost?: {to:number; amount:number; until:number};
+  goalNoticeSeen?:number;
+  goals?: {id:number;time:number;scorer:string;assister:string|null;team:number}[];
   competition?: string;
   tactics?: [string,string];
 };
@@ -190,11 +197,14 @@ export type Match = {
 // When an opponent carries the ball close to the user, the live match pauses for a defensive
 // choice. finishMatch / auto mode never prompts, so simulated matches (and the 2,000-match
 // balance) are unchanged. Every effect is gated on `m.guard`, so no extra RNG is drawn otherwise.
-export type DefenseAction = "tackle" | "press" | "intercept" | "contain";
+export type DefenseAction = "tackle" | "slide" | "press" | "predict" | "intercept" | "contain";
+export const PLAYER_DEFENSE_ACTIONS = ["tackle","slide","press","predict"] as const;
 export type Guard = { kind: Exclude<DefenseAction, "tackle">; until: number; target: number; shots: number; team: 0 | 1; /** ball x when the window started (지연 수비 judges the ground given up) */ x?: number };
 export const DEFENSE_ACTIONS: Record<DefenseAction, { label: string; desc: string }> = {
-  tackle: { label: "태클", desc: "즉시 공을 뺏으러 들어갑니다. 실패하면 제쳐지고 파울 위험이 큽니다." },
-  press: { label: "강한 압박", desc: "30초간 붙어서 실수를 유도합니다. 체력을 더 씁니다." },
+  tackle: { label: "스탠딩 태클", desc: "가까울수록 유리 · 실패하면 상대 다음 행동 +10%p" },
+  slide: {label:"슬라이딩 태클",desc:"거리 영향 없음 · 실패 시 상대 +20%p, 파울·카드 위험 · 체력 소모"},
+  predict: {label:"예측 수비",desc:"세 수비 중 무작위 선택 · 예측력에 따라 최대 +10%p"},
+  press: { label: "압박하기", desc: "성공하면 더 가까이 접근 · 실패하면 제쳐지고 체력 소모" },
   intercept: { label: "패스 길 차단", desc: "30초간 패스 길목을 지켜 가로채기를 노립니다." },
   contain: { label: "지연 수비", desc: "30초간 거리를 두고 버텨 돌파·슈팅을 어렵게 합니다." },
 };
@@ -364,7 +374,7 @@ function own(m: Match, p: Footballer) {
   if (m.assistBoost && m.assistBoost.to !== p.id) m.assistBoost = null;
   m.ball = { x: p.x, y: p.y, owner: p.id, flight: null };
   m.decision = p.id === m.userId && m.userOnPitch !== false;
-  m.nextAI = shotQuality(m,p)>=.22 ? .5 : 1.8;
+  m.nextAI = Math.hypot((direction(m,p.team)>0?105:0)-p.x,34-p.y)<18 || attackChance(m,"shoot")>=.20 ? .5 : 1.8;
 }
 /** 집념 bookkeeping for a turnover from `loser` to `winner`. No state unless a player has the effect. */
 export function turnover(m: Match, loser: Footballer, winner: Footballer) {
@@ -386,11 +396,7 @@ function wantsDefense(m: Match, owner: Footballer) {
     dist(u, owner) < DEFENSE_PROMPT_DISTANCE && m.clock - (m.defensePromptAt ?? -Infinity) >= DEFENSE_PROMPT_GAP;
 }
 /** Success chance of the user's tackle on the ball carrier (shown on the button). */
-export function tackleChance(m: Match) {
-  const u = m.players[m.userId], o = m.ball.owner === null ? null : m.players[m.ball.owner];
-  if (!o) return 0;
-  return clamp(0.38 + (u.a.defending - o.a.control) / 150 + (u.a.strength - o.a.strength) / 500 - (dist(u, o) > 3 ? 0.08 : 0), 0.12, 0.75);
-}
+export const tackleChance = (m:Match) => defenseChance(m,"tackle");
 /** 지연 수비: attacking actions near the containing user are harder (dribble, shot). */
 function containFactor(m: Match, p: Footballer, kind: "dribble" | "shoot") {
   const g = m.guard;
@@ -399,44 +405,47 @@ function containFactor(m: Match, p: Footballer, kind: "dribble" | "shoot") {
 }
 /** Applies the user's defensive choice. `none` lets the AI keep defending as before. */
 export function defend(m: Match, action: DefenseAction | "none") {
-  if (!m.defending) return;
-  m.defending = false;
-  const u = m.players[m.userId], o = m.ball.owner === null ? null : m.players[m.ball.owner];
-  if (action === "none" || !o || o.team === u.team || !userOn(m)) return;
-  if (action === "tackle") {
-    insightAttempt(m, u, ["defending"]);
-    const temper = u.fx?.temper ?? 1;
-    if (random(m) < 0.2 * temper) {
-      u.stats.failedTackles = (u.stats.failedTackles ?? 0) + 1;
-      event(m, `${u.name} · 무리한 태클, 파울`);
-      if (random(m) < 0.3 * temper) {
-        u.yellow++;
-        event(m, `${u.name} · 경고`);
-        if (u.yellow >= 2) { u.red = true; event(m, `${u.name} · 퇴장`); }
-      }
-      m.cooldown = 3;
-      return;
-    }
-    if (random(m) < tackleChance(m)) {
-      u.stats.tackles++;
-      o.stats.losses++;
-      own(m, u);
-      turnover(m, o, u);
-      event(m, `${u.name} · 태클 성공! 공을 빼앗았다`);
-      m.cooldown = 1;
-    } else {
-      u.stats.failedTackles = (u.stats.failedTackles ?? 0) + 1;
-      u.x = clamp(u.x - direction(m, u.team) * 4, 1, 104);
-      o.x = clamp(o.x + direction(m, o.team) * 3, 2, 103);
-      m.ball.x = o.x; m.ball.y = o.y;
-      event(m, `${u.name} · 태클 실패, 제쳐졌다`);
-      m.cooldown = 1.5;
+  if (!m.defending || m.ended) return;
+  const u=m.players[m.userId], o=m.ball.owner===null?null:m.players[m.ball.owner];
+  m.defending=false;
+  if(action==='none'||!o||o.team===u.team||!userOn(m)||dist(u,o)>6)return;
+  // Old saves/tests may still contain the retired choices. Resolve through the new pressure action.
+  const predicted=action==='predict';
+  const selected=predicted?(['tackle','slide','press'] as const)[Math.floor(random(m)*3)]:action==='intercept'||action==='contain'?'press':action;
+  const chance=defenseChance(m,selected,predicted);
+  const key=selected==='tackle'?'defending':selected==='slide'?'sliding':'marking';
+  insightAttempt(m,u,[key,'strength',...(predicted?['anticipation' as Attr]:[])]);
+  if(selected==='slide')u.energy=Math.max(0,u.energy-3);
+  event(m,`${u.name} · ${predicted?'예측 수비 → ':''}${DEFENSE_ACTIONS[selected].label}`);
+  if(random(m)<chance){
+    if(selected==='press'){
+      const gap=dist(u,o),ratio=Math.max(0,(gap-.7)/(gap||1));
+      u.x+=(o.x-u.x)*ratio;u.y+=(o.y-u.y)*ratio;
+      m.nextAI=.15;m.cooldown=1;
+      u.stats.defensiveWins=(u.stats.defensiveWins??0)+1;
+      event(m,`${u.name}, 바짝 붙어 ${o.name}의 선택을 좁힙니다!`);
+    }else{
+      u.x=o.x;u.y=o.y;u.stats.tackles++;o.stats.losses++;
+      m.lastPass=null;own(m,u);turnover(m,o,u);m.cooldown=1;
+      event(m,`${u.name}, 공을 빼앗았습니다! 곧바로 공격을 선택합니다.`);
     }
     return;
   }
-  if (action === "press") u.energy = Math.max(8, u.energy - 3);
-  m.guard = { kind: action, until: m.clock + GUARD_SECONDS, target: o.id, shots: m.shots[o.team], team: o.team, x: m.ball.x };
-  event(m, `${u.name} · ${DEFENSE_ACTIONS[action].label}`);
+  u.stats.failedTackles=(u.stats.failedTackles??0)+1;
+  u.x=clamp(u.x-direction(m,u.team)*3,1,104);
+  o.x=clamp(o.x+direction(m,o.team)*2,1,104);
+  m.ball.x=o.x;m.ball.y=o.y;
+  if(selected==='press')u.energy=Math.max(0,u.energy-2);
+  else m.beatenBoost={to:o.id,amount:selected==='slide'?.20:.10,until:m.clock+30};
+  event(m,`${o.name}, ${u.name}을 제치고 전진합니다!`);
+  m.nextAI=.1;m.cooldown=.2;
+  if(selected==='slide'&&random(m)<.30*(u.fx?.temper??1)){
+    event(m,`${u.name}, 늦은 슬라이딩! 파울, 프리킥입니다.`);
+    const card=random(m);
+    if(card<.04){u.red=true;event(m,`${u.name} · 레드카드, 퇴장`);}
+    else if(card<.45){u.yellow++;if(u.yellow>=2)u.red=true;event(m,`${u.name} · ${u.red?'두 번째 경고, 퇴장':'옐로우카드'}`);}
+    m.cooldown=3;
+  }
 }
 /** Ground (m) the attackers may gain during 지연 수비 for it to still count as a win. */
 export const CONTAIN_MAX_GAIN = 4;
@@ -523,39 +532,17 @@ function targets(m: Match, p: Footballer, act: Action) {
     }))
     .sort((a, b) => b.score - a.score);
 }
-export function actionChance(m: Match, action: Action) {
-  const p = m.players.find((p) => p.id === m.ball.owner);
-  if (!p) return 0;
-  const pr = pressure(m, p), b = boostFor(m, p);
-  if (action === "shoot") return (b === 1 ? shotQuality(m, p) : Math.min(0.95, shotQuality(m, p) * b)) * containFactor(m, p, "shoot");
-  if (action === "dribble")
-    return Math.min(0.97, clamp(0.44 + p.a.dribbling / 180 - pr * 0.14, 0.12, 0.92) * b) * containFactor(m, p, "dribble");
-  if (action === "hold")
-    return Math.min(0.97, clamp(0.65 + p.a.strength / 260 - pr * 0.15, 0.15, 0.95) * b);
-  const q = targets(m, p, action)[0]?.p;
-  if (!q) return 0;
-  return Math.min(0.99, b * clamp(
-    0.76 +
-      p.a.passing / 330 -
-      dist(p, q) * 0.003 -
-      laneRisk(m, p, q) * 0.25 -
-      pr * 0.055 -
-      (action === "through" ? 0.12 : 0),
-    0.15,
-    0.97,
-  ));
+export function actionChance(m:Match,action:Action,options:AttackOptions={}) {
+  const p=m.ball.owner===null?null:m.players[m.ball.owner];
+  if(!p)return 0;
+  const target=options.targetId??targets(m,p,action)[0]?.p.id;
+  return attackChance(m,action,{...options,targetId:target});
 }
-export function availableActions(m: Match): Action[] {
-  const p = m.players.find((p) => p.id === m.ball.owner);
-  if (!p) return [];
-  return (Object.keys(ACTIONS) as Action[]).filter(
-    (a) =>
-      a !== "shoot" ||
-      Math.hypot((direction(m, p.team) > 0 ? 105 : 0) - p.x, 34 - p.y) < 43,
-  );
+export function availableActions(m:Match):Action[]{
+  return (['closeShot','longShot','curl','dribble','pass'] as Action[]).filter(a=>attackAllowed(m,a));
 }
 export function chooseAction(m: Match, p: Footballer): Action {
-  const acts = availableActions(m);
+  const acts = (["safe","forward","through","dribble","shoot","hold"] as Action[]).filter(a=>attackAllowed(m,a));
   const d = direction(m, p.team),
     distance = Math.hypot((d > 0 ? 105 : 0) - p.x, 34 - p.y);
   let best: Action = "safe",
@@ -563,7 +550,7 @@ export function chooseAction(m: Match, p: Footballer): Action {
   for (const a of acts) {
     let utility = actionChance(m, a);
     if (a === "shoot")
-      utility = shotQuality(m, p) * 5.42 + (distance < 21 ? 0.25 : -0.32);
+      utility = actionChance(m,a) * 7.5 + (distance < 22 ? .85 : distance < 35 ? .15 : -.32);
     if (a === "forward") utility += 0.12;
     if (a === "through") utility += p.a.vision / 550;
     if (a === "safe") utility -= 0.05;
@@ -586,21 +573,22 @@ export function insightAttempt(m:Match,p:Footballer,keys:Attr[]){
   // The commentary keeps the event private (no stat name); exact gains are shown in the growth history.
   event(m,`${p.name} · 경기 중에 깨달음을 얻었다!`);
 }
-export function act(m: Match, action: Action) {
-  if (m.ended || m.ball.owner === null || !availableActions(m).includes(action))
+export function act(m: Match, action: Action, options:AttackOptions={}) {
+  if (m.ended || m.ball.owner === null || !attackAllowed(m,action,options))
     return;
   const p = m.players[m.ball.owner],
     d = direction(m, p.team),
-    chance = actionChance(m, action),
+    chance = actionChance(m, action,options),
     boost = boostFor(m, p);
+  if(m.beatenBoost?.to===p.id)m.beatenBoost=undefined;
   if (m.assistBoost?.to === p.id) m.assistBoost = null; // one action only, never stacks
-  insightAttempt(m,p,action==='shoot'?['shooting','composure']:action==='dribble'?['dribbling']:action==='hold'?['strength']:['passing']);
+  insightAttempt(m,p,attackKeys(action==='shoot'&&Math.hypot((d>0?105:0)-p.x,34-p.y)>22?'longShot':action));
   m.decision = false;
   m.nextAI = 2.5;
-  if (action === "shoot") {
+  if (["shoot","closeShot","longShot","curl"].includes(action)) {
     p.stats.shots++;
     m.shots[p.team]++;
-    const xg = (boost === 1 ? shotQuality(m, p) : Math.min(0.95, shotQuality(m, p) * boost)) * containFactor(m, p, "shoot");
+    const xg = chance;
     m.xg[p.team] += xg;
     // Credit the creator at the shot, independent of the finisher's outcome.
     if (m.lastPass?.to === p.id && m.clock - m.lastPass.time < 90) {
@@ -631,13 +619,15 @@ export function act(m: Match, action: Action) {
       xg,
     };
     m.ball.owner = null;
-    event(m, `${p.name} · 슈팅!`);
+    event(m, `${p.name}, ${ACTIONS[action]}! 골문을 노립니다!`);
     return;
   }
   if (action === "dribble" || action === "hold") {
     if (random(m) < chance) {
-      p.x = clamp(p.x + (action === "dribble" ? 4 : 1) * d, 2, 103);
-      p.y = clamp(p.y + (random(m) - 0.5) * 4, 3, 65);
+      const vector=options.vector??{x:d,y:0},length=Math.hypot(vector.x,vector.y)||1;
+      p.x=clamp(p.x+vector.x/length*(action==="dribble"?4:1),1,104);
+      p.y=clamp(p.y+vector.y/length*(action==="dribble"?4:1),1,67);
+      if(action==="dribble"){p.energy=Math.max(0,p.energy-1);own(m,p);event(m,`${p.name}, 수비를 피해 공간으로 치고 나갑니다!`);}
       m.ball.x = p.x;
       m.ball.y = p.y;
     } else {
@@ -653,7 +643,7 @@ export function act(m: Match, action: Action) {
     m.nextAI = 3;
     return;
   }
-  const q = targets(m, p, action)[0]?.p;
+  const q = options.targetId===undefined?targets(m,p,action)[0]?.p:m.players.find(q=>q.id===options.targetId);
   if (!q) return;
   // Offside judged at release: receiver beyond ball and second-last defender.
   const defenders = m.players
@@ -674,6 +664,7 @@ export function act(m: Match, action: Action) {
     return;
   }
   p.stats.passes++;
+  event(m,`${p.name}, ${q.name}을 향해 패스를 보냅니다.`);
   m.ball.flight = {
     from: p.id,
     to: q.id,
@@ -861,6 +852,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
           from.stats.goals++;
           const assister = m.lastPass?.to === from.id && m.clock - m.lastPass.time < 90 ? m.players[m.lastPass.from] : null;
           if (assister) assister.stats.assists++;
+          (m.goals??=[]).push({id:(m.goals?.length??0)+1,time:m.clock,scorer:from.name,assister:assister?.name??null,team:from.team});
           // 분위기 메이커: the conceding team's momentum ends; a scorer/assister with the effect starts it.
           if (m.momentum) m.momentum[1 - from.team] = 0;
           const mood = from.fx?.momentum ?? (assister?.team === from.team ? assister.fx?.momentum : undefined);
@@ -891,6 +883,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
           target.x = f.x;
           target.y = f.y;
           own(m, target);
+          event(m,`${Math.abs((direction(m,target.team)>0?105:0)-target.x)<22?"페널티 박스 근처에서":"빈 공간에서"} ${from.name}의 패스를 받은 ${target.name}!`);
           if (from.fx?.playmaker && target.team === from.team && target.id !== from.id)
             m.assistBoost = { to: target.id, mult: 1 + from.fx.playmaker };
         } else {
@@ -911,6 +904,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
     m.ball.x = owner.x;
     m.ball.y = owner.y;
     if (!auto && wantsDefense(m, owner)) {
+      event(m,`골문 ${Math.hypot((direction(m,owner.team)>0?105:0)-owner.x,34-owner.y).toFixed(0)}m 앞, ${owner.name}의 앞을 가로막는 ${m.players[m.userId].name}!`);
       m.defending = true;
       m.defensePromptAt = m.clock;
       return;

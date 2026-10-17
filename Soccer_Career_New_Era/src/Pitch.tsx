@@ -3,9 +3,11 @@ import type { Match } from "./engine";
 export function Pitch({
   match,
   ambient = false,
+  selectable=false,onPlayer,
 }: {
   match?: Match | null;
   ambient?: boolean;
+  selectable?:boolean;onPlayer?:(id:number)=>void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -81,15 +83,17 @@ export function Pitch({
           ctx.lineTo(x + 5, y - 31);
           ctx.fill();
         }
+        if(selectable&&match&&p.team===match.players[match.userId].team&&p.id!==match.userId){ctx.strokeStyle="#f9df64";ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,22,0,7);ctx.stroke();}
         ctx.beginPath();
-        ctx.arc(x, y, 12, 0, 7);
+        ctx.arc(x, y, 15, 0, 7);
         ctx.fillStyle = p.team === 0 ? "#f2f1db" : "#e79562";
         ctx.fill();
         ctx.fillStyle = p.team === 0 ? "#183c2e" : "#40251c";
-        ctx.font = "bold 12px sans-serif";
+        ctx.font = "bold 15px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(String(p.number), x, y + 0.5);
+        if(match){ctx.font="bold 12px sans-serif";ctx.fillStyle="#fff";ctx.strokeStyle="#123428";ctx.lineWidth=3;ctx.strokeText(match.players[p.id].name,x,y+27);ctx.fillText(match.players[p.id].name,x,y+27);}
       }
       const b = match?.ball ?? { x: 53, y: 33 };
       ctx.fillStyle = "#ffffff";
@@ -107,10 +111,11 @@ export function Pitch({
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [match, ambient]);
+  }, [match, ambient,selectable]);
   return (
     <canvas
       ref={ref}
+      onClick={e=>{if(!selectable||!match)return;const r=e.currentTarget.getBoundingClientRect(),x=((e.clientX-r.left)/r.width*1000-35)/930*105,y=((e.clientY-r.top)/r.height*650-35)/580*68;const q=match.players.filter(p=>p.team===match.players[match.userId].team&&p.id!==match.userId&&!p.red&&!p.injured).sort((a,b)=>Math.hypot(a.x-x,a.y-y)-Math.hypot(b.x-x,b.y-y))[0];if(q&&Math.hypot(q.x-x,q.y-y)<5)onPlayer?.(q.id);}}
       className="pitch"
       role="img"
       aria-label="22명 선수와 공의 위치를 표시하는 실시간 축구 경기장"

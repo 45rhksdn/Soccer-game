@@ -4,7 +4,7 @@ import {newCareer,nextSeason} from '../../src/career';
 import {encode} from '../../src/storage';
 
 // v0.5: 럭키 popup and private news, equipment, slot delete, account-wide retirement reward.
-test.beforeEach(async({page})=>{await page.addLocatorHandler(page.locator('.growth-popup.insight'),async()=>{await page.locator('.growth-popup').getByRole('button',{name:'확인'}).click();});});
+test.beforeEach(async({page})=>{await page.addLocatorHandler(page.locator('.growth-popup.insight, .growth-popup.goal'),async()=>{await page.locator('.growth-popup').getByRole('button',{name:'확인'}).click();});});
 async function nav(page:Page,name:string){if((page.viewportSize()?.width??1440)<900)await page.getByRole('button',{name:'메뉴',exact:true}).click();await page.getByRole('button',{name,exact:true}).click();}
 async function create(page:Page,name='테스트선수'){await page.goto('/');await page.getByRole('button',{name:'새로운 커리어 시작'}).click();await page.getByRole('tab',{name:'직접 만들기'}).click();await page.getByLabel('선수 이름').fill(name);await page.getByLabel('입학 나이').selectOption('16');await page.getByLabel('주 포지션',{exact:true}).selectOption('ST');await page.getByRole('button',{name:'입단하고 커리어 시작'}).click();await expect(page.locator('.save-state')).toHaveText('저장 완료');}
 /** Runs `fn(store)` against the game's IndexedDB from a same-origin static file, so the app cannot autosave over it. */
@@ -26,7 +26,7 @@ test('럭키 opens a popup; the news hides the stat and amount while the growth 
   await editDb(page,`${fnv}const r=store.get('slot1');r.onsuccess=()=>{const env=JSON.parse(r.result);const c=JSON.parse(env.payload);c.seed=arg;c.development.traits=[];const payload=JSON.stringify(c);store.put(JSON.stringify({format:'SCNE',checksum:fnv(payload),payload}),'slot1');};`,seed);
   await page.goto('/');await nav(page,'오늘의 일정');
   await page.getByRole('button',{name:'오늘 패스훈련'}).click();
-  const popup=page.getByRole('dialog');await expect(popup).toBeVisible();await expect(popup).toContainText('럭키!');await expect(popup).toContainText('훈련 중 무언가를 느꼈다!');
+  const popup=page.getByRole('dialog');await expect(popup).toBeVisible();await expect(popup).toContainText('놀라운 성장!');await expect(popup).toContainText('훈련 중 무언가를 느꼈다!');
   await page.screenshot({path:`reports/${info.project.name}-lucky-popup.png`});
   await popup.getByRole('button',{name:'확인'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('.today-result')).toContainText('럭키! ×10 · 패스훈련 · OVR +');

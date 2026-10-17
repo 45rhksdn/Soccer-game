@@ -94,15 +94,15 @@ for(const file of ['v4-weeks.json','v4-live-match.json'])it(`real v4 save (${fil
   const old=JSON.parse(JSON.parse(text).payload);
   expect(old.version).toBe(4);
   const n=decode(text);
-  expect(n.version).toBe(6);
+  expect(n.version).toBe(7);
   expect(n.development.traits).toEqual([old.development.trait]);
   expect(n.development.rival.traits).toEqual([old.development.rival.trait]);
   expect('trait' in n.development).toBe(false);
-  expect(n.player).toEqual(old.player);expect(n.history).toEqual(old.history);expect(n.week).toBe(old.week);expect(n.day).toBe(old.day);
-  expect(n.match).toEqual(old.match);expect(n.development.active).toEqual(old.development.active);
+  expect(n.player).toMatchObject(old.player);expect(n.history).toEqual(old.history);expect(n.week).toBe(old.week);expect(n.day).toBe(old.day);
+  old.match?expect(n.match).toMatchObject(old.match):expect(n.match).toBeNull();old.development.active?expect(n.development.active).toMatchObject(old.development.active):expect(n.development.active).toBeUndefined();
   expect(n.world.clubs.flatMap(x=>x.roster).every(p=>Array.isArray(p.traits))).toBe(true);
   expect(decode(text)).toEqual(n);expect(decode(encode(n))).toEqual(n);
   // The migrated career keeps playing.
   if(n.match){finishMatch(n.match);settle(n);}
-  expect(validate(n).version).toBe(6);
+  expect(validate(n).version).toBe(7);
 });

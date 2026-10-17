@@ -1,3 +1,4 @@
+import {MatchInteraction} from "./MatchInteraction";
 import {traitNotice} from './traitPresentation';
 import {GrowthNotes,RivalPanel} from './WeeklyPanels';
 import {TraitList} from './TraitBadges';
@@ -91,9 +92,17 @@ export default function App() {
     const key = c?.match ? `${c.seed}:${c.week}` : "",
       count = c?.match?.insight?.events.length ?? 0;
     if (key !== insightSeen.current.key) { insightSeen.current = { key, count }; return; }
-    if (count <= insightSeen.current.count) return;
+    if (count <= insightSeen.current.count || popup) return;
     insightSeen.current.count = count;
     setPopup({ kind: "insight", text: INSIGHT_NEWS, resume: !paused && !c!.match!.ended });
+    setPaused(true);
+  });
+  useEffect(()=>{
+    const m=c?.match;if(!m||popup)return;
+    const goal=m.goals?.find(g=>g.id>(m.goalNoticeSeen??0));
+    if(!goal)return;
+    m.goalNoticeSeen=goal.id;
+    setPopup({kind:'goal',text:`${goal.scorer} 골!\n${goal.assister?`${goal.assister} 도움`:'도움 없음'}`,resume:!paused&&!m.ended});
     setPaused(true);
   });
   const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
@@ -188,9 +197,10 @@ export default function App() {
     const interval = setInterval(() => {
       const m = live.current?.match;
       if (!m || m.ended || m.decision || m.defending) return;
+      const goals=m.goals?.length??0,insights=m.insight?.events.length??0;
       for (let i = 0; i < speed; i++) {
         step(m, 0.5);
-        if (m.decision || m.defending || m.ended) break;
+        if (m.decision || m.defending || m.ended || (m.goals?.length??0)>goals || (m.insight?.events.length??0)>insights) break;
       }
       setTick((v) => v + 1);
       if (m.decision || m.defending || m.ended) persist(live.current!, currentSlot.current);
@@ -570,19 +580,7 @@ export default function App() {
                         <small>AWAY</small>
                       </div>
                     </div>
-                    <div className="pitch-wrap">
-                      <Pitch match={m} />
-                      <div className="live-badge">
-                        <span className="dot" />
-                        {m.decision
-                          ? "YOUR MOMENT"
-                          : m.defending
-                            ? "DEFEND"
-                            : paused
-                            ? "PAUSED"
-                            : "LIVE"}
-                      </div>
-                    </div>
+                    <MatchInteraction m={m} onChange={()=>{setTick(v=>v+1);persist(c!);}}/>
                     <div className="match-toolbar">
                       <button
                         className="secondary"
@@ -651,105 +649,7 @@ export default function App() {
                       </button>
                     </section>
                   ) : (
-                    <section className="card decisions">
-                      <div className="section-title">
-                        <div>
-                          <span className="eyebrow">
-                            {m.decision ? "ON THE BALL" : m.defending ? "DEFENDING" : "OFF THE BALL"}
-                          </span>
-                          <h3>
-                            {m.decision
-                              ? "당신의 차례입니다."
-                              : m.defending
-                                ? `${m.players[m.ball.owner ?? m.userId].name}이(가) 공을 몰고 다가옵니다.`
-                                : m.guard
-                                  ? `${DEFENSE_ACTIONS[m.guard.kind].label} 중 · ${Math.max(0, Math.ceil(m.guard.until - m.clock))}초`
-                                  : "다음 기회를 준비하세요."}
-                          </h3>
-                        </div>
-                        <span className="pill">
-                          컨디션 {Math.round(m.players[m.userId].energy)}%
-                        </span>
-                      </div>
-                      {m.defending ? (
-                        <div className="action-grid defense-grid" role="group" aria-label="수비 선택">
-                          {(Object.keys(DEFENSE_ACTIONS) as DefenseAction[]).map((a) => (
-                            <button
-                              key={a}
-                              aria-label={`수비 ${DEFENSE_ACTIONS[a].label}`}
-                              onClick={() => {
-                                defend(m, a);
-                                setTick(tick + 1);
-                                persist(c!);
-                              }}
-                            >
-                              <span>{DEFENSE_ACTIONS[a].label}</span>
-                              <small>{a === "tackle" ? `성공 확률 ${Math.round(tackleChance(m) * 100)}% · ` : ""}{DEFENSE_ACTIONS[a].desc}</small>
-                              <ArrowUpRight size={17} />
-                            </button>
-                          ))}
-                          <button
-                            className="secondary"
-                            aria-label="수비 AI에게 맡기기"
-                            onClick={() => {
-                              defend(m, "none");
-                              setTick(tick + 1);
-                              persist(c!);
-                            }}
-                          >
-                            <span>자동 수비</span>
-                            <small>평소처럼 위치를 지키며 대응합니다.</small>
-                          </button>
-                        </div>
-                      ) : m.decision ? (
-                        <div className="action-grid">
-                          {availableActions(m).map((a) => (
-                            <button
-                              key={a}
-                              onClick={() => {
-                                act(m, a);
-                                setTick(tick + 1);
-                                persist(c!);
-                              }}
-                            >
-                              <span>{ACTIONS[a]}</span>
-                              <small>
-                                {a === "shoot" ? "득점 확률" : "성공 확률"}{" "}
-                                {Math.round(actionChance(m, a) * 100)}%
-                              </small>
-                              <ArrowUpRight size={17} />
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="offball" style={{pointerEvents:m.userOnPitch===false?"none":"auto",opacity:m.userOnPitch===false?.4:1}}>
-                          {(
-                            [
-                              ["shape", "전술 위치 유지"],
-                              ["run", "공간 침투"],
-                              ["press", "압박"],
-                              ["defend", "수비 가담"],
-                              ["call", "패스 요청"],
-                            ] as const
-                          ).map(([v, label]) => (
-                            <button
-                              className={
-                                m.offball === v
-                                  ? "secondary selected"
-                                  : "secondary"
-                              }
-                              key={v}
-                              onClick={() => {
-                                m.offball = v;
-                                setTick(tick + 1);
-                              }}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </section>
+                    null
                   )}
                   <div className="two-col">
                     <section className="card">

@@ -4,21 +4,8 @@ import {REGIONS,SCHOOL_SOURCES,DISCLAIMER,schoolById,searchSchools,type Region,t
 import {generateCandidates,candidateOverall,listNumber,type Candidate,type ScoutState} from './scouting';
 import {TraitList} from './TraitBadges';
 
-// Schematic tile map of the 17 시·도 (column, row). Positions are approximate, not geographic.
-const TILES:Record<Region,[number,number]>={
-  경기:[1,0],강원:[2,0],
-  인천:[0,1],서울:[1,1],충북:[2,1],경북:[3,1],
-  충남:[0,2],세종:[1,2],대전:[2,2],대구:[3,2],울산:[4,2],
-  전북:[1,3],경남:[2,3],부산:[3,3],
-  광주:[0,4],전남:[1,4],
-  제주:[1,5],
-};
-
-export function RegionMap({value,onChange}:{value:Region|null,onChange:(r:Region|null)=>void}){
-  return <div className="region-map" role="group" aria-label="시·도 선택 지도 (약도)">
-    {REGIONS.map(r=>{const [c,row]=TILES[r],count=searchSchools('',r).length;return <button key={r} type="button" className={value===r?'region-tile selected':'region-tile'} style={{gridColumn:c+1,gridRow:row+1}} aria-pressed={value===r} aria-label={`${r} · 축구부 ${count}개 학교`} onClick={()=>onChange(value===r?null:r)}><strong>{r}</strong><small>{count}</small></button>;})}
-  </div>;
-}
+export {KoreaMap as RegionMap} from './KoreaMap';
+import {KoreaMap as RegionMap} from './KoreaMap';
 
 function Potential({c}:{c:Candidate}){return <span>{c.potentialRange[0]}–{c.potentialRange[1]}</span>;}
 
@@ -36,7 +23,7 @@ export function ScoutPanel({scout,onReroll,onPick,school,setSchool,potentialBonu
       <div className="scout-columns">
         <div>
           <RegionMap value={region} onChange={r=>{setRegion(r);}}/>
-          <small className="muted">지역 배치는 약도입니다. 지역을 다시 누르면 전국 보기로 돌아갑니다.</small>
+          
         </div>
         <div className="school-search">
           <label>학교 검색<input type="search" value={query} placeholder="예: 보인, 제주, 수원삼성" onChange={e=>setQuery(e.target.value)} aria-label="학교 검색"/></label>

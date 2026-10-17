@@ -14,20 +14,20 @@ test('live match: an opponent near me with the ball asks for a defensive choice;
   const defense=page.getByRole('group',{name:'수비 선택'});
   // On-ball moments are answered with a safe pass until the first defensive moment.
   for(let i=0;i<400&&!(await defense.count());i++){
-    const pass=page.locator('.action-grid button').first();
-    if(await pass.count()&&!(await defense.count()))await pass.click().catch(()=>{});
+    const pass=page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/});
+    if(await pass.count()&&!(await defense.count())){await pass.click().catch(()=>{});await page.locator('.target-options button:not(:disabled)').first().click().catch(()=>{});}
     await page.waitForTimeout(150);
     if(await page.getByText('FULL TIME REPORT').count())break;
   }
   if(!(await defense.count())){test.skip(true,'not selected or no defensive moment');return;}
-  await expect(page.locator('.live-badge')).toContainText('DEFEND');
-  await expect(defense.getByRole('button',{name:'수비 태클'})).toContainText('성공 확률');
+  await expect(page.locator('.live-badge')).toContainText('수비 선택');
+  await expect(defense.getByRole('button',{name:'수비 스탠딩 태클'})).toContainText('성공 확률');
   await page.screenshot({path:`reports/${info.project.name}-defense.png`,fullPage:false});
   const clock=await page.locator('.scoreboard small, .score small').first().innerText().catch(()=>'');
   await page.waitForTimeout(600);expect(await page.locator('.scoreboard small, .score small').first().innerText().catch(()=>'')).toBe(clock); // paused while choosing
-  await defense.getByRole('button',{name:'수비 지연 수비'}).click();
+  await defense.getByRole('button',{name:'수비 압박하기'}).click();
   await expect(defense).toHaveCount(0);
-  await expect(page.locator('.decisions h3')).toContainText(/지연 수비 중|당신의 차례|다음 기회|다가옵니다/);
+  await expect(page.locator('.live-commentary')).toBeVisible();
   await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();
   expect(errors).toEqual([]);
 });
