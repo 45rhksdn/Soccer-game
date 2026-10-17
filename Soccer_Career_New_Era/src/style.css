@@ -2060,3 +2060,63 @@ td strong {
 .live-commentary p{color:#f3eed6}
 .match-board{scroll-margin-top:12px}
 @media(max-width:900px){.match-board{scroll-margin-top:72px}}
+
+/* ── 0.8.1: action tiles (design D, one continuous probability bar) ── */
+.match-actions{background:#f3f4ef}
+.match-actions .action-grid .action-card{border:0;box-shadow:none;border-radius:12px;padding:12px 14px;gap:8px;min-height:88px;color:#fff;
+  background:linear-gradient(160deg,#1f6e4f,#174f3a);transition:filter .12s,transform .08s}
+.match-actions .action-grid .action-card.defense{background:linear-gradient(160deg,#843529,#5f241c)}
+.match-actions .action-card::before{display:none}
+.match-actions .action-card:hover{filter:brightness(1.08);transform:none;box-shadow:none}
+.match-actions .action-card:active{transform:scale(.98);box-shadow:none}
+.match-actions .action-card.selected{background:linear-gradient(160deg,#1f6e4f,#174f3a);box-shadow:0 0 0 3px #ffe27a}
+.match-actions .action-card .tile-top{display:flex;justify-content:space-between;align-items:center;width:100%;gap:8px}
+.match-actions .action-card strong{font-size:15px;font-weight:800;color:#fff}
+.match-actions .action-card small{font-size:12px;line-height:1.4;color:#ffffffc4}
+.tile-icon{flex:none;opacity:.75}
+.chance-bar{display:flex;flex-direction:column;gap:5px;width:100%}
+.chance-bar .track{display:block;height:6px;border-radius:999px;overflow:hidden}
+.chance-bar .fill{display:block;height:100%;border-radius:999px;transition:width .25s}
+.chance-bar .label{font-size:11.5px;font-weight:700}
+.chance-bar.dark .track{background:#ffffff2e}.chance-bar.dark .fill{background:#ffe27a}.chance-bar.dark .label{color:#ffffffde}
+.chance-bar.light .track{background:#1b2f2420}.chance-bar.light .fill{background:#2f8a5c}.chance-bar.light .label{color:#2c3d33}
+.target-options button,.direction-options button{border:1px solid #d7ddd3;box-shadow:none;border-radius:10px;background:#fff;align-items:stretch;min-width:120px}
+.direction-options button b{text-align:center}
+/* 0.8.1: dribble tile → eight-way pad */
+.dribble-pad{grid-column:span 1}
+.dribble-pad .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;width:100%}
+.dribble-pad .pad-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:38px;border-radius:8px;border:0;background:#ffffff1f;color:#fff;font-size:17px;font-weight:800;padding:0}
+.dribble-pad .pad-cell:hover{background:#ffffff33}
+.dribble-pad .pad-cell b{line-height:1}
+.dribble-pad .mini{display:block;width:70%;height:3px;border-radius:2px;background:#ffffff33;overflow:hidden}
+.dribble-pad .mini span{display:block;height:100%;background:#ffe27a}
+.dribble-pad .pad-center{display:grid;place-items:center;color:#ffe27a;font-size:12px}
+.dribble-pad .pad-close{border:0;background:#ffffff26;color:#fff;width:26px;height:26px;border-radius:50%;font-size:16px;line-height:1;padding:0}
+.dribble-pad small{font-size:11px;color:#ffffffb0}
+
+/* 0.8.1: keep older generic button rules away from the pad and give titles room */
+.match-actions .action-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.match-actions .action-grid .dribble-pad .pad-cell{min-height:0;height:40px;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;box-shadow:none;border-radius:8px;background:#ffffff1f;color:#fff}
+.match-actions .action-grid .dribble-pad .pad-cell:hover{background:#ffffff33}
+.match-actions .action-grid .dribble-pad .pad-close{min-height:0;width:26px;height:26px;padding:0;display:grid;place-items:center;border:0;box-shadow:none;border-radius:50%;background:#ffffff26;color:#fff}
+.match-actions .action-grid .dribble-pad{gap:8px}
+.match-actions .action-grid{align-items:start}
+
+/* 0.8.2: softer tiles — lighter tones, rounder corners, gentle shadow, round icon badge */
+.match-actions{background:#f5f6f1}
+.match-actions .action-grid{gap:12px}
+.match-actions .action-grid .action-card{border-radius:18px;padding:14px 16px;min-height:78px;gap:10px;
+  background:linear-gradient(150deg,#4a9a76,#357e60);box-shadow:0 6px 16px -8px #1f4d3a99,inset 0 1px 0 #ffffff26}
+.match-actions .action-grid .action-card.defense{background:linear-gradient(150deg,#c26f5c,#a65746);box-shadow:0 6px 16px -8px #6b2c2099,inset 0 1px 0 #ffffff26}
+.match-actions .action-card.selected,.match-actions .action-grid .action-card.selected{box-shadow:0 0 0 3px #fff3b8,0 6px 16px -8px #1f4d3a99}
+.match-actions .action-card:hover{filter:brightness(1.05)}
+.match-actions .action-card strong{font-weight:700;letter-spacing:-.01em}
+.tile-icon{opacity:1;width:30px;height:30px;padding:6px;border-radius:50%;background:#ffffff2b;box-sizing:border-box}
+.chance-bar .track{height:8px}
+.chance-bar.dark .track{background:#ffffff33}
+.chance-bar.dark .fill{background:linear-gradient(90deg,#fff6c9,#ffe58f)}
+.chance-bar.dark .label{color:#fffffff0;font-weight:600}
+.chance-bar.light .fill{background:linear-gradient(90deg,#6bbf93,#3f9a6c)}
+.match-actions .action-grid .dribble-pad .pad-cell{border-radius:12px;background:#ffffff26}
+.dribble-pad .mini span{background:#fff1a8}
+.match-actions .action-card .tile-icon,.match-actions .action-card svg.tile-icon{color:#fff;stroke:#fff}

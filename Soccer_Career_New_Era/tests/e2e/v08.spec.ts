@@ -19,7 +19,7 @@ test('vertical pitch: the whole pitch fits the screen, probabilities are words',
   const box=(await canvas.boundingBox())!,vh=page.viewportSize()!.height;
   expect(box.height>box.width).toBe(true);expect(box.height<=vh).toBe(true);
   expect(box.y>=0&&box.y+box.height<=vh).toBe(true); // fully on screen when the match opens
-  await expect(page.locator('.match-actions')).toContainText(/(매우 낮은|낮은|중간|높은|매우 높은) 확률|동료 선택|방향 선택/);
+  await expect(page.locator('.match-actions')).toContainText(/(매우 낮은|낮은|중간|높은|매우 높은) 확률/);
   await noPercent(page,'.match-actions');
   await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/}).click();await noPercent(page,'.match-actions');
   await page.screenshot({path:`reports/${info.project.name}-v08-vertical.png`});
@@ -46,4 +46,24 @@ test('defence choices show word probabilities; the popup is the new game-style b
   const c=fixture();c.match!.goals=[{id:1,time:700,scorer:'김준서',assister:'이도윤',team:0}];await load(page,c);
   const popup=page.getByRole('dialog');await expect(popup).toContainText('김준서 골!');await expect(popup).toHaveCSS('border-radius','10px');
   await popup.getByRole('button',{name:'확인'}).click();await expect(popup).toHaveCount(0);
+});
+
+test('choosing 드리블 turns its tile into a direction pad; 예측 수비 shows no 평균',async({page})=>{
+  await load(page,fixture());
+  await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/드리블/}).click();
+  const pad=page.getByRole('group',{name:'드리블 방향'});await expect(pad).toBeVisible();
+  await expect(pad.locator('.pad-cell')).toHaveCount(8);
+  await expect(page.locator('.direction-options')).toHaveCount(0); // the pad replaces the separate direction list
+  await pad.getByRole('button',{name:'드리블 취소'}).click();await expect(pad).toHaveCount(0);
+  await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/드리블/}).click();
+  await page.getByRole('group',{name:'드리블 방향'}).getByRole('button',{name:'드리블 ↑',exact:true}).click();
+  await expect(page.getByRole('group',{name:'드리블 방향'})).toHaveCount(0);
+  await load(page,fixture(true));const defense=page.getByRole('group',{name:'수비 선택'});await expect(defense).toBeVisible();
+  await expect(defense).not.toContainText('평균');
+  await expect(page.locator('.chance-bar .fill').first()).toBeVisible();
+});
+
+test('dribble and pass tiles also show a gauge bar',async({page})=>{
+  await load(page,fixture());const attack=page.getByRole('group',{name:'공격 선택'});
+  for(const name of [/드리블/,/^패스/]){const tile=attack.getByRole('button',{name});await expect(tile.locator('.chance-bar .fill')).toHaveCount(1);await expect(tile).toContainText(/확률/);await expect(tile).not.toContainText(/득점 ·|앞으로 ·|추천 동료|방향 선택|동료 선택/);}
 });
