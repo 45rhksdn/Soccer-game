@@ -39,7 +39,7 @@ test('two school seasons, rival aging, offer expiry and renewed professional con
   if(season===1){await nav(page,'이적 · 계약');await expect(page.getByRole('button',{name:'계약 수락',exact:true}).first()).toBeVisible();
    // Let 15 offseason days pass one at a time: offers older than 14 days must disappear.
    await nav(page,'오늘의 일정');for(let day=0;day<15;day++)await page.getByRole('button',{name:'오늘 휴식하기'}).click();
-   await nav(page,'이적 · 계약');await expect(page.getByRole('button',{name:'계약 수락',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'새 계약 구직'}).click();await page.getByRole('button',{name:'연봉 15% 인상 협상'}).first().click();await page.getByRole('button',{name:'계약 수락',exact:true}).first().click();await nav(page,'시즌 · 리그');}
+   await nav(page,'이적 · 계약');await expect(page.getByRole('button',{name:'계약 수락',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'새 계약 구직'}).click();await page.getByRole('button',{name:'연봉 인상',exact:true}).first().click();await page.getByRole('button',{name:'계약 수락',exact:true}).first().click();await nav(page,'시즌 · 리그');}
   await page.getByRole('button',{name:'다음 시즌 시작',exact:true}).click();await nav(page,'커리어 홈');
  }
  await playWeek(page);await nav(page,'라이벌');await expect(page.getByText(/19세/).first()).toBeVisible();await expect(page.locator('.save-state')).toHaveText('저장 완료');await page.reload();expect(errors).toEqual([]);
@@ -111,3 +111,4 @@ test('오늘의 일정: one tap per day, match-day screen, then Sunday ends the 
  await page.screenshot({path:`reports/${info.project.name}-today.png`,fullPage:true});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
+

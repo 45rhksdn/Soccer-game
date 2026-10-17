@@ -56,7 +56,7 @@ it('long career (16 → 35): the peak is reached around 32 and is not far above 
       byAge[c.player.age]=roleAbility(c.player.a,c.player.pos);
       const best=c.world.clubs.filter(x=>x.league===3).flatMap(x=>x.roster).filter(p=>p.pos!=='GK').map(p=>roleAbility(p.a,p.pos)).sort((a,b)=>b-a);top.push(best[0]);top5.push(best.slice(0,5).reduce((a,b)=>a+b,0)/5);
       if((c.player.age>=18&&clubOf(c.world).league===0)||(clubOf(c.world).league>0&&c.world.contract.years===0)){
-        const offer=[...c.world.offers].filter(o=>o.status==='open').sort((a,b)=>c.world.clubs.find(x=>x.id===b.clubId)!.league-c.world.clubs.find(x=>x.id===a.clubId)!.league)[0];
+        const offer=[...c.world.offers].filter(o=>o.status==='open').sort((a,b)=>c.world.clubs.find(x=>x.id===b.clubId)!.reputation-c.world.clubs.find(x=>x.id===a.clubId)!.reputation)[0];
         if(!offer){c.world.currentDay=c.day;prepareWeek(c,[...plan]);continue;}
         acceptOffer(c.world,offer.clubId,c.player.name);
       }

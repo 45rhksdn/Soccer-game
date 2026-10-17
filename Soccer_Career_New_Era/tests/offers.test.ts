@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {newCareer} from '../src/career';
 import {attributes} from '../src/engine';
-import {generateOffers,clubLevel,OFFER_FIT,type World} from '../src/world';
+import {generateOffers,clubLevel,offerDetails,OFFER_FIT,type World} from '../src/world';
 import {scoutInterest,INTEREST_FIT} from '../src/development';
 import {roleAbility,ROLE_KEYS} from '../src/roles';
 
@@ -17,14 +17,14 @@ it('offers follow the current position ability: every bidding club is within the
     const inWindow=fits.filter(f=>f>=OFFER_FIT.min&&f<=OFFER_FIT.max).length;
     // Either all bidders fit, or (no club fits) only the two closest-level fallback clubs bid.
     if(inWindow)expect(inWindow).toBe(clubs.length);else expect(clubs.length).toBeLessThanOrEqual(2);
-    for(const o of c.world.offers.filter(o=>o.clubId!==c.world.clubId)){const f=ability-clubLevel(c.world.clubs.find(x=>x.id===o.clubId)!,pos);expect(o.role).toBe(f>=0?'주전 경쟁':f>=-4?'로테이션':'유망주 / 벤치');}
+    for(const o of c.world.offers.filter(o=>o.clubId!==c.world.clubId)){const f=ability-clubLevel(c.world.clubs.find(x=>x.id===o.clubId)!,pos);expect(o.role).toBe(offerDetails(c.world.clubs.find(x=>x.id===o.clubId)!,p).role);}
   }
 });
 
 it('a stronger player gets offers from stronger leagues, a weaker one from weaker leagues',()=>{
-  const mean=(level:number)=>{const c=make('ST',3);c.world.interestedClubIds=[];generateOffers(c.world,player('ST',level),6.8);const cl=offered(c.world);return cl.reduce((n,x)=>n+x.league,0)/cl.length;};
+  const mean=(level:number)=>{const c=make('ST',3);c.world.interestedClubIds=[];generateOffers(c.world,player('ST',level),6.8);const cl=offered(c.world);return cl.reduce((n,x)=>n+clubLevel(x,'ST'),0)/cl.length;};
   const ls=[52,62,72,82].map(mean);for(let i=1;i<ls.length;i++)expect(ls[i]).toBeGreaterThan(ls[i-1]);
-  expect(ls[0]).toBeLessThan(1.6);expect(ls[3]).toBeGreaterThan(2.5);
+  expect(ls[0]).toBeLessThan(65);expect(ls[3]).toBeGreaterThan(75);
   // A star is no longer courted by every club of the lowest professional league.
   const c=make('ST',3);generateOffers(c.world,player('ST',85),6.8);expect(offered(c.world).every(x=>x.league>=2)).toBe(true);
 });

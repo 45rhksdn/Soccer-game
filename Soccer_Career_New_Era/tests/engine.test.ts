@@ -105,7 +105,7 @@ describe("deterministic engine", () => {
     const c = newCareer(player, 0);
     const raw = { ...c, version: 1 };
     const migrated = decode(encode(raw as any));
-    expect(migrated.version).toBe(7);
+    expect(migrated.version).toBe(8);
   });
   it("100 week progression stays finite and within potential", async () => {
     const c = newCareer(player, 0);

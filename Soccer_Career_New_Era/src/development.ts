@@ -1,6 +1,6 @@
 import {ATTRS,LABELS,clamp,random,overall,createMatch,finishMatch,rating,type Attributes,type Attr,type Match} from './engine';
 import {grow,startCareerMatch,type Career,type Player} from './career';
-import {npcInjuryWeek,matchInjury,clubLevel,clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,nextOpponent,type Offer} from './world';
+import {npcInjuryWeek,matchInjury,clubLevel,clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,marketValue,offerDetails,nextOpponent,type Offer} from './world';
 import {TRAIT_IDS,TRAIT_TEXT,rollTraits,trainingGrowthMultiplier,trainingFatigueMultiplier,injuryChanceMultiplier,injuryWeeks,insightChance,trainingLuckChance,matchAttributes,traitDef,seedFrom,restRecoveryMultiplier,rivalryDrive,focusBonus,lateBloom,matchFx,hasMatchEffect,trustGainMultiplier,abroadGrowthMultiplier,superSubMultiplier,type TraitId,type TraitInput} from './traits';
 import {ROLE_KEYS,roleAbility} from './roles';
 import {applyAging} from './aging';
@@ -234,22 +234,37 @@ export function playRival(c:Career,main:Match){
 export const INTEREST_FIT=8;
 /** Professional club whose level at the player's position is closest to the player's ability. */
 function closestClub(c:Career,p:Player){const a=roleAbility(p.a,p.pos);return c.world.clubs.filter(x=>x.league>0&&x.id!==c.world.clubId).sort((x,y)=>Math.abs(clubLevel(x,p.pos)-a)-Math.abs(clubLevel(y,p.pos)-a))[0];}
+/** Scouting uses position-relevant contribution, so a missed finish does not erase a creator's work. */
+export function scoutingForm(c:Career){
+ const played=c.history.slice(0,5).filter(r=>r.stats.minutes>0);if(!played.length)return 6.5;
+ return played.reduce((n,r)=>{const s=r.stats,minutes=Math.max(30,s.minutes),creator=((s.keyPasses??0)*.08+(s.expectedAssists??0)*.3)*90/minutes,defender=s.tackles*.05*90/minutes;return n+r.rating+Math.min(.6,c.player.pos==='CM'?creator:['CB','LB','RB'].includes(c.player.pos)?defender:s.goals*.08);},0)/played.length;
+}
 export function scoutInterest(c:Career){
  if(c.world.phase==='retired'||c.world.phase==='offseason')return;
+ const w=c.world;w.scouting??=[];
  for(const rival of [false,true]){
   const p=rival?c.development.rival.player:c.player,ids=rival?c.development.rival.interests:c.development.interestIds;
-  if(p.age<17||random(c)>.35)continue;
-  const candidates=c.world.clubs.filter(x=>x.league>0&&!ids.includes(x.id)&&x.id!==(rival?c.development.rival.clubId:c.world.clubId)&&Math.abs(clubLevel(x,p.pos)-roleAbility(p.a,p.pos))<=INTEREST_FIT&&x.budget>=roleSalary(roleAbility(p.a,p.pos),x.league)*2);
-  if(!candidates.length)continue;const club=candidates[Math.floor(random(c)*candidates.length)];ids.push(club.id);news(c,`${club.name} · ${rival?'라이벌 ':''}${p.name}에게 관심! 졸업 가능한 시즌 종료 후 정식 제안 예정`,'interest');
+  if(p.age<17)continue;
+  const ability=roleAbility(p.a,p.pos),candidates=w.clubs.filter(x=>x.league>0&&!ids.includes(x.id)&&x.id!==(rival?c.development.rival.clubId:w.clubId)&&Math.abs(clubLevel(x,p.pos)-ability)<=INTEREST_FIT&&x.budget>=roleSalary(ability,x.league)*4+marketValue(ability,p.age,7,3)*2);
+  if(!candidates.length)continue;
+  if(rival){if(random(c)<.35){const club=candidates[Math.floor(random(c)*candidates.length)];ids.push(club.id);news(c,`${club.name} · 라이벌 ${p.name}에게 공식 관심! 시즌 종료 후 제안 예정`,'interest');}continue;}
+  const pending=w.scouting.find(r=>r.stage!=='공식 관심'&&candidates.some(x=>x.id===r.clubId));
+  const target=candidates.find(x=>x.id===w.targetClubId),club=target??(pending?candidates.find(x=>x.id===pending.clubId):undefined)??candidates[Math.floor(random(c)*candidates.length)];
+  let report=w.scouting.find(r=>r.clubId===club.id);
+  if(report?.lastWeek===c.week)continue;
+  if(!report){report={clubId:club.id,stage:'관찰',observations:1,lastWeek:c.week,reason:offerDetails(club,p,scoutingForm(c)).reason};w.scouting.push(report);news(c,`${club.name} · ${p.name}의 ${p.pos} 경기 운영을 관찰하기 시작했습니다.`,'interest');continue;}
+  report.lastWeek=c.week;report.observations++;
+  if(report.observations===2){report.stage='면담';news(c,`${club.name} · 에이전트 면담: ${report.reason}`,'interest');}
+  else if(scoutingForm(c)>=6.3){report.stage='공식 관심';report.reserved=roleSalary(ability,club.league)*4+marketValue(ability,p.age,7,3)*2;ids.push(club.id);news(c,`${club.name} · ${p.name}에게 공식 관심! 졸업 가능한 시즌 종료 후 정식 제안 예정`,'interest');}
  }
- c.world.interestedClubIds=[...c.development.interestIds];
+ w.interestedClubIds=[...c.development.interestIds];
 }
-export function announceOffers(c:Career){const d=c.development;c.world.currentDay=c.day;c.world.interestedClubIds=[...d.interestIds];generateOffers(c.world,{...c.player,age:c.player.age+1},c.history[0]?.rating||6.5);for(const o of c.world.offers)news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 14일 유효한 계약 제안 도착`,'offer');
+export function announceOffers(c:Career){const d=c.development;c.world.currentDay=c.day;c.world.interestedClubIds=[...d.interestIds];generateOffers(c.world,{...c.player,age:c.player.age+1},scoutingForm(c));for(const o of c.world.offers)news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 14일 유효한 계약 제안 도착`,'offer');
  if(d.rival.player.age>=18){const rw=structuredClone(c.world);rw.clubId=d.rival.clubId;rw.contract={salary:0,years:0};rw.interestedClubIds=d.rival.interests;generateOffers(rw,{...d.rival.player,age:d.rival.player.age+1},d.rival.history[0]?.rating??6.5);d.rival.offers=rw.offers;for(const o of rw.offers.filter(o=>d.rival.interests.includes(o.clubId)))news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 라이벌 ${d.rival.player.name}에게 정식 제안`,'offer');}
 }
 export function renewSearch(c:Career){if(c.world.phase!=='offseason'||c.match)throw Error('시즌 종료 후 구직할 수 있습니다.');expireOffers(c.world);if(c.world.offers.length)throw Error('아직 유효한 제안이 있습니다.');announceOffers(c);}
 export function ageRival(c:Career){const r=c.development.rival;r.player.age=c.player.age;r.player.energy=100;r.player.fatigue=0;r.retired=c.player.age>=36;if(!r.retired)applyAging(r.player.a,r.traits,r.player.age);
- const choices=r.offers.filter(o=>o.clubId!==c.world.clubId&&(o.expiresDay??Infinity)>c.day);
- if(r.player.age>=19&&(c.world.clubs.find(x=>x.id===r.clubId)!.league===0||choices.length)){const best=choices.sort((a,b)=>b.salary-a.salary)[0];const club=best?c.world.clubs.find(x=>x.id===best.clubId)!:closestClub(c,r.player);r.clubId=club.id;news(c,`${r.player.name} · ${club.name} 입단!`);}
- r.offers=[];if(c.player.age>=19){r.interests=[];c.development.interestIds=[];}c.world.interestedClubIds=[...c.development.interestIds];syncRival(c);
+ const choices=r.offers.filter(o=>(o.expiresDay??Infinity)>c.day&&c.world.clubs.find(x=>x.id===o.clubId)!.budget>=o.fee+o.salary*o.years);
+ if(r.player.age>=19&&(c.world.clubs.find(x=>x.id===r.clubId)!.league===0||choices.length)){const best=choices.sort((a,b)=>{const score=(o:Offer)=>{const club=c.world.clubs.find(x=>x.id===o.clubId)!;return -Math.abs(roleAbility(r.player.a,r.player.pos)-clubLevel(club,r.player.pos)-3)*4+club.development*10+Math.log1p(o.salary);};return score(b)-score(a);})[0];const club=best?c.world.clubs.find(x=>x.id===best.clubId)!:closestClub(c,r.player);if(best&&best.fee>0&&r.clubId!==club.id){const seller=c.world.clubs.find(x=>x.id===r.clubId)!;club.budget-=best.fee;seller.budget+=best.fee;c.world.ledger.push({year:c.world.year,from:club.id,to:seller.id,fee:best.fee,player:r.player.name});}r.clubId=club.id;news(c,`${r.player.name} · ${club.name} 입단!`);}
+ r.offers=[];c.world.scouting=[];if(c.player.age>=19){r.interests=[];c.development.interestIds=[];}c.world.interestedClubIds=[...c.development.interestIds];syncRival(c);
 }

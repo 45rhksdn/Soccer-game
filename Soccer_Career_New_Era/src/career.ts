@@ -1,3 +1,4 @@
+import {returnFromLoan} from './world';
 import {ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledMatch,announceOffers,ageRival,news,syncRival,finishWeek,type Development} from './development';
 import {ROLE_KEYS,roleAbility} from './roles';
 import {matchInjury,npcRecovery,clearInjuries,newWorld,clubOf,nextOpponent,chooseLineup,selectionScore,advanceLeague,startPostseason,advanceCup,sortedTable,LEAGUES,advanceWorldYear,type World,type RosterPlayer} from './world';
@@ -77,7 +78,7 @@ export type CareerPreset={a?:Attributes,potential?:number,learning?:number,trait
  /** Account-wide max-potential increase from retirements (legacy.ts); only raises the top of the random range. */
  potentialBonus?:number};
 export type Career = {
-  version: 7;
+  version: 8;
   /** Stable player id (0.5): same across backups/archives of this player, different for every new player. */
   id?: string;
   schoolRef?: SchoolRef;
@@ -137,7 +138,7 @@ export function newCareer(
     a.vision += 5;
   }
   const c = {
-    version: 7,
+    version: 8,
     id: preset.id ?? `p-${seedFrom(seed >>> 0, `${p.name}|${p.pos}|${school}`).toString(36)}`,
     world: newWorld(seed,school),
     seed: r.seed,
@@ -363,7 +364,10 @@ function completeSeason(c:Career){
  if(rank===1)w.achievements.unshift(`${w.year} ${LEAGUES[club.league]} 우승`);
  if(played.length>=6&&mean>=7.5)w.achievements.unshift(`${w.year} 시즌 베스트 선수`);
  const pay=Math.min(club.budget,w.contract.salary);club.budget-=pay;w.wealth+=pay;w.contract.years=Math.max(0,w.contract.years-1);
- c.development.wallet+=pay;announceOffers(c);
+ c.development.wallet+=pay;
+ const loyalty=w.loyalty?.clubId===club.id?w.loyalty:{clubId:club.id,seasons:0};loyalty.seasons++;w.loyalty=loyalty;
+ if(loyalty.seasons===3||loyalty.seasons===5)w.achievements.unshift(`${club.name} · ${loyalty.seasons}시즌 동행, 팬들의 신뢰`);
+ returnFromLoan(w);announceOffers(c);
  c.feed.unshift(`${w.year} 시즌 종료 · ${rank}위 · 평균 ${mean.toFixed(2)}`);
 }
 export function nextSeason(c:Career){

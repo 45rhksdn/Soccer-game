@@ -2140,3 +2140,5 @@ td strong {
 .match-actions .dribble-pad .pad-center{color:#111}
 .match-actions .dribble-pad small{color:#5d625c}
 .chance-bar.light .fill{background:#111}.chance-bar.light .track{background:#ecedea}.chance-bar.light .label{color:#222}
+
+.transfer-agent,.transfer-toolbar{display:flex;gap:16px;flex-wrap:wrap;margin:18px 0}.transfer-agent h2,.transfer-agent p{flex-basis:100%}.transfer-agent label,.transfer-toolbar label{display:flex;flex-direction:column;gap:8px;max-width:100%}.transfer-agent select,.transfer-toolbar select{padding:10px;max-width:100%;background:var(--card,#fff);color:inherit;border:1px solid #cbd8cd;border-radius:8px}.negotiation-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.save-card h2{font-size:22px}.save-card p{overflow-wrap:anywhere}@media(max-width:600px){.negotiation-options{grid-template-columns:1fr}.transfer-agent select{width:100%}}
