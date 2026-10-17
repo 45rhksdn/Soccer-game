@@ -44,7 +44,7 @@ test('defence choices show word probabilities; the popup is the new game-style b
   await load(page,fixture(true));const defense=page.getByRole('group',{name:'수비 선택'});await expect(defense.getByRole('button')).toHaveCount(4);
   await expect(defense).toContainText(/확률/);await noPercent(page,'.match-actions');
   const c=fixture();c.match!.goals=[{id:1,time:700,scorer:'김준서',assister:'이도윤',team:0}];await load(page,c);
-  const popup=page.getByRole('dialog');await expect(popup).toContainText('김준서 골!');await expect(popup).toHaveCSS('border-radius','10px');
+  const popup=page.getByRole('dialog');await expect(popup).toContainText('김준서 골!');await expect(popup).toHaveCSS('border-radius','20px');await expect(popup).toHaveCSS('background-color','rgb(255, 255, 255)');await expect(popup.locator('.popup-medal')).toBeVisible();
   await popup.getByRole('button',{name:'확인'}).click();await expect(popup).toHaveCount(0);
 });
 

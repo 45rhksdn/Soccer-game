@@ -2140,3 +2140,24 @@ td strong {
 .match-actions .dribble-pad .pad-center{color:#111}
 .match-actions .dribble-pad small{color:#5d625c}
 .chance-bar.light .fill{background:#111}.chance-bar.light .track{background:#ecedea}.chance-bar.light .label{color:#222}
+
+/* 0.8.3: popup design C — white medal card with black text (lucky / insight / goal) */
+.popup-backdrop{background:#0a1d15b3}
+.growth-popup,.growth-popup.lucky,.growth-popup.insight,.growth-popup.goal{
+  background:#fff;color:#111;border:0;outline:0;border-radius:20px;box-shadow:0 18px 44px #00000047;
+  padding:44px 22px 22px;margin-top:30px;max-width:360px;text-align:center;position:relative;overflow:visible;gap:6px}
+.growth-popup::after{display:none}
+.growth-popup .popup-medal{position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:60px;height:60px;border-radius:50%;
+  background:#111;color:#fff;border:4px solid #fff;display:grid;place-items:center;font-size:26px;line-height:1;box-sizing:border-box}
+.growth-popup .eyebrow{display:block;margin:0;padding:0;background:none;border:0;box-shadow:none;transform:none;color:#777;font-size:12px;font-weight:700;letter-spacing:.04em}
+.growth-popup h3{font-size:28px;font-weight:900;color:#111;margin:2px 0 4px;letter-spacing:0;text-shadow:none;-webkit-text-stroke:0}
+.growth-popup p{color:#111;font-size:16px;font-weight:700;line-height:1.6;white-space:pre-line}
+.growth-popup .muted{color:#777;font-size:12px}
+.growth-popup .primary{display:block;margin:14px auto 0;min-width:150px;padding:12px 32px;background:#111;color:#fff;font-size:16px;font-weight:700;
+  border:0;border-radius:999px;box-shadow:none;transform:none}
+.growth-popup .primary:hover{transform:none;box-shadow:none;background:#2a2a2a}
+.growth-popup .primary:active{transform:scale(.97);box-shadow:none}
+.growth-popup .primary:focus-visible{outline:3px solid #111;outline-offset:3px}
+.growth-popup{max-height:calc(100vh - 62px);max-height:calc(100dvh - 62px)}
+@media(max-width:600px){.growth-popup{width:calc(100% - 40px)}.growth-popup h3{font-size:26px}}
+.growth-popup.lucky h3,.growth-popup.insight h3,.growth-popup.goal h3{color:#111}
