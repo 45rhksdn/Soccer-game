@@ -1,9 +1,23 @@
-# v0.9 validation — in progress
+# v0.9 통합 검증 (2026-10-18)
 
-Base: Claude v0.8 `f36d1e3245593d5f98f751e1b8dae711061994d0` (PR #8).
+기반: Claude v0.9 `22234e5`, 통합 `9601cf8`, 브라우저 탐색 수정 `b7dc737`, 자동 저장 표시 수정 `642d022`.
 
-- Added 11 pro leagues, 66 fictional pro clubs, 6 schools (72 clubs / 1,440 roster slots).
-- TypeScript and production build passed.
-- Initial focused run: 31 tests passed (league calibration, 30-year world accounting, offers, scouting, loan roundtrip, v7 expansion, existing v5 saves and season integration), 24.34 seconds.
-- Browser tests added for league browsing, target/preference persistence, offer details, loan acceptance and reload. GitHub CI pending.
-- Full regression and long-career growth verification pending. No publication claimed.
+- `npm run build`: TypeScript + Vite + PWA 빌드 통과.
+- `BALANCE_MATCHES=200 npm test`: 26개 파일, 158개 테스트 모두 통과, 355.12초. 저장 확장/실제 v4·v5 저장 복원/30년 세계 예산/임대 복귀/감독 미션·시그니처 포함.
+- 200경기: 2.635골, 23.445슈팅, 홈 1.340/원정 1.295, 무득점 14경기, 최대 8골. 포지션 평균 평점 최대 차이 약 0.596.
+- 미드필더 200경기: 패스 3,404회/성공 2,411회, 키패스 70회, 기대 도움 5.721, 도움 4회. 기존 기대 도움 >5 게이트 통과.
+- 16~35세 장기 커리어: 32세 시즌 말 69.1로 최고점, 35세 67.4. 이 측정은 한 시드의 커리어이지 모든 선수에게 같은 성장을 보장하지 않는다.
+- 감독 미션(각 포지션 30경기): ST 57%, CM 43%, CB 43%, GK 63%; 1시즌 내 시그니처 자동 획득 없음.
+- 브라우저 1차: Claude 미션/시그니처/팝업/세로 경기장 16개 Chromium 및 8개 WebKit 통과. 신규 이적 화면에서 메뉴 탐색 테스트와 실제 저장 완료 표시 문제 발견, 수정 후 재검증 중.
+- 자동 저장 수정: 빠른 연속 변경 중 이전 저장 요청의 완료가 최신 요청의 상태 표시를 덮지 않도록 요청 세대를 구분한다. 리그/이적 브라우저 테스트가 설정 변경 직후 저장 완료→재접속을 검증한다.
+- GitHub CI `39055873001`, 앱 코드 `642d022`: 기본 2,000경기 포함 158개 단위·회귀 테스트 전부 통과(1003.30초). 2.7695골/24.074슈팅, 홈 1.3495/원정 1.4200, 무득점 123/2,000, 포지션 평점 차이 약 0.604.
+- Chromium: 핵심 20개 통과, 전체 dev 52개 통과/4개 건너뜀, production PWA 54개 통과/2개 건너뜀. 건너뜀은 dev의 PWA 전용 2개 및 수비 기회가 없는 랜덤 시나리오이며 실패를 숨긴 것이 아니다.
+- WebKit: 핵심 10개 통과, 전체 26개 통과/1개 건너뜀/1개 실패. 기존 커리어 테스트가 수비 선택 대기를 처리하지 않은 문제를 수정했다. 같은 흐름 재검증 `39080414007`: 1개 통과(31.3초). 게임 엔진 변경 없음.
+- 캡처 검토 후 모바일 이적 제목과 카드 너비 보정. 최신 f483940의 CI 39080551682에서 핵심 Chromium 20개 및 WebKit 10개 smoke 단계가 통과했다. 전체 재실행은 진행 중이나 엔진 코드는 642d022 검증 이후 변경하지 않았다. 별도 focused CI는 브라우저 설치 지연이 있었고, 동일 검사를 먼저 마친 전체 CI의 smoke 결과를 사용했다.
+
+한계: 실제 iPhone Safari 기기 검증 없음. 각 리그는 대표 6구단/10라운드 압축 시즌. 현실 전력은 게임 보정값(LEAGUE_BALANCE.md). 로컬 브라우저는 실행하지 않았으며 브라우저 검증은 GitHub Actions에서 수행한다.
+
+## 배포
+
+2026-10-18 기존 주소에 배포 성공: https://soccer-new-era-v05.spicy-vine-2764.chatgpt.site
+Site 소스 a68268a69e79ebf0e256cbf692542553e329f5fc, 앱 코드 기준 f483940. 도메인/접근 권한 유지. 실제 iPhone 기기는 미검증.
