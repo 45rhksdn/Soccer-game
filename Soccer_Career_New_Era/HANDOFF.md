@@ -1,3 +1,13 @@
+# 0.9.0 추가 (2026-10-17, Claude, `claude/v0.9-engagement`)
+- 새 모듈 `src/engagement.ts`(규칙)와 `src/EngagementPanels.tsx`(화면)에서 감독 미션, 시그니처 도전, 라이벌 비교를 처리한다. 자세한 내용은 CHANGELOG 0.9.0에 있다.
+- 연결 지점:
+  - `startCareerMatch` → `createMission`
+  - `settle` → `settleMission`, `recordDeeds`, `rivalNews`. 반환값은 `{mission, signatures}`이고, App이 이 값으로 시그니처 팝업을 띄운다.
+  - `configureTrait` → `signatureFx`
+- 저장: `development.deeds`, `signatures`, `missions`, `rivalAhead`와 `match.mission`은 모두 선택 항목이다. 예전 저장은 deeds를 경기 기록에서 처음 한 번 채운다. 같은 경기를 두 번 세지 않도록 `settle` 맨 앞에서 `deedsOf`를 부른다.
+- 밸런스: 미션 목표는 실제 커리어 경기의 중앙값 근처로 정했다. 시그니처는 포지션에 맞는 것이 3~6시즌 걸리도록 정했다. 엔진의 성공 판정과 난수 흐름은 그대로라 기존 2,000경기 측정값도 그대로다.
+- 다음 후보: 경기 하이라이트 저장, 커리어 연대기, 은퇴 후 2세대 커리어.
+
 # 0.7.1 추가 (2026-10-17, Claude, `claude/v0.7-finish`)
 - 패스 성공률을 사용자 요청 기준으로 조정했다(압박 없는 짧은 패스: 능력 60에서 약 87~90%, 95에서 약 95~97%). 기준값은 `tactical.PASS`이고, `tests/passing.test.ts`가 이 기준을 검사한다.
 - 깨달음은 그 선택지의 성공률에 쓰이는 능력치만 올린다. 패스는 거리에 따라 대상이 정해진다(`passInsightKeys`).
