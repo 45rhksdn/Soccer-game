@@ -53,13 +53,17 @@ export function shotBlockAt(m:Match,team:number,x:number,y:number){
  }
  return block;
 }
+/** Pass success tuning (0.7.1). Exact engine probabilities; the UI shows the same numbers. */
+export const PASS={base:.74,skill:.22,anticipation:.03,shortRange:12,perMetre:.006,forward:.03,forwardMetres:8,through:.12,crowd:.04,pressure:.08} as const;
 export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  if(!attackAllowed(m,a,opts))return 0;
  const p=m.players[m.ball.owner!],near=nearbyOpponents(m,p),q=near.nearest;
  const proximity=q?clamp(1-near.distance/6,0,1):0;
  const opponent=q?(q.a.marking*.45+q.a.defending*.35+q.a.anticipation*.20)/100:0;
  // Separate crowd penalty (5 points each) from distance/quality pressure (up to 12 points).
- const penalty=near.count*.05+proximity*opponent*.12;
+ const passing=['pass','safe','forward','through'].includes(a);
+ // Passes feel pressure less than shots and dribbles (the ball leaves the foot first).
+ const penalty=passing?near.count*PASS.crowd+proximity*opponent*PASS.pressure:near.count*.05+proximity*opponent*.12;
  let base=0;
  if(['shoot','closeShot','longShot','curl'].includes(a)){
    base=baseShotChance(m,p,a);
@@ -75,7 +79,11 @@ export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
    const target=m.players.find(q=>q.id===opts.targetId);if(!target||target.team!==p.team||target.id===p.id||!active(target))return 0;
    const d=distance(p,target),longWeight=clamp((d-8)/32,0,1);
    const skill=p.a.passing*(1-longWeight)+p.a.longPassing*longWeight;
-   base=.68+.27*skill/100+.04*p.a.anticipation/100-d*.0045;
+   // 0.7.1: an unpressured short pass is safe (skill 60 ≈ 89 %, 95 ≈ 97 %); length, a forward or
+   // through ball, an intercepting defender in the lane and pressure on the passer lower it.
+   base=PASS.base+PASS.skill*skill/100+PASS.anticipation*p.a.anticipation/100-Math.max(0,d-PASS.shortRange)*PASS.perMetre;
+   const ahead=(target.x-p.x)*direction(m,p.team);
+   base-=a==='through'?PASS.through:a==='forward'||(a==='pass'&&ahead>PASS.forwardMetres)?PASS.forward:0;
    const dx=target.x-p.x,dy=target.y-p.y,l=dx*dx+dy*dy||1;
    let risk=0;
    for(const o of m.players){if(o.team===p.team||!active(o))continue;const t=((o.x-p.x)*dx+(o.y-p.y)*dy)/l;if(t>.08&&t<.95)risk=Math.max(risk,clamp(1-Math.hypot(o.x-p.x-t*dx,o.y-p.y-t*dy)/3,0,1)*(o.a.anticipation/100));}
