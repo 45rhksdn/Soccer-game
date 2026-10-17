@@ -1967,3 +1967,9 @@ td strong {
 .growth-popup,.growth-popup.lucky,.growth-popup.insight,.growth-popup.goal{background:#c0c0c0;color:#101010;border:3px solid;border-color:#fff #404040 #404040 #fff;border-radius:0;padding:5px 18px 18px;box-shadow:2px 2px 0 #000;max-width:420px;font-family:Arial,sans-serif}.growth-popup .eyebrow{display:block;margin:0 -13px 18px;padding:6px 9px;background:linear-gradient(90deg,#000080,#2476b7);color:white;font-size:13px;font-weight:bold;letter-spacing:0}.growth-popup h3{font-size:24px;color:#101010}.growth-popup p{white-space:pre-line;line-height:1.8}.growth-popup .muted{color:#404040}.growth-popup .primary{display:block;margin:20px auto 0;min-width:100px;background:#c0c0c0;color:#000;border:3px solid;border-color:white #404040 #404040 white;border-radius:0;box-shadow:0 0 0 1px #000;justify-content:center}.growth-popup .primary:focus-visible{outline:1px dashed #000;outline-offset:-7px}.popup-backdrop{background:#0008}
 @media(min-width:1100px){.match-board{width:100%;}.match-board .pitch{min-height:520px;object-fit:contain}}
 @media(max-width:600px){.match-actions{padding:10px}.match-actions .action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.live-commentary{padding:10px;font-size:13px}.distance-strip{font-size:12px}.interactive-pitch{overflow:auto}.interactive-pitch .pitch{min-width:600px}.direction-options{grid-template-columns:repeat(4,1fr)}.target-options button{font-size:12px}.growth-popup{width:calc(100% - 32px)}}
+/* 0.7 fix: a long grouped goal list must never push the 확인 button off small screens. */
+.popup-backdrop{overflow-y:auto}
+.growth-popup{max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);min-height:0}
+.growth-popup p{overflow-y:auto;min-height:0;flex:0 1 auto}
+.growth-popup .primary{flex:none}
+.growth-popup p{color:#101010}

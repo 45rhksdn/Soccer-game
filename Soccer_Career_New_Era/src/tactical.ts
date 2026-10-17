@@ -25,12 +25,23 @@ export function attackAllowed(m:Match,a:Action,opts:AttackOptions={}){
  if(a==='dribble'&&opts.vector)return Number.isFinite(opts.vector.x)&&Number.isFinite(opts.vector.y)&&Math.hypot(opts.vector.x,opts.vector.y)>0;
  return a==='dribble'||a==='hold';
 }
+/** Share of long-pass skill in a pass of this length (0 = short-pass skill only, 1 = long-pass skill only). */
+export const longPassWeight=(d:number)=>clamp((d-8)/32,0,1);
+/**
+ * 깨달음 targets for a pass: the skill that decides this pass, in the same proportion as the success
+ * formula (short ≤ 8 m: 짧은 패스, ≥ 40 m: 긴 패스, between: mixed), plus 예측력 (one third, as before).
+ * Built as six equally likely slots so the engine still draws exactly one random number.
+ */
+export function passInsightKeys(d:number):Attr[]{
+ const long=Math.round(4*longPassWeight(d));
+ return [...Array(4-long).fill('passing'),...Array(long).fill('longPassing'),'anticipation','anticipation'] as Attr[];
+}
 export function attackKeys(a:Action):Attr[]{
  if(a==='longShot')return ['longShot','finishing'];
  if(a==='curl')return ['curve','finishing'];
  if(a==='shoot'||a==='closeShot')return ['shooting','finishing'];
  if(a==='dribble')return ['dribbling','speed','anticipation'];
- if(a==='hold')return ['strength','control'];
+ if(a==='hold')return ['strength']; // only strength decides a hold
  return ['passing','longPassing','anticipation'];
 }
 /** Unpressured shot envelope: low attributes 5–15%, max long shot 10–35%. */
@@ -42,25 +53,33 @@ export function baseShotChance(m:Match,p:Footballer,a:Action){
  const angle=clamp(1-Math.abs(34-p.y)/60,.45,1);
  return (low+(high-low)*quality)*angle;
 }
+/** How strongly the nearest outfield defender stands in the shooting lane from (x, y) to goal (0 = open, 1 = fully blocked). */
+export function shotBlockAt(m:Match,team:number,x:number,y:number){
+ const dx=(direction(m,team)>0?105:0)-x,dy=34-y,l=dx*dx+dy*dy||1;
+ let block=0;
+ for(const o of m.players){
+   if(o.team===team||o.pos==='GK'||!active(o))continue;
+   const t=((o.x-x)*dx+(o.y-y)*dy)/l;
+   if(t>.08&&t<.95)block=Math.max(block,clamp(1-Math.hypot(o.x-x-t*dx,o.y-y-t*dy)/3,0,1));
+ }
+ return block;
+}
+/** Pass success tuning (0.7.1). Exact engine probabilities; the UI shows the same numbers. */
+export const PASS={base:.74,skill:.22,anticipation:.03,shortRange:12,perMetre:.006,forward:.03,forwardMetres:8,through:.12,crowd:.04,pressure:.08} as const;
 export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  if(!attackAllowed(m,a,opts))return 0;
  const p=m.players[m.ball.owner!],near=nearbyOpponents(m,p),q=near.nearest;
  const proximity=q?clamp(1-near.distance/6,0,1):0;
  const opponent=q?(q.a.marking*.45+q.a.defending*.35+q.a.anticipation*.20)/100:0;
  // Separate crowd penalty (5 points each) from distance/quality pressure (up to 12 points).
- const penalty=near.count*.05+proximity*opponent*.12;
+ const passing=['pass','safe','forward','through'].includes(a);
+ // Passes feel pressure less than shots and dribbles (the ball leaves the foot first).
+ const penalty=passing?near.count*PASS.crowd+proximity*opponent*PASS.pressure:near.count*.05+proximity*opponent*.12;
  let base=0;
  if(['shoot','closeShot','longShot','curl'].includes(a)){
    base=baseShotChance(m,p,a);
    // A defender farther than the close-pressure radius can still block the shot.
-   const dx=(direction(m,p.team)>0?105:0)-p.x,dy=34-p.y,l=dx*dx+dy*dy||1;
-   let block=0;
-   for(const o of m.players){
-     if(o.team===p.team||o.pos==='GK'||!active(o))continue;
-     const t=((o.x-p.x)*dx+(o.y-p.y)*dy)/l;
-     if(t>.08&&t<.95)block=Math.max(block,clamp(1-Math.hypot(o.x-p.x-t*dx,o.y-p.y-t*dy)/3,0,1));
-   }
-   base*=1-.4*block;
+   base*=1-.4*shotBlockAt(m,p.team,p.x,p.y);
  }
  else if(a==='dribble'){
    base=.35+.49*Math.pow(p.a.dribbling/100,1.4)+.07*p.a.speed/100+.07*p.a.anticipation/100;
@@ -69,9 +88,13 @@ export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  }else if(a==='hold')base=.55+.35*p.a.strength/100;
  else{
    const target=m.players.find(q=>q.id===opts.targetId);if(!target||target.team!==p.team||target.id===p.id||!active(target))return 0;
-   const d=distance(p,target),longWeight=clamp((d-8)/32,0,1);
+   const d=distance(p,target),longWeight=longPassWeight(d);
    const skill=p.a.passing*(1-longWeight)+p.a.longPassing*longWeight;
-   base=.68+.27*skill/100+.04*p.a.anticipation/100-d*.0045;
+   // 0.7.1: an unpressured short pass is safe (skill 60 ≈ 89 %, 95 ≈ 97 %); length, a forward or
+   // through ball, an intercepting defender in the lane and pressure on the passer lower it.
+   base=PASS.base+PASS.skill*skill/100+PASS.anticipation*p.a.anticipation/100-Math.max(0,d-PASS.shortRange)*PASS.perMetre;
+   const ahead=(target.x-p.x)*direction(m,p.team);
+   base-=a==='through'?PASS.through:a==='forward'||(a==='pass'&&ahead>PASS.forwardMetres)?PASS.forward:0;
    const dx=target.x-p.x,dy=target.y-p.y,l=dx*dx+dy*dy||1;
    let risk=0;
    for(const o of m.players){if(o.team===p.team||!active(o))continue;const t=((o.x-p.x)*dx+(o.y-p.y)*dy)/l;if(t>.08&&t<.95)risk=Math.max(risk,clamp(1-Math.hypot(o.x-p.x-t*dx,o.y-p.y-t*dy)/3,0,1)*(o.a.anticipation/100));}
