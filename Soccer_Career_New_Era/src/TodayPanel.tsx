@@ -1,7 +1,6 @@
-import {DAILY,WEEKDAYS,todayIndex,isMatchToday,TRAINING_INJURY_FATIGUE,type Daily,type TodayResult} from './development';
+import {DAILY,WEEKDAYS,todayIndex,isMatchToday,type Daily,type TodayResult} from './development';
 import {LABELS,type Attr} from './engine';
 import {dateOf,opponentOf,competitionName,selection,type Career} from './career';
-import {lateBloom} from './traits';
 
 // One glyph per daily activity (24×24 stroke icons).
 const ICONS:Record<Daily,string>={
@@ -40,7 +39,11 @@ export function TodayPanel({c,last,onTrain,onMatch}:{c:Career,last:TodayResult|n
       <button type="button" className="primary" onClick={onMatch}>경기 진행</button>
     </div>
     :<>
-      <p className="muted today-help">할 일을 누르면 하루가 지나고 결과가 바로 반영됩니다. 컨디션 {Math.round(p.energy)}% · 피로 {Math.round(p.fatigue)}% · 잔액 {d.wallet.toLocaleString()}만원 · 훈련 중 럭키! · 경기 중 깨달음!은 낮은 확률로 찾아옵니다.{p.injuryWeeks?' · 부상 중(훈련은 휴식으로 전환)':''}{p.fatigue>=TRAINING_INJURY_FATIGUE-12&&!p.injuryWeeks?' · 피로가 높아 부상 위험이 있습니다':''}{lateBloom(d.traits)?` · 대기만성 경험 ${(d.experienceBank??0).toFixed(1)}`:''}</p>
+      <div className="today-help" aria-label="오늘 상태">
+        <span><small>컨디션</small><b>{Math.round(p.energy)}%</b></span>
+        <span><small>피로도</small><b>{Math.round(p.fatigue)}%</b></span>
+        <span><small>잔액</small><b>{d.wallet.toLocaleString()}만원</b></span>
+      </div>
       <div className="today-grid">
         {(Object.keys(DAILY) as Daily[]).map(t=><button key={t} type="button" className={`today-tile ${t}`} disabled={t==='vacation'&&d.wallet<5} onClick={()=>onTrain(t)} aria-label={`오늘 ${DAILY[t].label.replace(' · 5만원','')}`}>
           <DailyIcon type={t}/><strong>{DAILY[t].label.replace(' · 5만원','')}</strong><small>{effect(t)}</small>

@@ -204,9 +204,9 @@ export type DefenseAction = "tackle" | "slide" | "press" | "predict" | "intercep
 export const PLAYER_DEFENSE_ACTIONS = ["tackle","slide","press","predict"] as const;
 export type Guard = { kind: Exclude<DefenseAction, "tackle">; until: number; target: number; shots: number; team: 0 | 1; /** ball x when the window started (지연 수비 judges the ground given up) */ x?: number };
 export const DEFENSE_ACTIONS: Record<DefenseAction, { label: string; desc: string }> = {
-  tackle: { label: "스탠딩 태클", desc: "가까울수록 유리 · 실패하면 상대 다음 행동 +10%p" },
-  slide: {label:"슬라이딩 태클",desc:"거리 영향 없음 · 실패 시 상대 +20%p, 파울·카드 위험 · 체력 소모"},
-  predict: {label:"예측 수비",desc:"세 수비 중 무작위 선택 · 예측력에 따라 최대 +10%p"},
+  tackle: { label: "스탠딩 태클", desc: "가까울수록 유리 · 실패하면 상대가 잠시 유리해집니다" },
+  slide: {label:"슬라이딩 태클",desc:"거리 영향 없음 · 실패하면 상대가 크게 유리해지고 파울·카드 위험 · 체력 소모"},
+  predict: {label:"예측 수비",desc:"세 수비 중 하나를 무작위로 · 예측력이 높을수록 유리"},
   press: { label: "압박하기", desc: "성공하면 더 가까이 접근 · 실패하면 제쳐지고 체력 소모" },
   intercept: { label: "패스 길 차단", desc: "30초간 패스 길목을 지켜 가로채기를 노립니다." },
   contain: { label: "지연 수비", desc: "30초간 거리를 두고 버텨 돌파·슈팅을 어렵게 합니다." },

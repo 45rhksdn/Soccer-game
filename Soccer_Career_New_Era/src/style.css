@@ -1973,3 +1973,191 @@ td strong {
 .growth-popup p{overflow-y:auto;min-height:0;flex:0 1 auto}
 .growth-popup .primary{flex:none}
 .growth-popup p{color:#101010}
+
+/* ── 0.8: vertical match screen ───────────────────────────────────── */
+.match-layout{display:grid;grid-template-columns:auto minmax(300px,1fr);gap:0;align-items:start}
+.match-field{background:#163f30;padding:10px 12px;position:sticky;top:0}
+.match-board .match-field .pitch-wrap{padding:0;position:relative}
+.match-board .interactive-pitch .pitch.vertical,.pitch.vertical{aspect-ratio:650/1000;min-width:0;max-height:none;min-height:0;
+  width:min(100%,calc((100vh - 190px)*.65));width:min(100%,calc((100dvh - 190px)*.65));height:auto;margin:0 auto;border-radius:6px}
+.pitch.clickable{cursor:crosshair}
+.match-field .live-badge{left:10px;top:10px}
+.pitch-hint{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);background:#ffd84a;color:#1b2f24;font-weight:800;font-size:13px;padding:7px 12px;border-radius:4px;border:2px solid #1b2f24;box-shadow:3px 3px 0 #0c2219;white-space:nowrap;pointer-events:none}
+.match-side{display:flex;flex-direction:column;min-width:0;background:#f6f3e4}
+.match-side .match-toolbar{background:#163f30}
+@media(max-width:900px){
+  .match-layout{grid-template-columns:1fr}
+  .match-field{position:static;padding:8px}
+  .match-board .interactive-pitch .pitch.vertical,.pitch.vertical{width:min(100%,calc((100vh - 120px)*.65));width:min(100%,calc((100dvh - 120px)*.65))}
+  .match-board .interactive-pitch{overflow:visible}
+}
+
+/* Action cards: dark text on cream, coloured edge, always readable on the dark match board. */
+.match-actions{background:#f6f3e4;color:#1d3328}
+.match-actions .distance-strip{color:#1d3328}.match-actions .distance-strip small{color:#4f5f52}
+.match-actions .action-grid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.match-actions .action-grid .action-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-height:84px;padding:12px 12px 12px 16px;
+  background:#fffdf3;color:#1b2f24;border:2px solid #1b2f24;border-radius:6px;box-shadow:3px 3px 0 #1b2f24;position:relative;text-align:left;transition:transform .08s,box-shadow .08s}
+.match-actions .action-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;border-radius:4px 0 0 4px;background:#e2873a}
+.match-actions .action-card.defense::before{background:#c2412f}
+.match-actions .action-card strong{font-size:16px;font-weight:900;color:#13261c}
+.match-actions .action-card small{font-size:12px;line-height:1.4;color:#3d4b40}
+.match-actions .action-card:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 #1b2f24}
+.match-actions .action-card:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #1b2f24}
+.match-actions .action-card.selected{background:#ffe77a;outline:none}
+.match-actions .action-card:focus-visible{outline:3px solid #2b6fd6;outline-offset:2px}
+.target-options button,.direction-options button{background:#fffdf3;color:#1b2f24;border:2px solid #1b2f24;border-radius:6px;box-shadow:2px 2px 0 #1b2f24;display:flex;flex-direction:column;align-items:center;gap:4px;font-weight:700}
+.target-options button:disabled{opacity:.45;box-shadow:none}
+.target-options p,.direction-options small{color:#3d4b40}
+.match-side .offball button{color:#1b2f24;background:#fffdf3;border:2px solid #1b2f24}
+.match-side .offball button.selected{background:#ffe77a}
+
+/* Probability as words (0.8): colour + text, never colour alone. */
+.chance{display:inline-block;font-size:12px;font-weight:800;padding:3px 8px;border-radius:999px;border:1.5px solid #1b2f24;white-space:nowrap}
+.chance.lv0{background:#b8332a;color:#fff}.chance.lv1{background:#e9853e;color:#1b1206}.chance.lv2{background:#f1cf4a;color:#1b1a06}.chance.lv3{background:#7cc15a;color:#0f2410}.chance.lv4{background:#1f7a45;color:#fff}
+
+/* Today: three plain status values only. */
+.today-help{display:flex;gap:10px;flex-wrap:wrap;margin:0}
+.today-help span{flex:1 1 90px;display:flex;flex-direction:column;align-items:flex-start;padding:8px 12px;border:1px solid #dfe5dc;border-radius:10px;background:#fbfcf8}
+.today-help small{font-size:11px;color:#667366}.today-help b{font-size:18px;color:#1d3328}
+
+/* ── 0.8: game-style popup (chunky pitch-side board) ─────────────── */
+.popup-backdrop{background:#06170fcc}
+.growth-popup,.growth-popup.lucky,.growth-popup.insight,.growth-popup.goal{
+  --accent:#f2d64b;
+  background:repeating-linear-gradient(0deg,#174734 0 26px,#1a4d38 26px 52px);color:#f6f1d8;
+  border:4px solid #efe6c4;outline:4px solid #0b2219;border-radius:10px;box-shadow:8px 8px 0 #0b2219;
+  padding:0 20px 20px;max-width:380px;font-family:inherit;text-align:center;position:relative}
+.growth-popup.lucky{--accent:#f39a3c}.growth-popup.insight{--accent:#7fd0f2}.growth-popup.goal{--accent:#f2d64b}
+.growth-popup .eyebrow{display:inline-block;margin:-16px auto 10px;padding:6px 16px;background:var(--accent);color:#13261c;border:3px solid #0b2219;border-radius:6px;
+  font-size:13px;font-weight:900;letter-spacing:.06em;transform:rotate(-2deg);box-shadow:3px 3px 0 #0b2219;align-self:center}
+.growth-popup h3{font-size:34px;font-weight:900;color:var(--accent);margin:4px 0 2px;letter-spacing:.02em;text-shadow:3px 3px 0 #0b2219;-webkit-text-stroke:1px #0b2219}
+.growth-popup p{color:#f6f1d8;font-size:17px;font-weight:700;line-height:1.7;white-space:pre-line}
+.growth-popup .muted{color:#c9d6c4;font-size:12px}
+.growth-popup .primary{display:block;margin:14px auto 0;min-width:140px;padding:11px 18px;background:var(--accent);color:#13261c;font-size:17px;font-weight:900;
+  border:3px solid #0b2219;border-radius:8px;box-shadow:4px 4px 0 #0b2219;justify-content:center;transition:transform .08s,box-shadow .08s}
+.growth-popup .primary:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 #0b2219}
+.growth-popup .primary:active{transform:translate(3px,3px);box-shadow:1px 1px 0 #0b2219}
+.growth-popup .primary:focus-visible{outline:3px dashed #f6f1d8;outline-offset:3px}
+.growth-popup::after{content:"";position:absolute;inset:6px;border:2px dashed #efe6c455;border-radius:6px;pointer-events:none}
+@media(max-width:600px){.growth-popup{width:calc(100% - 40px)}.growth-popup h3{font-size:30px}}
+/* 0.8: slim scoreboard so the scoreboard + the whole vertical pitch fit one screen. */
+.match-board .scoreboard{padding:8px 12px;gap:18px}
+.match-board .scoreboard>div:not(.score){flex-direction:row;gap:8px}
+.match-board .scoreboard>div:not(.score) svg{width:20px;height:20px}
+.match-board .scoreboard small{display:none}
+.match-board .score{font-size:28px;gap:8px}
+.match-board .score small{display:block;font-size:11px;color:#cfe0b9}
+.match-board .scoreboard strong{font-size:13px;max-width:30vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(min-width:901px){
+  .match-board .interactive-pitch .pitch.vertical,.pitch.vertical{width:min(100%,calc((100vh - 150px)*.65));width:min(100%,calc((100dvh - 150px)*.65))}
+}
+@media(max-width:900px){
+  /* Phone: sticky header 65 px + scoreboard; leave room for the commentary and first action row. */
+  .match-board .interactive-pitch .pitch.vertical,.pitch.vertical{width:min(100%,max(234px,calc((100vh - 360px)*.65)));width:min(100%,max(234px,calc((100dvh - 360px)*.65)))}
+  .match-board .scoreboard strong{font-size:12px}
+}
+.live-commentary p{color:#f3eed6}
+.match-board{scroll-margin-top:12px}
+@media(max-width:900px){.match-board{scroll-margin-top:72px}}
+
+/* ── 0.8.1: action tiles (design D, one continuous probability bar) ── */
+.match-actions{background:#f3f4ef}
+.match-actions .action-grid .action-card{border:0;box-shadow:none;border-radius:12px;padding:12px 14px;gap:8px;min-height:88px;color:#fff;
+  background:linear-gradient(160deg,#1f6e4f,#174f3a);transition:filter .12s,transform .08s}
+.match-actions .action-grid .action-card.defense{background:linear-gradient(160deg,#843529,#5f241c)}
+.match-actions .action-card::before{display:none}
+.match-actions .action-card:hover{filter:brightness(1.08);transform:none;box-shadow:none}
+.match-actions .action-card:active{transform:scale(.98);box-shadow:none}
+.match-actions .action-card.selected{background:linear-gradient(160deg,#1f6e4f,#174f3a);box-shadow:0 0 0 3px #ffe27a}
+.match-actions .action-card .tile-top{display:flex;justify-content:space-between;align-items:center;width:100%;gap:8px}
+.match-actions .action-card strong{font-size:15px;font-weight:800;color:#fff}
+.match-actions .action-card small{font-size:12px;line-height:1.4;color:#ffffffc4}
+.tile-icon{flex:none;opacity:.75}
+.chance-bar{display:flex;flex-direction:column;gap:5px;width:100%}
+.chance-bar .track{display:block;height:6px;border-radius:999px;overflow:hidden}
+.chance-bar .fill{display:block;height:100%;border-radius:999px;transition:width .25s}
+.chance-bar .label{font-size:11.5px;font-weight:700}
+.chance-bar.dark .track{background:#ffffff2e}.chance-bar.dark .fill{background:#ffe27a}.chance-bar.dark .label{color:#ffffffde}
+.chance-bar.light .track{background:#1b2f2420}.chance-bar.light .fill{background:#2f8a5c}.chance-bar.light .label{color:#2c3d33}
+.target-options button,.direction-options button{border:1px solid #d7ddd3;box-shadow:none;border-radius:10px;background:#fff;align-items:stretch;min-width:120px}
+.direction-options button b{text-align:center}
+/* 0.8.1: dribble tile → eight-way pad */
+.dribble-pad{grid-column:span 1}
+.dribble-pad .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;width:100%}
+.dribble-pad .pad-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:38px;border-radius:8px;border:0;background:#ffffff1f;color:#fff;font-size:17px;font-weight:800;padding:0}
+.dribble-pad .pad-cell:hover{background:#ffffff33}
+.dribble-pad .pad-cell b{line-height:1}
+.dribble-pad .mini{display:block;width:70%;height:3px;border-radius:2px;background:#ffffff33;overflow:hidden}
+.dribble-pad .mini span{display:block;height:100%;background:#ffe27a}
+.dribble-pad .pad-center{display:grid;place-items:center;color:#ffe27a;font-size:12px}
+.dribble-pad .pad-close{border:0;background:#ffffff26;color:#fff;width:26px;height:26px;border-radius:50%;font-size:16px;line-height:1;padding:0}
+.dribble-pad small{font-size:11px;color:#ffffffb0}
+
+/* 0.8.1: keep older generic button rules away from the pad and give titles room */
+.match-actions .action-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.match-actions .action-grid .dribble-pad .pad-cell{min-height:0;height:40px;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;box-shadow:none;border-radius:8px;background:#ffffff1f;color:#fff}
+.match-actions .action-grid .dribble-pad .pad-cell:hover{background:#ffffff33}
+.match-actions .action-grid .dribble-pad .pad-close{min-height:0;width:26px;height:26px;padding:0;display:grid;place-items:center;border:0;box-shadow:none;border-radius:50%;background:#ffffff26;color:#fff}
+.match-actions .action-grid .dribble-pad{gap:8px}
+.match-actions .action-grid{align-items:start}
+
+/* 0.8.2: softer tiles — lighter tones, rounder corners, gentle shadow, round icon badge */
+.match-actions{background:#f5f6f1}
+.match-actions .action-grid{gap:12px}
+.match-actions .action-grid .action-card{border-radius:18px;padding:14px 16px;min-height:78px;gap:10px;
+  background:linear-gradient(150deg,#4a9a76,#357e60);box-shadow:0 6px 16px -8px #1f4d3a99,inset 0 1px 0 #ffffff26}
+.match-actions .action-grid .action-card.defense{background:linear-gradient(150deg,#c26f5c,#a65746);box-shadow:0 6px 16px -8px #6b2c2099,inset 0 1px 0 #ffffff26}
+.match-actions .action-card.selected,.match-actions .action-grid .action-card.selected{box-shadow:0 0 0 3px #fff3b8,0 6px 16px -8px #1f4d3a99}
+.match-actions .action-card:hover{filter:brightness(1.05)}
+.match-actions .action-card strong{font-weight:700;letter-spacing:-.01em}
+.tile-icon{opacity:1;width:30px;height:30px;padding:6px;border-radius:50%;background:#ffffff2b;box-sizing:border-box}
+.chance-bar .track{height:8px}
+.chance-bar.dark .track{background:#ffffff33}
+.chance-bar.dark .fill{background:linear-gradient(90deg,#fff6c9,#ffe58f)}
+.chance-bar.dark .label{color:#fffffff0;font-weight:600}
+.chance-bar.light .fill{background:linear-gradient(90deg,#6bbf93,#3f9a6c)}
+.match-actions .action-grid .dribble-pad .pad-cell{border-radius:12px;background:#ffffff26}
+.dribble-pad .mini span{background:#fff1a8}
+.match-actions .action-card .tile-icon,.match-actions .action-card svg.tile-icon{color:#fff;stroke:#fff}
+
+/* 0.8.2: one simple style for attack and defense — white tile, black text */
+.match-actions .action-grid .action-card,.match-actions .action-grid .action-card.defense,.match-actions .action-grid .action-card.attack{
+  background:#fff;color:#111;border:1px solid #e2e4df;box-shadow:0 1px 3px #0000000f}
+.match-actions .action-grid .action-card:hover{filter:none;background:#fafaf8}
+.match-actions .action-grid .action-card.selected{background:#fff;box-shadow:0 0 0 2px #111}
+.match-actions .action-card strong{color:#111}
+.match-actions .action-card small{color:#5d625c}
+.match-actions .action-card .tile-icon,.match-actions .action-card svg.tile-icon{color:#111;stroke:#111;background:#f1f2ef}
+.match-actions .chance-bar.dark .track{background:#ecedea}
+.match-actions .chance-bar.dark .fill{background:#111}
+.match-actions .chance-bar.dark .label{color:#222}
+.match-actions .action-grid .dribble-pad .pad-cell{background:#f1f2ef;color:#111}
+.match-actions .action-grid .dribble-pad .pad-cell:hover{background:#e6e7e3}
+.match-actions .action-grid .dribble-pad .pad-close{background:#f1f2ef;color:#111}
+.match-actions .dribble-pad .mini{background:#dcdeda}
+.match-actions .dribble-pad .mini span{background:#111}
+.match-actions .dribble-pad .pad-center{color:#111}
+.match-actions .dribble-pad small{color:#5d625c}
+.chance-bar.light .fill{background:#111}.chance-bar.light .track{background:#ecedea}.chance-bar.light .label{color:#222}
+
+/* 0.8.3: popup design C — white medal card with black text (lucky / insight / goal) */
+.popup-backdrop{background:#0a1d15b3}
+.growth-popup,.growth-popup.lucky,.growth-popup.insight,.growth-popup.goal{
+  background:#fff;color:#111;border:0;outline:0;border-radius:20px;box-shadow:0 18px 44px #00000047;
+  padding:44px 22px 22px;margin-top:30px;max-width:360px;text-align:center;position:relative;overflow:visible;gap:6px}
+.growth-popup::after{display:none}
+.growth-popup .popup-medal{position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:60px;height:60px;border-radius:50%;
+  background:#111;color:#fff;border:4px solid #fff;display:grid;place-items:center;font-size:26px;line-height:1;box-sizing:border-box}
+.growth-popup .eyebrow{display:block;margin:0;padding:0;background:none;border:0;box-shadow:none;transform:none;color:#777;font-size:12px;font-weight:700;letter-spacing:.04em}
+.growth-popup h3{font-size:28px;font-weight:900;color:#111;margin:2px 0 4px;letter-spacing:0;text-shadow:none;-webkit-text-stroke:0}
+.growth-popup p{color:#111;font-size:16px;font-weight:700;line-height:1.6;white-space:pre-line}
+.growth-popup .muted{color:#777;font-size:12px}
+.growth-popup .primary{display:block;margin:14px auto 0;min-width:150px;padding:12px 32px;background:#111;color:#fff;font-size:16px;font-weight:700;
+  border:0;border-radius:999px;box-shadow:none;transform:none}
+.growth-popup .primary:hover{transform:none;box-shadow:none;background:#2a2a2a}
+.growth-popup .primary:active{transform:scale(.97);box-shadow:none}
+.growth-popup .primary:focus-visible{outline:3px solid #111;outline-offset:3px}
+.growth-popup{max-height:calc(100vh - 62px);max-height:calc(100dvh - 62px)}
+@media(max-width:600px){.growth-popup{width:calc(100% - 40px)}.growth-popup h3{font-size:26px}}
+.growth-popup.lucky h3,.growth-popup.insight h3,.growth-popup.goal h3{color:#111}
