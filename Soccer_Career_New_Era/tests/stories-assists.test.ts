@@ -71,3 +71,35 @@ it('custom players get a story too; old saves without one still load; damaged st
   const bad=structuredClone(c) as any;bad.story.chapters=[1,2];expect(()=>validate(bad)).toThrow();
   expect(josa('조준우','은는')).toBe('조준우는');expect(josa('홍도민','이가')).toBe('홍도민이');expect(josa('몸싸움','이다')).toBe('몸싸움이다');expect(josa('시야','이다')).toBe('시야다');
 });
+
+import {scoutKey,FIELD_POSITIONS} from '../src/scouting';
+import {potentialForecast,levelPhrase} from '../src/forecast';
+import {TRAIT_DEFS} from '../src/traits';
+import {LEAGUES} from '../src/world';
+it('creation: school + wished position gives one student of that position; deterministic; old lists unchanged',()=>{
+  const school='daegu-hyeonpung';
+  for(const pos of FIELD_POSITIONS){
+    const [a]=generateCandidates(9,school,0,1,0,pos);expect(a.pos).toBe(pos);
+    expect(generateCandidates(9,school,0,1,0,pos)).toEqual([a]);
+    expect(generateCandidates(9,school,1,1,0,pos)[0].name+generateCandidates(9,school,1,1,0,pos)[0].a.speed).not.toBe(a.name+a.a.speed);
+  }
+  // Without a wished position the pre-0.14 list is reproduced exactly (same ids, same players).
+  const old=generateCandidates(9,school,0);expect(old[0].id).toBe(`${school}#0#0`);expect(scoutKey(school)).toBe(school);expect(scoutKey(school,'ST')).toBe(`${school}@ST`);
+  const career=careerFromCandidate(generateCandidates(9,school,0,1,0,'CB')[0],9);expect(career.player.pos).toBe('CB');expect(career.story?.chapters?.[2]).toContain('센터백');
+});
+it('the scout’s forecast names leagues and levels, rises with the estimate, and never shows the number',()=>{
+  const order=(t:string)=>[...LEAGUES].map((n,i)=>t.includes(n)?i:-1).filter(i=>i>0);
+  const text=potentialForecast([75,80]);expect(text).toContain('스카우트 평가');expect(text).not.toMatch(/\d/);expect(order(text).length).toBeGreaterThan(0);
+  expect(levelPhrase(90)).toContain('최정상');expect(levelPhrase(72)).toContain('주전급');
+  // A better estimate never reads worse: the likely league's average level does not fall as the range rises.
+  const avgOf=(phrase:string)=>Math.max(...LEAGUES.map((n,i)=>phrase.includes(n)?i:-1).filter(i=>i>0).map(i=>[0,59.3,71.8,80.7,63.7,70,69.3,78.5,79.3,71.5,75.5,78.2][i]));
+  let last=0;for(let v=70;v<=92;v++){const a=avgOf(levelPhrase(v));expect(a).toBeGreaterThanOrEqual(last);last=a;}
+  expect(potentialForecast([84,89],2)).toContain('자신이 있습니다');expect(potentialForecast([84,89],0)).toContain('뒤집힐 수');
+});
+it('a student met for a wished position always has at least one trait, drawn by rarity',()=>{
+  const seen=new Map<string,number>();let pos=0,neg=0;
+  for(let list=0;list<400;list++){const [c]=generateCandidates(11,'seoul-boin',list,1,0,'CM');expect(c.traits.length).toBeGreaterThan(0);
+    for(const t of c.traits)seen.set(t,(seen.get(t)??0)+1);}
+  for(const [id,n] of seen){const d=TRAIT_DEFS.find(x=>x.id===id)!;if(d.polarity==='positive')pos+=n;else neg+=n;}
+  expect(seen.size).toBeGreaterThan(10);expect(pos).toBeGreaterThan(0);expect(neg).toBeGreaterThan(0);
+});

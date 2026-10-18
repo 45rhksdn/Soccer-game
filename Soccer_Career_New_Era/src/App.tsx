@@ -472,7 +472,7 @@ export default function App() {
                   <Heading
                     eyebrow="SCOUTING / 01"
                     title="실제 고교 축구부에서 시작하세요."
-                    text="지역과 학교를 고르면 가상의 후보 선수들이 나옵니다. 비교한 뒤 한 명을 골라 커리어를 시작하세요."
+                    text="지역과 학교, 희망 포지션을 고르면 그 자리에서 뛰는 학생 한 명을 만납니다. 그의 이야기와 특성, 가능성을 보고 함께할지 정하세요."
                   />
                   {scout ? (
                     <ScoutPanel

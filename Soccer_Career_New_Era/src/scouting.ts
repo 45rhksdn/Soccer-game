@@ -3,7 +3,7 @@
 // list never changes on reload or save/load. Names are random syllables.
 import {ATTRS,attributes,clamp,random,type Attributes,type Position} from './engine';
 import {roleAbility} from './roles';
-import {rollTraits,seedFrom} from './traits';
+import {rollTraits,seedFrom,TRAIT_DEFS} from './traits';
 import {newCareer,type Career} from './career';
 import {schoolById,type School} from './schools';
 import {playerStory} from './stories';
@@ -42,12 +42,15 @@ const pick=<T,>(r:{seed:number},xs:readonly T[])=>xs[Math.floor(random(r)*xs.len
  * `potentialBonus` (retirement reward, legacy.ts) widens only the top of the potential range:
  * the same random draw maps to the same minimum, so no other candidate field changes.
  */
-export function generateCandidates(scoutSeed:number,schoolId:string,list:number,count=CANDIDATES_PER_LIST,potentialBonus=0):Candidate[]{
+/** 0.14 scouting key for one school and wished position (each has its own list counter). */
+export const scoutKey=(schoolId:string,pos?:Position)=>pos?`${schoolId}@${pos}`:schoolId;
+export function generateCandidates(scoutSeed:number,schoolId:string,list:number,count=CANDIDATES_PER_LIST,potentialBonus=0,wanted?:Position):Candidate[]{
   const bonus=Math.max(0,potentialBonus);
-  const r={seed:seedFrom(scoutSeed,`school:${schoolId}#${list}`)};
+  // Without a wished position the seed is the pre-0.14 one, so earlier lists regenerate exactly.
+  const r={seed:seedFrom(scoutSeed,`school:${schoolId}#${list}${wanted?'@'+wanted:''}`)};
   const out:Candidate[]=[];
   for(let i=0;i<count;i++){
-    const pos=pick(r,FIELD_POSITIONS),secondary=pick(r,SECONDARY[pos]);
+    const rolled=pick(r,FIELD_POSITIONS),pos=wanted??rolled,secondary=pick(r,SECONDARY[pos]);
     const style=pick(r,STYLES),curve=pick(r,CURVES);
     const age=random(r)<.6?16:17;
     const footRoll=random(r),foot=footRoll<.7?'오른':footRoll<.92?'왼':'양';
@@ -69,7 +72,11 @@ export function generateCandidates(scoutSeed:number,schoolId:string,list:number,
     const spread=3+Math.floor(random(r)*3),shift=Math.floor(random(r)*(spread+1));
     const potentialRange:[number,number]=[Math.floor(potential)-shift,Math.floor(potential)-shift+spread+1];
     const name=pick(r,SURNAMES)+pick(r,FIRST)+pick(r,SECOND);
-    out.push({id:`${schoolId}#${list}#${i}`,schoolId,list,name,age,pos,secondary,foot,height,weight,style,curve,a,potential,learning,traits:rollTraits(r),potentialRange});
+    let traits:string[]=rollTraits(r);
+    // 0.14 a student met for a wished position always shows at least one trait (drawn by the traits' own
+    // relative rarity, so rare ones stay rare and positive/negative keep their usual mix). The extra draw comes last.
+    if(wanted&&!traits.length){const w=TRAIT_DEFS.reduce((n,d)=>n+d.chance,0);let x=random(r)*w;traits=[(TRAIT_DEFS.find(d=>(x-=d.chance)<0)??TRAIT_DEFS[0]).id];}
+    out.push({id:`${schoolId}#${list}#${i}${wanted?'@'+wanted:''}`,schoolId,list,name,age,pos,secondary,foot,height,weight,style,curve,a,potential,learning,traits,potentialRange});
   }
   return out;
 }

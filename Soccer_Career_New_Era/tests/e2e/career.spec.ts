@@ -64,18 +64,20 @@ test('backup stays readable and distinct after restoring from a corrupted slot',
  await page.waitForTimeout(6000);const idle=await read();expect(idle.slot).toBe(progressed.slot);expect(idle.backup).toBe(progressed.backup);
 });
 async function names(page:Page){return page.locator('.candidate h4').allInnerTexts();}
-async function openSchool(page:Page,region:string,school:string){await page.getByRole('button',{name:new RegExp(`^${region} · 축구부`)}).click();await page.getByRole('button',{name:new RegExp(school)}).first().click();await expect(page.locator('.candidate')).toHaveCount(6);}
-test('scouting: region map → real school → stable candidates → reroll persists → chosen player starts there',async({page},info)=>{
+async function openSchool(page:Page,region:string,school:string){await page.getByRole('button',{name:new RegExp(`^${region} · 축구부`)}).click();await page.getByRole('button',{name:new RegExp(school)}).first().click();await page.getByRole('radiogroup',{name:'희망 포지션'}).getByRole('radio',{name:/중앙 미드필더/}).click();await expect(page.locator('.candidate')).toHaveCount(1);}
+test('scouting: region map → real school → wished position → one student (story, traits, forecast) → reroll persists → chosen player starts there',async({page},info)=>{
  test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');await page.getByRole('button',{name:'새로운 커리어 시작'}).click();
  await expect(page.getByRole('tab',{name:'실제 고교에서 발굴'})).toHaveAttribute('aria-selected','true');
  await openSchool(page,'대구','현풍고');const first=await names(page);
- await page.getByText('후보 능력치 자세히 비교',{exact:true}).click();await page.getByText('학교 정보 출처',{exact:true}).click();await expect(page.getByRole('heading',{name:'3. 능력치 비교'})).toBeVisible();await expect(page.locator('.scout-source a').first()).toBeVisible();
+ await expect(page.locator('.candidate .tag').first()).toContainText('CM /');
+ await expect(page.locator('.forecast')).toContainText('스카우트 평가');await expect(page.locator('.candidate .story-rest blockquote')).toContainText('현풍고 축구부 코치');
+ await page.getByText('코치의 관찰과 능력치',{exact:true}).click();await expect(page.locator('.student-attrs')).toBeVisible();await page.getByText('학교 정보 출처',{exact:true}).click();await expect(page.locator('.scout-source a').first()).toBeVisible();
  await page.screenshot({path:`reports/${info.project.name}-scouting.png`,fullPage:true});
  await page.reload();await page.getByRole('button',{name:'새로운 커리어 시작'}).click();await openSchool(page,'대구','현풍고');expect(await names(page)).toEqual(first);
- await page.getByRole('button',{name:'새 후보 목록 생성'}).click();await expect(page.getByText('후보 목록 #2')).toBeVisible();const second=await names(page);expect(second).not.toEqual(first);
+ await page.getByRole('button',{name:'다른 학생 만나 보기'}).click();await expect(page.getByText('2번째 만남')).toBeVisible();const second=await names(page);expect(second).not.toEqual(first);
  await page.reload();await page.getByRole('button',{name:'새로운 커리어 시작'}).click();await openSchool(page,'대구','현풍고');expect(await names(page)).toEqual(second);
- const chosen=second[1];await page.getByRole('button',{name:`${chosen} 선수로 커리어 시작`}).click();
+ const chosen=second[0];await page.getByRole('button',{name:`${chosen} 선수로 커리어 시작`}).click();
  await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.getByText('현풍고 축구부 입단').first()).toBeVisible();
  await nav(page,'내 선수');await expect(page.getByRole('heading',{name:new RegExp(chosen)}).first()).toBeVisible();await expect(page.getByText(/현풍고 ·/).first()).toBeVisible();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
@@ -86,7 +88,7 @@ test('player switching keeps up to three careers independent; replaced players c
  await create(page);await playWeek(page);await expect(page.locator('.page-heading')).toContainText('WEEK 02');await expect(page.locator('.save-state')).toHaveText('저장 완료');
  await nav(page,'선수 변경하기');await expect(page.getByRole('heading',{name:'선수 변경하기'})).toBeVisible();
  await page.locator('.player-slot').nth(1).getByRole('button',{name:'새 선수 시작'}).click();
- await expect(page.getByText('저장 위치 · 슬롯 2')).toBeVisible();await page.getByLabel('학교 검색').fill('보인');await page.getByRole('button',{name:/보인고/}).click();
+ await expect(page.getByText('저장 위치 · 슬롯 2')).toBeVisible();await page.getByLabel('학교 검색').fill('보인');await page.getByRole('button',{name:/보인고/}).click();await page.getByRole('radiogroup',{name:'희망 포지션'}).getByRole('radio',{name:/스트라이커/}).click();
  const scouted=(await names(page))[0];await page.getByRole('button',{name:`${scouted} 선수로 커리어 시작`}).click();
  await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect.poll(async()=>(await db()).slot2).toBe(`${scouted}@0`);
  let state=await db();expect(state.slot1).toBe('테스트선수@1');expect(state.slot2).toBe(`${scouted}@0`);expect(state.activeSlot).toBe('2');

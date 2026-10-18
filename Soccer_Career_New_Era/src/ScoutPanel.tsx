@@ -1,24 +1,28 @@
 import {growthOutlook,strengths} from './origins';
 import {scoutLevel,type Legacy} from './legacy';
 import {useMemo,useState} from 'react';
-import {ATTRS,LABELS} from './engine';
+import {ATTRS,LABELS,type Position} from './engine';
+import {potentialForecast} from './forecast';
 import {REGIONS,SCHOOL_SOURCES,DISCLAIMER,schoolById,searchSchools,type Region,type School} from './schools';
-import {generateCandidates,candidateOverall,candidateStory,listNumber,type Candidate,type ScoutState} from './scouting';
+import {generateCandidates,candidateOverall,candidateStory,listNumber,scoutKey,FIELD_POSITIONS,type Candidate,type ScoutState} from './scouting';
 import {TraitList} from './TraitBadges';
 
 export {KoreaMap as RegionMap} from './KoreaMap';
 import {KoreaMap as RegionMap} from './KoreaMap';
 
-function Potential({c}:{c:Candidate}){return <span>{growthOutlook(c,c.id).label}</span>;}
+/** 0.14 wished positions in the creation flow. */
+export const POSITION_LABEL:Record<string,string>={ST:'스트라이커',LW:'왼쪽 윙어',RW:'오른쪽 윙어',CM:'중앙 미드필더',LB:'왼쪽 풀백',RB:'오른쪽 풀백',CB:'센터백'};
 
 export function ScoutPanel({scout,onReroll,onPick,school,setSchool,potentialBonus=0,legacy}:{legacy?:Legacy|null,scout:ScoutState,potentialBonus?:number,onReroll:(schoolId:string)=>void,onPick:(c:Candidate)=>void,school:string|null,setSchool:(id:string|null)=>void}){
   const [region,setRegion]=useState<Region|null>(()=>school?schoolById(school)?.region??null:null);
   const [query,setQuery]=useState('');
   const results=useMemo(()=>searchSchools(query,region??undefined),[query,region]);
   const selected=school?schoolById(school):undefined;
-  const list=selected?listNumber(scout,selected.id):0;
-  const candidates=useMemo(()=>selected?generateCandidates(scout.seed,selected.id,list,6+Math.min(2,scoutLevel(legacy)),potentialBonus):[],[scout.seed,selected?.id,list,potentialBonus,legacy]);
-  const best=(k:keyof Candidate['a'])=>Math.max(...candidates.map(c=>c.a[k]));
+  const [wish,setWish]=useState<Position|null>(null);
+  const key=selected&&wish?scoutKey(selected.id,wish):null;
+  const list=key?listNumber(scout,key):0;
+  // 0.14 one student at a time: the chosen school, the wished position, then a story to get to know.
+  const student=useMemo(()=>selected&&wish?generateCandidates(scout.seed,selected.id,list,1,potentialBonus,wish)[0]:null,[scout.seed,selected?.id,wish,list,potentialBonus]);
   return <div className="scout">
     <section className="card scout-pick">
       <div className="section-title"><h3>1. 지역과 학교</h3><span className="muted">{region??'전국'} · {results.length}개 학교</span></div>
@@ -38,37 +42,35 @@ export function ScoutPanel({scout,onReroll,onPick,school,setSchool,potentialBonu
         </div>
       </div>
     </section>
-    {selected&&<SchoolCandidates school={selected} list={list} candidates={candidates} best={best} onReroll={()=>onReroll(selected.id)} onPick={onPick} scoutExperience={scoutLevel(legacy)}/>}
+    {selected&&<section className="card wish-position">
+      <div className="section-title"><h3>2. 희망 포지션</h3><span className="muted">{selected.name} 축구부</span></div>
+      <div className="position-picks" role="radiogroup" aria-label="희망 포지션">{FIELD_POSITIONS.map(p=><button key={p} type="button" role="radio" aria-checked={wish===p} className={wish===p?'on':''} onClick={()=>setWish(p)}><strong>{p}</strong><small>{POSITION_LABEL[p]}</small></button>)}</div>
+      {!wish&&<p className="muted">포지션을 고르면 그 자리에서 뛰는 학생 한 명을 만나게 됩니다.</p>}
+    </section>}
+    {selected&&student&&<StudentCard school={selected} list={list} c={student} onReroll={()=>onReroll(key!)} onPick={onPick} scoutExperience={scoutLevel(legacy)}/>}
     <div className="note scout-note">{DISCLAIMER}</div>
   </div>;
 }
 
-function SchoolCandidates({school,list,candidates,best,onReroll,onPick,scoutExperience}:{scoutExperience:number,school:School,list:number,candidates:Candidate[],best:(k:keyof Candidate['a'])=>number,onReroll:()=>void,onPick:(c:Candidate)=>void}){
-  return <>
-    <section className="card">
-      <div className="section-title"><h3>2. {school.name} 후보 선수 <span className="tag fictional">가상 선수</span></h3><span className="muted">후보 목록 #{list+1}</span></div>
-      <p className="note fictional-note">학교는 실제 축구부 운영 학교이고, 아래 후보는 모두 게임이 만든 <strong>가상 인물</strong>입니다. 이름·신체·능력치는 실존 선수와 관계없습니다.</p>
-      <details className="scout-source"><summary>학교 정보 출처</summary><p className="muted">축구부 확인: {school.sources.map((k,i)=><span key={k}>{i?' · ':''}<a href={SCHOOL_SOURCES[k].url} target="_blank" rel="noreferrer">{SCHOOL_SOURCES[k].title}</a> ({SCHOOL_SOURCES[k].published})</span>)} · 확인일 {school.verifiedAt}</p></details>
-      <div className="candidate-grid">
-        {candidates.map(c=><article className="candidate" key={c.id} aria-label={`후보 ${c.name}`}>
-          <div className="candidate-top"><span className="tag">{c.pos} / {c.secondary}</span><span className="tag fictional" title="게임이 만든 가상 선수">가상</span><strong className="candidate-ovr">{candidateOverall(c).toFixed(1)}<small>OVR</small></strong></div>
-          <h4>{c.name}</h4>
-          {(()=>{const t=candidateStory(c,school);return <><div className="candidate-story"><p className="story-headline">{t.headline}</p>{' '}<p>{t.chapters[0]}</p></div>
-            <details className="story-more"><summary>사연 더 읽기</summary><div className="story-rest">{t.chapters.slice(1).map((x,i)=><p key={i}>{x}</p>)}<blockquote>{t.quote}<cite>{school.name} 축구부 코치</cite></blockquote></div></details></>;})()}
-          <p className="muted">{c.age}세 · {c.height}cm / {c.weight}kg · {c.foot}발<br/>{c.style} · 강점 {strengths(c.a)}</p>
-          <p className="candidate-outlook">{growthOutlook(c,c.id,0,scoutExperience).label}</p><details className="candidate-detail"><summary>코치의 관찰과 특성 설명</summary><p>{growthOutlook(c,c.id,0,scoutExperience).note}</p><TraitList traits={c.traits} detail empty="특성 없이도 훈련과 경기 경험으로 성장할 수 있습니다."/></details>
-          <TraitList traits={c.traits} empty="특성 없음"/>
-          <button type="button" className="primary full" onClick={()=>onPick(c)} aria-label={`${c.name} 선수로 커리어 시작`}>이 선수로 시작</button>
-        </article>)}
-      </div>
-      <div className="scout-actions"><button type="button" className="secondary" onClick={onReroll}>새 후보 목록 생성</button><small className="muted">새 목록을 만들어도 이 학교의 이전 목록은 같은 결과로 다시 만들 수 있으며, 생성 기록은 기기에 저장됩니다.</small></div>
-    </section>
-    <details className="card table-wrap compare"><summary>후보 능력치 자세히 비교</summary>
-      <div className="section-title"><h3>3. 능력치 비교</h3><span className="muted">초록: 후보 중 최고</span></div>
-      <table><thead><tr><th>능력치</th>{candidates.map(c=><th key={c.id}>{c.name}<br/><small>{c.pos}</small></th>)}</tr></thead>
-        <tbody>{ATTRS.map(k=><tr key={k}><td>{LABELS[k]}</td>{candidates.map(c=><td key={c.id} className={c.a[k]===best(k)?'best':''}>{c.a[k].toFixed(1)}</td>)}</tr>)}
-          <tr><td>성장 전망</td>{candidates.map(c=><td key={c.id}><Potential c={c}/></td>)}</tr>
-        </tbody></table>
-    </details>
-  </>;
+function StudentCard({school,list,c,onReroll,onPick,scoutExperience}:{scoutExperience:number,school:School,list:number,c:Candidate,onReroll:()=>void,onPick:(c:Candidate)=>void}){
+  const t=candidateStory(c,school),outlook=growthOutlook(c,c.id,0,scoutExperience);
+  return <section className="card student" aria-label={`후보 ${c.name}`}>
+    <div className="section-title"><h3>3. {school.name}에서 만난 학생 <span className="tag fictional">가상 선수</span></h3><span className="muted">{list+1}번째 만남</span></div>
+    <article className="candidate student-card">
+      <div className="candidate-top"><span className="tag">{c.pos} / {c.secondary}</span><span className="tag fictional" title="게임이 만든 가상 선수">가상</span><strong className="candidate-ovr">{candidateOverall(c).toFixed(1)}<small>OVR</small></strong></div>
+      <h4>{c.name}</h4>
+      <p className="muted">{c.age}세 · {c.height}cm / {c.weight}kg · {c.foot}발 · {c.style} · 강점 {strengths(c.a)}</p>
+      <div className="candidate-story"><p className="story-headline">{t.headline}</p>{' '}<p>{t.chapters[0]}</p></div>
+      <div className="story-rest">{t.chapters.slice(1).map((x,i)=><p key={i}>{x}</p>)}<blockquote>{t.quote}<cite>{school.name} 축구부 코치</cite></blockquote></div>
+      <div className="student-traits"><strong>타고난 특성</strong><TraitList traits={c.traits} detail empty="눈에 띄는 특성은 없습니다. 훈련과 경기 경험으로 자신만의 색을 만들어 갈 선수입니다."/></div>
+      <p className="forecast">{potentialForecast(c.potentialRange,scoutExperience)}</p>
+      <p className="candidate-outlook">{outlook.label}</p>
+      <details className="candidate-detail"><summary>코치의 관찰과 능력치</summary><p>{outlook.note}</p>
+        <table className="student-attrs"><tbody>{ATTRS.map(k=><tr key={k}><td>{LABELS[k]}</td><td>{c.a[k].toFixed(1)}</td></tr>)}</tbody></table></details>
+      <button type="button" className="primary full" onClick={()=>onPick(c)} aria-label={`${c.name} 선수로 커리어 시작`}>이 학생과 함께 시작</button>
+    </article>
+    <div className="scout-actions"><button type="button" className="secondary" onClick={onReroll}>다른 학생 만나 보기</button><small className="muted">이전에 만난 학생은 같은 학교·포지션에서 언제든 같은 모습으로 다시 만들 수 있고, 만남 기록은 기기에 저장됩니다.</small></div>
+    <details className="scout-source"><summary>학교 정보 출처</summary><p className="muted">축구부 확인: {school.sources.map((k,i)=><span key={k}>{i?' · ':''}<a href={SCHOOL_SOURCES[k].url} target="_blank" rel="noreferrer">{SCHOOL_SOURCES[k].title}</a> ({SCHOOL_SOURCES[k].published})</span>)} · 확인일 {school.verifiedAt}</p></details>
+  </section>;
 }
+

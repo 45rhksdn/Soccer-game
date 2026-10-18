@@ -2,7 +2,10 @@
 - 요청: 노마크 찬스 득점률을 현실적으로, 드리블할 때 다른 선수도 시간 흐름에 맞게 움직이게, Codex 패치 통합, 도움 조건 완화, 지역·학교에 맞춘 선수 사연.
 - Codex `codex/v0.13-player-stories`(36a4b93)를 병합했다. 충돌은 GAME_DESIGN/HANDOFF(두 내용을 모두 유지)와 `tests/e2e/v13.spec.ts`(이름이 겹쳐 내 파일을 `v13-finishing.spec.ts`로 바꿈)뿐이었다.
 - 도움: engine `act`의 슛 처리에서 `flight.assistFrom`. 사연: `src/stories.ts`, `origins.makeStory`(선택 필드 headline/chapters/quote), `scouting.candidateStory`, `CareerPreset.storyId`(카드의 사연을 그대로 저장), ScoutPanel·OriginPanel 표시, storage 검증.
-- 추가 테스트: `tests/stories-assists.test.ts` 5개, `tests/e2e/v14.spec.ts`. 갱신: `midfielder.test`(슛 후 lastPass 대신 flight.assistFrom 확인).
+- 추가 요청(16:30~): 12× 제거(1×·2×·4×), 지역·학교·희망 포지션 → 학생 한 명(사연·특성·스카우트 평가) 생성 흐름.
+  - ScoutPanel의 후보 목록·비교표를 `StudentCard`로 바꿨다. `forecast.ts`, `scouting.generateCandidates`에 희망 포지션 인자와 `scoutKey`를 추가했다.
+  - 레거시 보상 중 '후보 수 증가'는 학생 한 명 방식이라 의미가 없어졌다. 대신 스카우트 평가의 확신 문구와 코치 관찰(growthOutlook)에 반영된다. 잠재력 상한 보너스는 그대로다.
+- 추가 테스트: `tests/stories-assists.test.ts` 8개, `tests/e2e/v14.spec.ts`. 새 흐름에 맞춰 갱신: `career.spec`(스카우팅, 선수 변경), Codex `v13.spec`(후보 1명, 비교표 없음), `v07.spec`(희망 포지션 선택). 갱신: `midfielder.test`(슛 후 lastPass 대신 flight.assistFrom 확인).
 - 코드:
   - tactical: `ODDS.shot`(gkFrom/gkPerMetre/aerialSave/block, 압박 1.2), `ODDS.close`.
   - engine: `moveTeams`(step에서 떼어 냄), `carry`, `CARRY`, `AI.shotWeight`(값 7.5 그대로).
