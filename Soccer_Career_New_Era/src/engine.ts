@@ -60,6 +60,8 @@ export type Stat = {
   completed: number;
   tackles: number;
   interceptions: number;
+  decisiveDefenses?: number;
+  duelAttempts?: number;
   losses: number;
   saves: number;
   goalsConceded?: number;
@@ -397,7 +399,7 @@ export const ON_LINE_RANGE = 62;
 export const ONE_TWO_BONUS = 8;
 /** AI preferences for the 0.10 actions (balance.test keeps the totals in range). */
 /** 0.13 carry: time slices of a dribble (each 3 game seconds), at most 8 (0.14 longer carries); probe = stop-check step (m). */
-export const CARRY = { dt: .5, maxSlices: 8, probe: .5 } as const;
+export const CARRY = { dt: .5, maxSlices: 128, probe: .5 } as const;
 export const AI = { hopelessShot: .07, midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35, dribbleOpen: .02, lossMetres: 25, shotWeight: 7.5 } as const;
 /** Missed shots that go out for a corner; saves parried for a corner; saves that drop loose in the box. */
 export const SET_PIECE = { cornerFromMiss: .3, cornerFromSave: .18, rebound: .14 } as const;
@@ -492,6 +494,15 @@ function containFactor(m: Match, p: Footballer, kind: "dribble" | "shoot") {
   return kind === "dribble" ? 0.8 : 0.85;
 }
 /** Applies the user's defensive choice. `none` lets the AI keep defending as before. */
+/** A tackle that wins possession inside the defender's own penalty area. */
+export function recordTackle(m:Match,defender:Footballer,carrier:Footballer){
+ defender.stats.tackles++;
+ const ownGoal=direction(m,defender.team)>0?0:105;
+ if(Math.abs(carrier.x-ownGoal)<=16.5&&carrier.y>=13.84&&carrier.y<=54.16){
+  defender.stats.decisiveDefenses=(defender.stats.decisiveDefenses??0)+1;
+  event(m,`${defender.name}, 페널티 박스 안에서 결정적 수비!`);
+ }
+}
 export function defend(m: Match, action: DefenseAction | "none") {
   if (!m.defending || m.ended) return;
   const u=m.players[m.userId], o=m.ball.owner===null?null:m.players[m.ball.owner];
@@ -500,6 +511,7 @@ export function defend(m: Match, action: DefenseAction | "none") {
   // Old saves/tests may still contain the retired choices. Resolve through the new pressure action.
   const predicted=action==='predict';
   const selected=predicted?(['tackle','slide','press'] as const)[Math.floor(random(m)*3)]:action==='intercept'||action==='contain'?'press':action;
+  if(selected!=='press')u.stats.duelAttempts=(u.stats.duelAttempts??0)+1;
   const chance=defenseChance(m,selected,predicted);
   const key=selected==='tackle'?'defending':selected==='slide'?'sliding':'marking';
   insightAttempt(m,u,[key,'strength',...(predicted?['anticipation' as Attr]:[])]);
@@ -513,7 +525,7 @@ export function defend(m: Match, action: DefenseAction | "none") {
       u.stats.defensiveWins=(u.stats.defensiveWins??0)+1;
       event(m,`${u.name}, 바짝 붙어 ${o.name}의 선택을 좁힙니다!`);
     }else{
-      u.x=o.x;u.y=o.y;u.stats.tackles++;o.stats.losses++;
+      u.x=o.x;u.y=o.y;recordTackle(m,u,o);o.stats.losses++;
       m.lastPass=null;own(m,u);turnover(m,o,u);m.cooldown=1;
       event(m,`${u.name}, 공을 빼앗았습니다! 곧바로 공격을 선택합니다.`);
     }
@@ -755,7 +767,7 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
         .sort((a, b) => dist(a, at) - dist(b, at))[0];
       if(run)p.energy=Math.max(0,p.energy-ODDS.run.energy);
       p.stats.losses++;
-      q.stats.tackles++;
+      q.stats.duelAttempts=(q.stats.duelAttempts??0)+1;recordTackle(m,q,p);
       own(m, q);
       turnover(m, p, q);
       event(m, `${q.name} · 볼 탈취`);
@@ -993,7 +1005,7 @@ function carry(m: Match, p: Footballer, from: { x: number; y: number }, to: { x:
   let done = 0;
   const blocked = (at: { x: number; y: number }) => done >= min && m.players.some(o => stopsCarry(m, p, o, at, ux, uy));
   for (let i = 1; i <= slices; i++) {
-    const target = gap * i / slices;
+    const target = Math.min(gap, pace * i);
     let stopped = false;
     while (done < target - 1e-9) {
       done = Math.min(target, done + CARRY.probe);
@@ -1001,14 +1013,14 @@ function carry(m: Match, p: Footballer, from: { x: number; y: number }, to: { x:
       p.x = at.x; p.y = at.y;
       if (blocked(at)) { stopped = true; break; }
     }
-    p.vx = ux * gap / slices; p.vy = uy * gap / slices;
+    p.vx = ux * pace; p.vy = uy * pace;
     m.ball.x = p.x; m.ball.y = p.y;
     m.clock += CARRY.dt * 6;
     m.possession[p.team] += CARRY.dt;
     moveTeams(m, CARRY.dt, p, p, p.id); // everyone else at their own pace: a quick carrier gains on chasers
     if (stopped || blocked(p)) return true;
   }
-  if (!slices) { const end = carryStop(m, p, from, to, min); p.x = end.x; p.y = end.y; return end.stopped; }
+  if (!slices || done < gap - 1e-6) return true;
   p.x = to.x; p.y = to.y;
   return false;
 }
@@ -1160,6 +1172,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
         )
         .sort((a, b) => dist(a, owner) - dist(b, owner))[0];
       if (near && random(m) < dt * (m.guard?.kind === "press" && near.id === m.userId ? 0.3 : 0.16)) {
+        near.stats.duelAttempts=(near.stats.duelAttempts??0)+1;
         insightAttempt(m,near,['defending']);
         const temper = near.fx?.temper ?? 1;
         if (random(m) < 0.16 * temper) {
@@ -1179,7 +1192,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
           // 0.12 plus the pace race: a quicker carrier escapes a chaser, a slower one is caught.
           random(m) < clamp(ODDS.tackle.base + ODDS.tackle.edge * tackleEdge(near, owner) - ODDS.pace.tackle * paceDuel(m, owner, near), .1, .85)
         ) {
-          near.stats.tackles++;
+          recordTackle(m,near,owner);
           owner.stats.losses++;
           own(m, near);
           turnover(m, owner, near);
@@ -1242,10 +1255,16 @@ export function finishMatch(m: Match) {
   return m;
 }
 /** Rating weight of a successful press / contain / lane cover window, and its cap per match. */
-export const DEFENSIVE_WIN_RATING = 0.04, DEFENSIVE_WIN_CAP = 0.24;
+export const DEFENSIVE_WIN_RATING = 0.05, DEFENSIVE_WIN_CAP = 0.30;
 /** Rating penalty of a missed or fouled user tackle, and its cap per match. */
 export const FAILED_TACKLE_RATING = 0.05, FAILED_TACKLE_CAP = 0.3;
 export const DRIBBLE_RATING = .03, DRIBBLE_RATING_CAP = .25;
+/** Critical tackles replace their ordinary contribution: exactly 3 units, not 1+3. */
+export function defensiveRating(p:Footballer){
+ const s=p.stats,unit=['CB','LB','RB'].includes(p.pos)?.085:p.pos==='CM'?.045:.015;
+ const critical=Math.min(s.tackles,s.decisiveDefenses??0);
+ return Math.min(1.2,(s.tackles+s.interceptions+2*critical)*unit);
+}
 export function rating(p: Footballer) {
   const s = p.stats;
   const midfielder = p.pos === "CM";
@@ -1260,7 +1279,7 @@ export function rating(p: Footballer) {
   return clamp(
     6 + s.goals * (p.pos === "ST" ? .45 : .65) + s.assists * .45 +
     accuracy + distribution + progression + creation +
-    Math.min(.8, (s.tackles + s.interceptions) * (["CB", "LB", "RB"].includes(p.pos) ? .075 : midfielder ? .04 : .012)) +
+    defensiveRating(p) +
     Math.min(1.3, s.saves * .13) +
     // 0.14 successful dribbles count a little (+0.03 each, at most +0.25).
     Math.min(DRIBBLE_RATING_CAP, (s.dribbles ?? 0) * DRIBBLE_RATING) +

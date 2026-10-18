@@ -57,7 +57,7 @@ it('a long carry stops where an opponent who is not chasing comes within 6 m; a 
   const chased=scene({x:40,y:34},[{x:37,y:34,a:{speed:40,acceleration:40}}]);const plan=dribbleAdvance(chased.m,chased.u,v);
   expect(stopsCarry(chased.m,chased.u,chased.field[0],chased.u,chased.d,0)).toBe(false);
   for(let k=0;k<30;k++){const m=structuredClone(chased.m);m.seed=k*7;const u=m.players[m.userId],x0=u.x;act(m,'dribble',{vector:v});
-    if(m.ball.owner!==m.userId)continue;expect(Math.abs(u.x-x0)).toBeCloseTo(Math.min(plan,(chased.d>0?104:x0-1)-(chased.d>0?x0:0)),6);break;}
+    if(m.ball.owner!==m.userId)continue;const travelled=Math.abs(u.x-x0),limit=Math.min(plan,(chased.d>0?104:x0-1)-(chased.d>0?x0:0));expect(travelled).toBeLessThanOrEqual(limit+1e-6);expect(travelled).toBeGreaterThan(dribbleMinimum(chased.m,chased.u,v));if(travelled<limit-1e-6)expect(m.log.at(-1)!.text).toContain('멈춰 섭니다'); /* With time proportional to distance, another defender can now close the route. */break;}
 });
 
 it('successful dribbles add a little to the match rating (capped)',()=>{

@@ -40,7 +40,7 @@ function DribblePad({m,run,onRun,onPick,onCancel}:{m:Match,run:boolean,onRun:(ru
   <small>{run?'길게 차고 달려 8~10m 전진 · 공간과 속도 승부':'짧게 치고 나가 3~7m 전진'} · 경기장을 눌러도 됩니다</small>
  </div>;
 }
-export function MatchInteraction({m,onChange,toolbar}:{m:Match;onChange:()=>void;toolbar?:ReactNode}){
+export function LegacyMatchInteraction({m,onChange,toolbar}:{m:Match;onChange:()=>void;toolbar?:ReactNode}){
  const [mode,setMode]=useState<'pass'|'dribble'|null>(null);
  const [run,setRun]=useState(false);
  const u=m.players[m.userId],o=m.ball.owner===null?null:m.players[m.ball.owner];
@@ -77,3 +77,6 @@ export function MatchInteraction({m,onChange,toolbar}:{m:Match;onChange:()=>void
  </div>;
 }
 
+
+// UI isolated from Claude's engine updates.
+export {CompactMatch as MatchInteraction} from './CompactMatch';

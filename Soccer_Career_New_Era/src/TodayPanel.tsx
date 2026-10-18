@@ -1,3 +1,4 @@
+import {TodayCompetitions} from './TodayCompetitions';
 import {useState} from 'react';
 import {DAILY,WEEKDAYS,FOCUS,FOCUS_KEYS,todayIndex,isMatchToday,matchDayIndex,vacationPrice,focusPrice,type Daily,type TodayResult} from './development';
 import {LABELS,type Attr} from './engine';
@@ -63,12 +64,13 @@ export function TodayPanel({c,last,onTrain,onMatch}:{c:Career,last:TodayResult|n
         </div>;})}
       </div>
     </>}
-    {last&&<div className={`today-result${last.lucky?' lucky':''}`} role="status" aria-live="polite">
+    {last&&!last.lucky&&<div className="today-result" role="status" aria-live="polite">
       {last.lucky&&<span className="lucky-burst">럭키! 놀라운 성장!</span>}
       <p>{WEEKDAYS[last.day]}요일 · {last.text}</p>
       {last.gain>0&&<small>종합 능력 +{last.gain.toFixed(2)}</small>}
       {last.weekDone&&<small>한 주가 끝났습니다. 성장노트에 기록되었습니다.</small>}
     </div>}
+    <TodayCompetitions c={c}/>
     {done>0&&!last&&<p className="muted">이번 주 {done}일을 진행했습니다.</p>}
   </section>;
 }

@@ -55,7 +55,7 @@ it('a successful dribble takes time: the clock runs and both teams move while th
     if(m.ball.owner!==m.userId)continue;
     done=true;
     const carried=Math.abs(u.x-x0);expect(carried).toBeLessThanOrEqual(gain+1e-9);expect(carried).toBeGreaterThanOrEqual(Math.min(gain,dribbleMinimum(s.m,s.u,v))-.51);expect(m.decision).toBe(true);
-    if(carried<gain-1e-6)expect(m.players.some(o=>stopsCarry(m,u,o,u,s.d,0))).toBe(true);
+    if(carried<gain-1e-6)expect(m.log.at(-1)!.text).toContain('멈춰 섭니다'); // Collision is detected before the other players finish this slice.
     expect(m.clock-t0).toBeGreaterThan(0);expect(m.clock-t0).toBeLessThanOrEqual(CARRY.maxSlices*CARRY.dt*6);
     const moved=(team:number)=>m.players.filter(p=>p.team===team&&p.id!==m.userId&&Math.hypot(p.x-before[p.id].x,p.y-before[p.id].y)>.3).length;
     expect(moved(0)).toBeGreaterThan(3);expect(moved(1)).toBeGreaterThan(3);

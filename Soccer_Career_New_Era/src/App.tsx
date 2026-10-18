@@ -70,6 +70,7 @@ import * as storage from "./storage";
 import { Pitch } from "./Pitch";
 type Tab = "home" | "training" | "player" | "records" | "saves" | "players" | "team" | "season" | "market" | "career" | "rival";
 export default function App() {
+  const matchAnimating=useRef(false);
   const [c, setC] = useState<Career | null>(null),
     [tab, setTab] = useState<Tab>("home"),
     [creating, setCreating] = useState(false),
@@ -215,7 +216,7 @@ export default function App() {
     if (!c?.match || c.match.ended || paused) return;
     const interval = setInterval(() => {
       const m = live.current?.match;
-      if (!m || m.ended || m.decision || m.defending) return;
+      if (!m || m.ended || m.decision || m.defending || matchAnimating.current) return;
       const goals=m.goals?.length??0,insights=m.insight?.events.length??0;
       for (let i = 0; i < speed; i++) {
         step(m, 0.5);
@@ -609,7 +610,7 @@ export default function App() {
                         <small>AWAY</small>
                       </div>
                     </div>
-                    <MatchInteraction m={m} onChange={()=>{setTick(v=>v+1);persist(c!);}} toolbar={
+                    <MatchInteraction m={m} onAnimating={busy=>{matchAnimating.current=busy;}} onChange={()=>{setTick(v=>v+1);persist(c!);}} toolbar={
                     <div className="match-toolbar">
                       <button
                         className="secondary"
@@ -656,6 +657,7 @@ export default function App() {
                           {userPerformance(m).stats.assists} · 드리블 성공{" "}
                           {userPerformance(m).stats.dribbles ?? 0}
                         </p>
+                        <p>가로채기 {userPerformance(m).stats.interceptions} · 태클 성공 {userPerformance(m).stats.tackles} · 볼 경합 {userPerformance(m).stats.duelAttempts??0}회 · 결정적 수비 {userPerformance(m).stats.decisiveDefenses??0}</p>
                         <p>패스 {userPerformance(m).stats.completed}/{userPerformance(m).stats.passes} · 전진 패스 {userPerformance(m).stats.progressivePasses ?? 0} · 키패스 {userPerformance(m).stats.keyPasses ?? 0} · 기대 도움 {(userPerformance(m).stats.expectedAssists ?? 0).toFixed(2)}</p>
                         <MissionResult m={m}/>
                         {(m.traitNotes??(m.traitBoost?['실전파 발동! 오늘은 몸놀림이 남다릅니다.']:[])).map((t)=><p key={t} className="note">{traitNotice(t)}</p>)}

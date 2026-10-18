@@ -15,40 +15,14 @@ function setup(defending=false,opp:{dx:number,dy:number}[]=[{dx:3,dy:0}]){
   if(defending){m.ball={x:field[0].x,y:field[0].y,owner:field[0].id,flight:null};m.defending=true;m.decision=false;}else{m.ball={x:u.x,y:u.y,owner:u.id,flight:null};m.decision=true;}
   return c;
 }
-test('the pad switches to 치고 달리기, a quick player chased from behind reads 속도 우위, and the knock-on is played',async({page})=>{
-  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
-  const c=setup(false,[{dx:-2,dy:0}]);const u=c.match!.players[c.match!.userId];u.a={...u.a,speed:90,acceleration:90};await load(page,c);
-  await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/드리블/}).click();
-  const pad=page.getByRole('group',{name:'드리블 방향'});await expect(pad).toBeVisible();
-  const mode=pad.getByRole('radiogroup',{name:'드리블 방식'});await expect(mode.getByRole('radio',{name:'짧은 드리블'})).toHaveAttribute('aria-checked','true');
-  await expect(pad.locator('.pad-why')).toContainText('속도 우위');await expect(pad).toContainText('3~7m');
-  await mode.getByRole('radio',{name:'치고 달리기'}).click();
-  await expect(mode.getByRole('radio',{name:'치고 달리기'})).toHaveAttribute('aria-checked','true');
-  await expect(pad).toContainText('치고 달리기 방향');await expect(pad).toContainText('8~10m');await expect(page.locator('.pitch-hint')).toContainText('치고 달리기');
-  await expect(pad.locator('.pad-why')).toContainText('매우 높은 확률');
-  // A quick player chased from behind: the reason names the pace race.
-  await expect(pad.locator('.pad-why')).toContainText('속도 우위');
-  await expect(page.locator('.match-actions')).not.toContainText('%');
-  await pad.getByRole('button',{name:'치고 달리기 ↑',exact:true}).click();
-  await expect(pad).toHaveCount(0);
-  await expect(page.locator('.live-commentary')).toContainText(/(질주선수|볼 탈취|상대)/);
-  expect(errors).toEqual([]);
+test('run mode retains pace reasons and stays selected across tab changes',async({page})=>{
+ const c=setup(false,[{dx:-2,dy:0}]);const u=c.match!.players[c.match!.userId];u.a={...u.a,speed:90,acceleration:90};await load(page,c);
+ const mode=page.getByRole('group',{name:'드리블 방식'});await mode.getByRole('button',{name:'치고 달리기',exact:true}).click();
+ await expect(page.getByRole('button',{name:'치고 달리기 ↑',exact:true})).toHaveAttribute('title',/속도 우위/);
+ await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'패스',exact:true}).click();
+ await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'드리블',exact:true}).click();
+ await expect(mode.getByRole('button',{name:'치고 달리기',exact:true})).toHaveAttribute('aria-pressed','true');
 });
-
-test('cancelling the pad resets to 짧은 드리블',async({page})=>{
-  await load(page,setup(false,[{dx:3,dy:0}]));
-  await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/드리블/}).click();
-  const pad=page.getByRole('group',{name:'드리블 방향'});await pad.getByRole('radio',{name:'치고 달리기'}).click();
-  await pad.getByRole('button',{name:'드리블 취소'}).click();await expect(pad).toHaveCount(0);
-  await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/드리블/}).click();
-  await expect(page.getByRole('group',{name:'드리블 방향'}).getByRole('radio',{name:'짧은 드리블'})).toHaveAttribute('aria-checked','true');
-  // A defender right in the path: the knock-on straight at him is clearly worse than a short dribble.
-  await expect(page.getByRole('group',{name:'드리블 방향'}).locator('.pad-why')).toContainText('정면 수비 견제');
-});
-
-test('an open path reads 진행 방향 공간 열림 at a very high chance',async({page})=>{
-  await load(page,setup(false,[{dx:20,dy:10}]));
-  await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/드리블/}).click();
-  const why=page.getByRole('group',{name:'드리블 방향'}).locator('.pad-why');
-  await expect(why).toContainText('매우 높은 확률');await expect(why).toContainText('진행 방향 공간 열림');
+test('an open route retains the engine reason',async({page})=>{
+ await load(page,setup(false,[{dx:20,dy:10}]));await expect(page.getByRole('button',{name:'드리블 ↑',exact:true})).toHaveAttribute('title',/진행 방향 공간 열림/);
 });

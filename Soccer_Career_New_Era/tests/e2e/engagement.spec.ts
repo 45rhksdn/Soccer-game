@@ -12,6 +12,7 @@ test('match screen shows the 감독 미션 with live progress',async({page})=>{
   m.ball={x:u.x,y:u.y,owner:u.id,flight:null};m.decision=true;m.insight={chance:0,gains:{},events:[]};
   m.mission={id:'t',label:'슈팅 2회 이상',stat:'shots',target:2,cmp:'min'};u.stats.minutes=5;u.stats.shots=1;
   await load(page,c);
+  await page.locator('.cm-mission summary').click();
   const strip=page.getByRole('status',{name:'감독 미션'});await expect(strip).toBeVisible();
   await expect(strip).toContainText('슈팅 2회 이상');await expect(strip).toContainText('1 / 2');
   await expect(strip.locator('.eg-bar span')).toHaveCount(1);

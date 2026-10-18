@@ -15,7 +15,7 @@ test('live match: an opponent near me with the ball asks for a defensive choice;
   // On-ball moments are answered with a safe pass until the first defensive moment.
   for(let i=0;i<400&&!(await defense.count());i++){
     const pass=page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/});
-    if(await pass.count()&&!(await defense.count())){await pass.click().catch(()=>{});await page.locator('.target-options button:not(:disabled)').first().click().catch(()=>{});}
+    if(await pass.count()&&!(await defense.count())){await pass.click().catch(()=>{});await page.locator('.cm-targets button:not(:disabled)').first().click().catch(()=>{});await page.getByRole('button',{name:/에게 패스하기/}).click().catch(()=>{});}
     await page.waitForTimeout(150);
     if(await page.getByText('FULL TIME REPORT').count())break;
   }

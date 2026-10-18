@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { direction, type Match } from "./engine";
+import {attackOdds,offside} from "./tactical";
 
 // 0.8: the live match is drawn vertically and always shows the user's team attacking upward,
 // so the whole pitch fits one phone screen. The home-page ambient pitch stays horizontal.
@@ -29,6 +30,7 @@ export function screenToEngineVector(m: Match, sx: number, sy: number) {
   return attacksUp(m) ? { x: -sy, y: sx } : { x: sy, y: -sx };
 }
 
+export type PitchMotion={from:Record<number,{x:number,y:number}>;started:number;duration:number};
 export function Pitch({
   match,
   ambient = false,
@@ -37,7 +39,13 @@ export function Pitch({
   onPlayer,
   dribble = false,
   onDribble,
+  selectedTarget = null,
+  premium = false,
+  motion = null,
 }: {
+  selectedTarget?: number | null;
+  premium?: boolean;
+  motion?: PitchMotion|null;
   match?: Match | null;
   ambient?: boolean;
   vertical?: boolean;
@@ -59,10 +67,11 @@ export function Pitch({
     const draw = () => {
       c.width = v.w;
       c.height = v.h;
-      ctx.fillStyle = "#1d5c46";
+      ctx.fillStyle = premium ? "#102c2b" : "#1d5c46";
       ctx.fillRect(0, 0, v.w, v.h);
       const P = (x: number, y: number) => toCanvas(v, x, y);
       const ease = (id: number, x: number, y: number) => {
+        if(motion&&motion.from[id]){const progress=Math.min(1,(performance.now()-motion.started)/motion.duration),f=motion.from[id];const pos={x:f.x+(x-f.x)*progress,y:f.y+(y-f.y)*progress};shown.current.set(id,pos);return pos;}
         const s = shown.current.get(id);
         if (!s || Math.hypot(s.x - x, s.y - y) > 25) { const n = { x, y }; shown.current.set(id, n); return n; }
         s.x += (x - s.x) * 0.16; s.y += (y - s.y) * 0.16; return s;
@@ -75,7 +84,7 @@ export function Pitch({
         if (fill) { ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); } else ctx.strokeRect(x, y, w, h);
       };
       // Mowing stripes across the length.
-      for (let i = 0; i < 10; i++) rect(i * 10.5, 0, (i + 1) * 10.5, PITCH_W, i % 2 ? "#286e54" : "#24674f");
+      for (let i = 0; i < 10; i++) rect(i * 10.5, 0, (i + 1) * 10.5, PITCH_W, premium ? (i % 2 ? "#174239" : "#19473d") : (i % 2 ? "#286e54" : "#24674f"));
       ctx.strokeStyle = "#cfe3cbb0";
       ctx.lineWidth = 2;
       rect(0, 0, PITCH_L, PITCH_W);
@@ -122,12 +131,21 @@ export function Pitch({
           ctx.beginPath(); ctx.moveTo(x, y - 24); ctx.lineTo(x - 6, y - 33); ctx.lineTo(x + 6, y - 33); ctx.fill();
         }
         if (selectable && match && p.team === userTeam && p.id !== match.userId) {
-          ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 3;
+          ctx.strokeStyle = offside(match,match.players[p.id]) ? "#82948b" : "#70e3b6"; ctx.lineWidth = selectedTarget === p.id ? 5 : 2;
           ctx.beginPath(); ctx.arc(x, y, 23, 0, 7); ctx.stroke();
+          if(!offside(match,match.players[p.id])){
+            const chance=attackOdds(match,'pass',{targetId:p.id}).p;
+            ctx.fillStyle='#122421';ctx.fillRect(x-20,y+36,40,5);
+            ctx.fillStyle='#70e3b6';ctx.fillRect(x-20,y+36,40*chance,5);
+          }
+          if(selectedTarget===p.id){
+            const u=match.players[match.userId],[ux,uy]=P(u.x,u.y);
+            ctx.save();ctx.setLineDash([6,6]);ctx.beginPath();ctx.moveTo(ux,uy);ctx.lineTo(x,y);ctx.stroke();ctx.restore();
+          }
         }
         ctx.beginPath();
         ctx.arc(x, y, 15, 0, 7);
-        ctx.fillStyle = p.team === userTeam ? "#f2f1db" : "#e79562";
+        ctx.fillStyle = premium ? (p.team === userTeam ? "#d1f7e7" : "#e79e86") : (p.team === userTeam ? "#f2f1db" : "#e79562");
         ctx.fill();
         ctx.fillStyle = p.team === userTeam ? "#183c2e" : "#40251c";
         ctx.font = "bold 15px sans-serif";
@@ -170,7 +188,7 @@ export function Pitch({
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [match, ambient, selectable, dribble, v.vertical, v.up]);
+  }, [match, ambient, selectable, dribble, selectedTarget, premium, motion, v.vertical, v.up]);
   const clickable = (selectable || dribble) && !!match;
   return (
     <canvas
