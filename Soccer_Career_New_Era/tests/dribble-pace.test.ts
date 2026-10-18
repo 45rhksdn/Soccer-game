@@ -96,7 +96,8 @@ it('the knock-on in play: the shown chance is the real rate; success moves 8–1
   for(let k=0;k<N;k++){
     const m=structuredClone(base.m);m.seed=k*2654435761>>>0;const u=m.players[m.userId],x0=u.x,e0=u.energy;
     act(m,'dribble',{vector:fwd(base.d),run:true});
-    expect(u.energy).toBe(e0-ODDS.run.energy);
+    // A lost knock-on costs exactly the sprint; a won one also the few seconds of running that follow (0.13 carry).
+    if(m.ball.owner===m.userId){expect(u.energy).toBeLessThanOrEqual(e0-ODDS.run.energy);expect(u.energy).toBeGreaterThan(e0-ODDS.run.energy-.5);}else expect(u.energy).toBe(e0-ODDS.run.energy);
     if(m.ball.owner===m.userId){ok++;expect(Math.abs(u.x-x0)).toBeCloseTo(gain,6);}
     else{const landing={x:x0+base.d*gain,y:34},q=m.players[m.ball.owner!];expect(q.team).toBe(1);
       const nearest=m.players.filter(p=>p.team===1).sort((a,b)=>Math.hypot(a.x-landing.x,a.y-landing.y)-Math.hypot(b.x-landing.x,b.y-landing.y))[0];

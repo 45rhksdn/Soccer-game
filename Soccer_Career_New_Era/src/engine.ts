@@ -392,7 +392,9 @@ export const ON_LINE_RANGE = 62;
 /** Pass-target bonus for returning a give-and-go to the user. */
 export const ONE_TWO_BONUS = 8;
 /** AI preferences for the 0.10 actions (balance.test keeps the totals in range). */
-export const AI = { hopelessShot: .07, midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35, dribbleOpen: .02, lossMetres: 25 } as const;
+/** 0.13 carry: time slices of a dribble (each 3 game seconds), at most 3. */
+export const CARRY = { dt: .5, maxSlices: 3 } as const;
+export const AI = { hopelessShot: .07, midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35, dribbleOpen: .02, lossMetres: 25, shotWeight: 7.5 } as const;
 /** Missed shots that go out for a corner; saves parried for a corner; saves that drop loose in the box. */
 export const SET_PIECE = { cornerFromMiss: .3, cornerFromSave: .18, rebound: .14 } as const;
 /** Share of the new step taken each tick (the rest keeps the previous step), before acceleration. */
@@ -633,7 +635,7 @@ export function chooseAction(m: Match, p: Footballer): Action {
   for (const a of acts) {
     let utility = actionChance(m, a);
     if (a === "shoot")
-      utility = actionChance(m,a) * 7.5 + (distance < 22 ? .65 : distance < 35 ? AI.midRangeShot : -.32) - (actionChance(m,a)<AI.hopelessShot?1:0);
+      utility = actionChance(m,a) * AI.shotWeight + (distance < 22 ? .65 : distance < 35 ? AI.midRangeShot : -.32) - (actionChance(m,a)<AI.hopelessShot?1:0);
     if (a === "forward") utility += 0.12;
     if (a === "through") utility += p.a.vision / 550;
     if (a === "safe") utility -= 0.05;
@@ -720,8 +722,11 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
     const step=action==="dribble"?dribbleAdvance(m,p,vector,run):1;
     const landing={x:clamp(p.x+vector.x/length*step,1,104),y:clamp(p.y+vector.y/length*step,1,67)};
     if (random(m) < chance) {
+      const start={x:p.x,y:p.y};
       p.x=landing.x;
       p.y=landing.y;
+      // 0.13 the user's dribble plays out in time: teammates and opponents move while he carries the ball.
+      if(action==="dribble"&&p.id===m.userId&&m.userOnPitch!==false)carry(m,p,start,run);
       if(action==="dribble"){p.energy=Math.max(0,p.energy-(run?ODDS.run.energy:1));p.stats.dribbles=(p.stats.dribbles??0)+1;own(m,p);event(m,run?`${p.name}, 공을 길게 치고 달립니다! 수비를 따돌립니다!`:`${p.name}, 수비를 피해 공간으로 치고 나갑니다!`);}
       m.ball.x = p.x;
       m.ball.y = p.y;
@@ -795,52 +800,11 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
   }
   m.ball.owner = null;
 }
-export function step(m: Match, dt = 0.5, auto = false) {
-  if (m.ended || ((m.decision || m.defending) && !auto)) return;
-  if (m.defending) defend(m, "none"); // auto mode (fast simulation) never waits for a defensive choice
-  if (m.decision && auto) {
-    { const u = m.players[m.userId], a = chooseAction(m, u); act(m, a, a === "dribble" ? aiDribble(m, u) : {}); }
-  }
-  const prev = m.clock;
-  m.clock += dt * 6;
-  m.cooldown = Math.max(0, m.cooldown - dt);
-  m.nextAI -= dt;
-  if (prev < 2700 && m.clock >= 2700) {
-    m.half = 2;
-    m.guard = null;
-    for (const p of m.players) p.energy = clamp(p.energy + 8, 0, 100);
-    event(m, "하프타임 · 진영 교체");
-    kickoff(m, 1);
-  }
-  if (m.clock >= m.endAt) {
-    m.ended = true;
-    m.decision = false;
-    m.clock = m.endAt;
-    event(m, "경기 종료");
-    return;
-  }
-  if (m.benchEntry && m.clock >= m.benchEntry.minute * 60) {
-    const slot = m.players[m.userId], incoming = m.benchEntry;
-    (m.replacedPlayers??=[]).push({rosterId:m.rosterIds?.[m.userId]??'unknown',player:structuredClone(slot)});
-    if(m.rosterIds)m.rosterIds[m.userId]='hero';
-    slot.name = incoming.name; slot.a = {...incoming.a}; slot.energy = incoming.energy;
-    slot.number = incoming.number; slot.stats = emptyStats(); slot.yellow = 0; slot.fx = incoming.fx;
-    m.userOnPitch = true; m.benchEntry = undefined;
-    if (m.ball.owner === slot.id) own(m, slot);
-    event(m, `${slot.name} 교체 투입 · 감독의 출전 결정`);
-  }
-  if (m.userExitMinute && m.clock >= m.userExitMinute * 60 && m.userOnPitch !== false && !m.players[m.userId].red) {
-    const slot=m.players[m.userId]; m.userFinalStats={...slot.stats};m.userFinalEnergy=slot.energy;
-    (m.replacedPlayers??=[]).push({rosterId:'hero',player:structuredClone(slot)});
-    const replacement=m.exitReplacement;
-    slot.name=replacement?.name??'교체 선수';slot.a=replacement?.a??slot.a;slot.stats=emptyStats();slot.energy=replacement?.energy??100;slot.number=replacement?.number??19;slot.fx=replacement?.fx;
-    if(m.rosterIds)m.rosterIds[m.userId]=replacement?.rosterId??'unknown';
-    m.userOnPitch=false;m.decision=false;m.defending=false;m.guard=null;event(m,'감독 교체 지시 · 오늘의 출전 종료');
-  }
-  const owner = m.ball.owner === null ? null : m.players[m.ball.owner];
-  if (owner) m.possession[owner.team] += dt;
-  // Keep the attacking shape while a pass travels, rather than returning to kickoff anchors.
-  const attack = owner ?? (m.ball.flight?.kind === "pass" ? {...m.players[m.ball.flight.from],id:-1,x:m.ball.flight.x,y:m.ball.flight.y} : null);
+/**
+ * Everyone's off-ball movement for one time slice (attack / support / press / recover / keeper), plus minutes and
+ * energy. `skip` is a player whose position is set elsewhere (0.13: the dribbler during a carry). No random numbers.
+ */
+function moveTeams(m: Match, dt: number, owner: Footballer | null, attack: Footballer | null, skip?: number) {
   const movement:{p:Footballer;x:number;y:number}[]=[];
   for (const p of m.players) {
     if (!active(p)) continue;
@@ -995,9 +959,77 @@ export function step(m: Match, dt = 0.5, auto = false) {
       const len = Math.hypot(sx, sy); if (len > v) { sx *= v / len; sy *= v / len; }
     }
     p.vx = sx; p.vy = sy;
-    movement.push({p,x:clamp(p.x+sx,1,104),y:clamp(p.y+sy,1,67)});
+    if (p.id !== skip) movement.push({p,x:clamp(p.x+sx,1,104),y:clamp(p.y+sy,1,67)});
   }
   for(const {p,x,y} of movement){p.x=x;p.y=y;}
+}
+/**
+ * 0.13 a successful dribble takes time: the dribbler carries the ball from `from` to the landing spot over a few
+ * slices while both teams keep moving (supporting runs, pressing, the back line dropping). The clock runs on, but
+ * never across half time or full time. No random numbers and no extra duels: the dribble roll already decided it.
+ */
+function carry(m: Match, p: Footballer, from: { x: number; y: number }, run: boolean) {
+  const to = { x: p.x, y: p.y }, gap = Math.hypot(to.x - from.x, to.y - from.y);
+  const pace = (2.6 + p.a.speed / 32) * (0.55 + p.energy / 222) * 0.68 * (run ? RUN_SPEED : 1) * CARRY.dt;
+  const limit = m.clock < 2700 ? 2700 : m.endAt;
+  const slices = Math.max(0, Math.min(CARRY.maxSlices, Math.ceil(gap / pace), Math.floor((limit - m.clock - 1e-9) / (CARRY.dt * 6))));
+  for (let i = 1; i <= slices; i++) {
+    p.x = from.x + (to.x - from.x) * i / slices; p.y = from.y + (to.y - from.y) * i / slices;
+    p.vx = (to.x - from.x) / slices; p.vy = (to.y - from.y) / slices;
+    m.ball.x = p.x; m.ball.y = p.y;
+    m.clock += CARRY.dt * 6;
+    m.possession[p.team] += CARRY.dt;
+    moveTeams(m, CARRY.dt, p, p, p.id);
+  }
+  p.x = to.x; p.y = to.y;
+}
+export function step(m: Match, dt = 0.5, auto = false) {
+  if (m.ended || ((m.decision || m.defending) && !auto)) return;
+  if (m.defending) defend(m, "none"); // auto mode (fast simulation) never waits for a defensive choice
+  if (m.decision && auto) {
+    { const u = m.players[m.userId], a = chooseAction(m, u); act(m, a, a === "dribble" ? aiDribble(m, u) : {}); }
+  }
+  const prev = m.clock;
+  m.clock += dt * 6;
+  m.cooldown = Math.max(0, m.cooldown - dt);
+  m.nextAI -= dt;
+  if (prev < 2700 && m.clock >= 2700) {
+    m.half = 2;
+    m.guard = null;
+    for (const p of m.players) p.energy = clamp(p.energy + 8, 0, 100);
+    event(m, "하프타임 · 진영 교체");
+    kickoff(m, 1);
+  }
+  if (m.clock >= m.endAt) {
+    m.ended = true;
+    m.decision = false;
+    m.clock = m.endAt;
+    event(m, "경기 종료");
+    return;
+  }
+  if (m.benchEntry && m.clock >= m.benchEntry.minute * 60) {
+    const slot = m.players[m.userId], incoming = m.benchEntry;
+    (m.replacedPlayers??=[]).push({rosterId:m.rosterIds?.[m.userId]??'unknown',player:structuredClone(slot)});
+    if(m.rosterIds)m.rosterIds[m.userId]='hero';
+    slot.name = incoming.name; slot.a = {...incoming.a}; slot.energy = incoming.energy;
+    slot.number = incoming.number; slot.stats = emptyStats(); slot.yellow = 0; slot.fx = incoming.fx;
+    m.userOnPitch = true; m.benchEntry = undefined;
+    if (m.ball.owner === slot.id) own(m, slot);
+    event(m, `${slot.name} 교체 투입 · 감독의 출전 결정`);
+  }
+  if (m.userExitMinute && m.clock >= m.userExitMinute * 60 && m.userOnPitch !== false && !m.players[m.userId].red) {
+    const slot=m.players[m.userId]; m.userFinalStats={...slot.stats};m.userFinalEnergy=slot.energy;
+    (m.replacedPlayers??=[]).push({rosterId:'hero',player:structuredClone(slot)});
+    const replacement=m.exitReplacement;
+    slot.name=replacement?.name??'교체 선수';slot.a=replacement?.a??slot.a;slot.stats=emptyStats();slot.energy=replacement?.energy??100;slot.number=replacement?.number??19;slot.fx=replacement?.fx;
+    if(m.rosterIds)m.rosterIds[m.userId]=replacement?.rosterId??'unknown';
+    m.userOnPitch=false;m.decision=false;m.defending=false;m.guard=null;event(m,'감독 교체 지시 · 오늘의 출전 종료');
+  }
+  const owner = m.ball.owner === null ? null : m.players[m.ball.owner];
+  if (owner) m.possession[owner.team] += dt;
+  // Keep the attacking shape while a pass travels, rather than returning to kickoff anchors.
+  const attack = owner ?? (m.ball.flight?.kind === "pass" ? {...m.players[m.ball.flight.from],id:-1,x:m.ball.flight.x,y:m.ball.flight.y} : null);
+  moveTeams(m, dt, owner, attack);
   updateGuard(m);
   if (m.ball.flight) {
     const f = m.ball.flight;

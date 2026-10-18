@@ -1,3 +1,15 @@
+# 0.13.0 (2026-10-18, Claude, `claude/v0.13-finishing-carry` ← `claude/v0.12-pace-dribble`)
+- 요청: 노마크 찬스 득점률을 현실적으로, 드리블할 때 다른 선수도 시간 흐름에 맞게 움직이게.
+- 코드:
+  - tactical: `ODDS.shot`(gkFrom/gkPerMetre/aerialSave/block, 압박 1.2), `ODDS.close`.
+  - engine: `moveTeams`(step에서 떼어 냄), `carry`, `CARRY`, `AI.shotWeight`(값 7.5 그대로).
+  - Pitch: 그리는 위치를 부드럽게 보간.
+- 테스트: `tests/finishing-carry.test.ts` 5개, `tests/e2e/v13.spec.ts` 2개 × PC·모바일. `dribble-pace` 치고 달리기 체력 기대값 갱신(성공 시 이동 시간만큼 체력 추가 소모).
+- 측정: reports/v013-finishing-carry.md, TEST_REPORT 최상단.
+- 한계:
+  - carry는 사용자 드리블에만 쓴다. AI 드리블은 기존처럼 다음 행동까지 대기하는 동안 모두가 움직인다.
+  - 슈팅 수가 경기당 23.5에서 21.2로 줄었다. 막힌 슛의 확률이 내려가 AI가 덜 쏘기 때문이다.
+
 # 0.12.0 (2026-10-18, Claude, `claude/v0.12-pace-dribble` ← `claude/v0.11-matchup-odds`)
 - 요청: 빈 방향 드리블은 거의 100%, 빠른 선수의 이점, 치고 달리기 선택지. 앞서 제안한 구상 3가지를 모두 반영했다.
 - 코드:

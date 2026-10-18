@@ -48,6 +48,9 @@ export function Pitch({
   onDribble?: (vector: { x: number; y: number }) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // 0.13 what is drawn eases toward the engine positions, so a dribble's carry (several seconds of play at once)
+  // shows everyone moving rather than jumping. Kick-offs and other jumps over 25 m snap.
+  const shown = useRef(new Map<number, { x: number; y: number }>());
   const v = view(vertical, match ? attacksUp(match) : true);
   useEffect(() => {
     const c = ref.current!;
@@ -59,6 +62,13 @@ export function Pitch({
       ctx.fillStyle = "#1d5c46";
       ctx.fillRect(0, 0, v.w, v.h);
       const P = (x: number, y: number) => toCanvas(v, x, y);
+      const ease = (id: number, x: number, y: number) => {
+        const s = shown.current.get(id);
+        if (!s || Math.hypot(s.x - x, s.y - y) > 25) { const n = { x, y }; shown.current.set(id, n); return n; }
+        s.x += (x - s.x) * 0.16; s.y += (y - s.y) * 0.16; return s;
+      };
+      const at = new Map<number, { x: number; y: number }>();
+      if (match) for (const p of match.players) at.set(p.id, ease(p.id, p.x, p.y));
       const rect = (x1: number, y1: number, x2: number, y2: number, fill?: string) => {
         const [a, b] = P(x1, y1), [cc, d] = P(x2, y2);
         const x = Math.min(a, cc), y = Math.min(b, d), w = Math.abs(cc - a), h = Math.abs(d - b);
@@ -98,7 +108,7 @@ export function Pitch({
       const userTeam = match ? match.players[match.userId].team : 0;
       for (const p of players) {
         if (p.red || p.injured) continue;
-        const [x, y] = P(p.x, p.y),
+        const q = (match && at.get(p.id)) || p, [x, y] = P(q.x, q.y),
           user = match ? p.id === match.userId && match.userOnPitch !== false : p.id === 9;
         ctx.beginPath();
         ctx.ellipse(x + 2, y + 7, 11, 6, 0, 0, 7);
@@ -143,7 +153,7 @@ export function Pitch({
       }
       // Dribble mode: eight arrows around the user; any tap on the pitch sets the direction.
       if (dribble && match) {
-        const u = match.players[match.userId], [ux, uy] = P(u.x, u.y);
+        const u = at.get(match.userId) ?? match.players[match.userId], [ux, uy] = P(u.x, u.y);
         ctx.fillStyle = "#ffd84ae6"; ctx.strokeStyle = "#1b3a2c"; ctx.lineWidth = 2;
         for (let i = 0; i < 8; i++) {
           const a = (i * Math.PI) / 4, r = 46, ax = ux + Math.cos(a) * r, ay = uy + Math.sin(a) * r;
@@ -152,7 +162,7 @@ export function Pitch({
           ctx.fill(); ctx.stroke(); ctx.restore();
         }
       }
-      const b = match?.ball ?? { x: 53, y: 33 }, [bx, by] = P(b.x, b.y);
+      const b0 = match?.ball ?? { x: 53, y: 33 }, b = match ? ease(-1, b0.x, b0.y) : b0, [bx, by] = P(b.x, b.y);
       ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#19352b"; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(bx, by, 5, 0, 7); ctx.fill(); ctx.stroke();
       if (ambient) { ctx.fillStyle = "#08271c44"; ctx.fillRect(0, 0, v.w, v.h); }

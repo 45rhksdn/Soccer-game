@@ -76,7 +76,7 @@ export function baseShotChance(m:Match,p:Footballer,a:Action){
  const r=goalDistance(m,p),kind=a==='shoot'?(r<=22?'closeShot':'longShot'):a;
  const quality=(kind==='curl'?.7*p.a.curve+.3*p.a.finishing: .55*p.a[kind==='longShot'?'longShot':'shooting']+.45*p.a.finishing)/100;
  const progress=kind==='closeShot'?clamp((22-r)/21,0,1):clamp((52.5-r)/36,0,1);
- const low=.05+.10*progress,high=kind==='closeShot'?.15+.60*progress:.10+.25*progress;
+ const low=.05+.10*progress,high=kind==='closeShot'?ODDS.close.high+ODDS.close.slope*progress:.10+.25*progress;
  const angle=clamp(1-Math.abs(34-p.y)/60,.45,1);
  return (low+(high-low)*quality)*angle;
 }
@@ -117,7 +117,10 @@ export const ODDS={
  advance:{dribbleMin:3,dribbleMax:7,runMin:8,runMax:10},
  passer:{block:.2,edgeShare:.6},
  lane:{reach:2.5,reachRead:1.5,base:.13,skill:.24},
- shot:{press:.7,edgeShare:.6,gkBase:.33,gkPerMetre:.015,gkMax:.62,gk:.24,pressMax:.75},
+ // 0.13 keeper: close in he barely reacts (from 5 m), farther out he sees it coming (+3%/m, up to 62%).
+ shot:{press:1.2,edgeShare:.6,gkFrom:5,gkPerMetre:.03,gkMax:.62,gk:.24,pressMax:.9,block:.6,aerialSave:.33},
+ // 0.13 close-range envelope ceiling (an unpressured close shot): high = closeHigh + closeSlope × progress.
+ close:{high:.2,slope:.7},
  hold:{block:.3,edgeShare:.6},
  tackle:{base:.40,skill:.12,edge:.26},slide:{base:.20,skill:.12,edge:.22},press:{base:.55,skill:.10,edge:.18},
 } as const;
@@ -208,9 +211,10 @@ export function attackOdds(m:Match,a:Action,opts:AttackOptions={}):Odds{
    const list=interferers(m,p,goal.x-p.x,goal.y-p.y),skill=p.a.composure*.5+p.a.finishing*.3+p.a.strength*.2;
    const press=Math.min(ODDS.shot.pressMax,covered(list.map(x=>x.i*ODDS.shot.press*(1-ODDS.shot.edgeShare*edge(skill-pressSkill(x.o))))));
    const block=shotBlockAt(m,p.team,p.x,p.y),g=opponentKeeper(m,p),gq=g?keeperQuality(g):.5;
-   // The keeper: an average one stops gkBase of what would score from 11 m, more from farther (he sees it coming), up to gkMax.
-   const save=Math.min(ODDS.shot.gkMax,ODDS.shot.gkBase+ODDS.shot.gkPerMetre*Math.max(0,r-11));
-   mult=(1-press)*(1-.4*block)*(1-save+ODDS.shot.gk*(.5-gq));
+   // The keeper: an average one saves more the farther out the shot is (0 at 5 m, +3%/m, up to gkMax).
+   // Headers and volleys off a cross carry less power and placement: the keeper keeps at least the 0.11 close save.
+   const save=Math.max(a==='header'||a==='volley'?ODDS.shot.aerialSave:0,Math.min(ODDS.shot.gkMax,ODDS.shot.gkPerMetre*Math.max(0,r-ODDS.shot.gkFrom)));
+   mult=(1-press)*(1-ODDS.shot.block*block)*(1-save+ODDS.shot.gk*(.5-gq));
    reasons.push([r>25?.6:0,'먼 거리'],[r<10?.5:0,'골문 가까움'],[clamp(1-Math.abs(34-p.y)/60,.45,1)<.62?.45:0,'각도 좁음'],[block>.35?block:0,'슈팅 경로 차단'],[press>.12?press+.1:0,'주변 압박'],[gq>.7?.3:gq<.35?.3:0,gq>.7?'골키퍼 강함':'골키퍼 약함']);
    return b;
  };
