@@ -1,3 +1,14 @@
+# 0.10.0 (2026-10-18, Claude, `claude/v0.10-attacking-play` ← `claude/v0.9.1-on-transfers`)
+- 공격 움직임을 다시 썼다(engine.ts `step`의 support/recover 분기). 조정값은 모두 export 상수에 모았다.
+  - 움직임: `FINAL_THIRD`, `RUN_*`, `LINE_DROP`(감독 성향별), `ON_LINE_RANGE`, `OFF_BALL_PACE`, `INERTIA_BASE`
+  - AI 선택: `AI`, 세트피스: `SET_PIECE`, 크로스: tactical `CROSS`
+- 새 행동은 `cross`, `cutback`, `header`, `volley`이고, 상태로 `Match.aerial`, `setPiece`, `oneTwo`와 `Footballer.run`, `vx`, `vy`가 추가됐다. 모두 선택 항목이라 저장 형식은 그대로다.
+- 결정성을 지키려고 노이즈와 침투 타이밍은 경기 난수가 아니라 `hash32`/`hashUnit`/`wobble`로 계산한다. 코너킥과 세컨드 볼만 난수를 쓴다.
+- 검증 테스트는 `tests/attacking.test.ts`(공격수 박스 수신 14% 이상, 골·슈팅·코너킥 범위)와 `tests/e2e/v10.spec.ts`(헤더/발리, 크로스, 코너킥 키커)다.
+- 남은 후보: 윙어끼리 자리 바꾸기, 골대 근처 프리킥, 하이라이트 저장.
+
+---
+
 # 0.9.1 (2026-10-18, Claude, `claude/v0.9.1-on-transfers` ← Codex `codex/v0.9-world-transfers` 958d9ba)
 Codex v0.9(11개 리그·이적 데스크) 위에 사용자 요청 5가지를 반영했다. Codex 브랜치는 직접 수정하지 않았고, PR은 Codex 브랜치로 보낸다.
 1. 졸업이나 계약 만료 시 '다음 시즌 시작'을 누르면 안내와 함께 이적 시장으로 이동한다(`career.contractNeeded` → `WorldPanel.onNeedContract`).

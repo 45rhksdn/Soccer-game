@@ -16,6 +16,8 @@ function Chance({p,prefix='',tone='dark'}:{p:number,prefix?:string,tone?:'dark'|
 const ICON:Record<string,string>={
  closeShot:'M12 3a9 9 0 1 0 .01 0M12 7l3 2.2-1.2 3.6h-3.6L9 9.2z',longShot:'M12 3a9 9 0 1 0 .01 0M12 7a5 5 0 1 0 .01 0M12 11a1 1 0 1 0 .01 0',
  curl:'M5 19C5 9 12 5 19 6M15 3l4 3-3 4',dribble:'M5 19L19 5M10 5h9v9',pass:'M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4',
+ header:'M12 3a3 3 0 1 0 .01 0M12 9v4M8 21l4-8 4 8M18 4l3-1M19 8h3',volley:'M4 20l6-6 3 3 7-7M15 4a3 3 0 1 0 .01 0',
+ cross:'M4 20C8 6 14 4 20 6M17 3l3 3-3 3M4 20h4',cutback:'M20 6v12H8M11 15l-3 3 3 3',
  tackle:'M4 18h10l6-6M14 18l-4-6M4 12h6',slide:'M3 17h11c3 0 5-2 7-5M3 17l4-4',press:'M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z',predict:'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12M12 9a3 3 0 1 0 .01 0',
 };
 function Icon({name}:{name:string}){return <svg className="tile-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICON[name]??ICON.pass}/></svg>;}

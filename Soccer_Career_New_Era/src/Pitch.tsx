@@ -129,6 +129,18 @@ export function Pitch({
           ctx.strokeText(match.players[p.id].name, x, y + 27); ctx.fillText(match.players[p.id].name, x, y + 27);
         }
       }
+      // 0.10 the user's run in behind: a dashed arrow to where the through ball should go.
+      if (match && match.userOnPitch !== false) {
+        const u = match.players[match.userId];
+        if (u.run && u.run.until > match.clock && match.ball.owner !== u.id) {
+          const [ux, uy] = P(u.x, u.y), [rx, ry] = P(u.run.x, u.run.y);
+          ctx.save(); ctx.strokeStyle = "#f4f78a"; ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
+          ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(rx, ry); ctx.stroke(); ctx.setLineDash([]);
+          const a = Math.atan2(ry - uy, rx - ux); ctx.fillStyle = "#f4f78a";
+          ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx - 12 * Math.cos(a - .4), ry - 12 * Math.sin(a - .4)); ctx.lineTo(rx - 12 * Math.cos(a + .4), ry - 12 * Math.sin(a + .4)); ctx.fill();
+          ctx.restore();
+        }
+      }
       // Dribble mode: eight arrows around the user; any tap on the pitch sets the direction.
       if (dribble && match) {
         const u = match.players[match.userId], [ux, uy] = P(u.x, u.y);

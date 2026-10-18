@@ -1,4 +1,4 @@
-import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, type AttackOptions } from "./tactical";
+import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, runPoint, crossTarget, cutbackTarget, boxMates, type AttackOptions } from "./tactical";
 /** Weight of an open shooting lane when attackers pick their receiving spot near goal. */
 export const SHOT_LANE_WEIGHT = 3;
 /** Pure seeded football simulation. No DOM, timers, or external services. Pitch 105 x 68m. */
@@ -38,9 +38,11 @@ export const LABELS: Record<Attr, string> = {
 };
 export type Position = "ST" | "CM" | "CB" | "LW" | "RW" | "LB" | "RB" | "GK";
 export type Action =
-  "safe" | "forward" | "through" | "dribble" | "shoot" | "hold" | "closeShot" | "longShot" | "curl" | "pass";
+  "safe" | "forward" | "through" | "dribble" | "shoot" | "hold" | "closeShot" | "longShot" | "curl" | "pass" |
+  "cross" | "cutback" | "header" | "volley";
 export const ACTIONS: Record<Action, string> = {
   closeShot:"근거리 슛", longShot:"중거리 슛", curl:"감아차기", pass:"패스",
+  cross:"크로스", cutback:"컷백", header:"헤더", volley:"발리",
   safe: "안전한 패스",
   forward: "전진 패스",
   through: "스루패스",
@@ -125,6 +127,10 @@ export type Footballer = {
   injured: boolean;
   mode: "shape" | "press" | "support" | "attack" | "recover";
   laneOffset?: {until:number;value:number};
+  /** 0.10 timed run in behind the last line (target point), and the last step for inertia. */
+  run?: {until:number;x:number;y:number};
+  vx?: number;
+  vy?: number;
   fx?: MatchFx;
 };
 export type Ball = {
@@ -148,6 +154,8 @@ export type Ball = {
     interceptor?: number;
     /** 0.9: the shot the player chose (counts 중거리 슛 / 감아차기 goals). */
     shotType?: Action;
+    /** 0.10 a lofted cross: the receiver meets it in the air (header / volley). */
+    aerial?: boolean;
   };
 };
 /**
@@ -207,6 +215,12 @@ export type Match = {
   competition?: string;
   tactics?: [string,string];
   mission?: MatchMission;
+  /** 0.10 give-and-go: the passer (user) expects the ball back until this clock. */
+  oneTwo?: { to: number; until: number };
+  /** 0.10 a cross reached this player: header / volley are available until the clock passes `until`. */
+  aerial?: { to: number; until: number };
+  /** 0.10 a corner kick is being taken by the current owner. */
+  setPiece?: "corner";
 };
 // ── 0.6 defensive choices (interactive play only) ─────────────────────
 // When an opponent carries the ball close to the user, the live match pauses for a defensive
@@ -366,6 +380,55 @@ export const direction = (m: Match, t: number) =>
 const active = (p: Footballer) => !p.red && !p.injured;
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
+// ── 0.10 attacking movement ───────────────────────────────────────────
+/** Ball within this distance of goal: forwards occupy the box. */
+export const FINAL_THIRD = 46;
+/** Timed runs: ball range, decision window (clock seconds), base chance per window, sprint factor. */
+export const RUN_START_GAP = 7, RUN_BALL_RANGE = 60, RUN_WINDOW = 9, RUN_CHANCE = .42, RUN_SPEED = 1.15, RUN_DEPTH = 18;
+/** Back-line depth from its own goal = ball depth × LINE_DROP + 3 (6–36 m), by the defending coach's style. */
+export const LINE_DROP = { 수비: .28, 역습: .32, 점유: .37, default: .32 } as const;
+/** Ball within this distance of goal: forwards push up level with the last defender. */
+export const ON_LINE_RANGE = 62;
+/** Pass-target bonus for returning a give-and-go to the user. */
+export const ONE_TWO_BONUS = 8;
+/** AI preferences for the 0.10 actions (balance.test keeps the totals in range). */
+export const AI = { midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35 } as const;
+/** Missed shots that go out for a corner; saves parried for a corner; saves that drop loose in the box. */
+export const SET_PIECE = { cornerFromMiss: .3, cornerFromSave: .18, rebound: .14 } as const;
+/** Share of the new step taken each tick (the rest keeps the previous step), before acceleration. */
+export const INERTIA_BASE = .45;
+/** Off-the-ball speed relative to the pre-0.10 pace. */
+export const OFF_BALL_PACE = 1.4;
+function hash32(x: number) {
+  x |= 0; x ^= x >>> 16; x = Math.imul(x, 0x7feb352d); x ^= x >>> 15; x = Math.imul(x, 0x846ca68b); x ^= x >>> 16;
+  return x >>> 0;
+}
+/** Deterministic value in [0,1) for a player, a purpose (salt) and a time window — never draws from the match RNG. */
+function hashUnit(m: Match, id: number, salt: number, window: number) {
+  return hash32(m.seed ^ Math.imul(id + 1, 0x9e3779b1) ^ Math.imul(salt + 7, 0x85ebca6b) ^ Math.imul(Math.floor(m.clock / window) + 3, 0xc2b2ae35)) / 4294967296;
+}
+/** Smooth per-player wobble in [-1,1] (value noise over 6-second knots) — replaces the old shared sine rhythm. */
+function wobble(m: Match, id: number, salt: number) {
+  const t = m.clock / 6, i = Math.floor(t), f = t - i, s = f * f * (3 - 2 * f);
+  const h = (k: number) => hash32(m.seed ^ Math.imul(id + 1, 0x27d4eb2d) ^ Math.imul(salt + 11, 0x165667b1) ^ Math.imul(k + 5, 0xd3a2646c)) / 2147483648 - 1;
+  return h(i) * (1 - s) + h(i + 1) * s;
+}
+/** Second-last opponent (x × direction): the offside line for `team`. */
+function offsideLine(m: Match, team: number) {
+  const d = direction(m, team);
+  return m.players.filter(q => q.team !== team && active(q)).map(q => q.x * d).sort((a, b) => b - a)[1] ?? 105;
+}
+/** Starts a run from level with the line to a point behind it, towards goal. */
+function startRun(m: Match, p: Footballer, backLine = offsideLine(m, p.team)) {
+  const d = direction(m, p.team), goal = (d > 0 ? 105 : 0) * d;
+  const depth = Math.min(backLine + RUN_DEPTH, goal - 7);
+  p.run = { until: m.clock + 12, x: d * Math.max(depth, p.x * d + 4), y: clamp(p.y + (34 - p.y) * .55, 14, 54) };
+}
+/** The midfielder making the late run into the box (rotates every 150 s). */
+function lateRunner(m: Match, p: Footballer) {
+  const cms = m.players.filter(q => q.team === p.team && q.pos === 'CM' && active(q));
+  return cms.length > 0 && cms[Math.floor(m.clock / 150) % cms.length].id === p.id;
+}
 function event(m: Match, text: string) {
   m.log.push({ time: m.clock, text });
   if (m.log.length > 120) m.log.shift();
@@ -374,6 +437,7 @@ function kickoff(m: Match, team: 0 | 1) {
   for (const p of m.players) {
     p.x = direction(m, p.team) > 0 ? p.homeX : 105 - p.homeX;
     p.y = p.homeY;
+    p.run = undefined; p.vx = undefined; p.vy = undefined;
   }
   const p =
     m.players.find((p) => p.team === team && p.pos === "ST" && active(p)) ||
@@ -386,6 +450,8 @@ function kickoff(m: Match, team: 0 | 1) {
 }
 function own(m: Match, p: Footballer) {
   if (m.lastPass && m.players[m.lastPass.from].team !== p.team) m.lastPass = null;
+  if (m.aerial && m.aerial.to !== p.id) m.aerial = undefined;
+  if (m.setPiece && m.ball.owner !== p.id) m.setPiece = undefined;
   if (m.assistBoost && m.assistBoost.to !== p.id) m.assistBoost = null;
   m.ball = { x: p.x, y: p.y, owner: p.id, flight: null };
   m.decision = p.id === m.userId && m.userOnPitch !== false;
@@ -512,31 +578,36 @@ function targets(m: Match, p: Footballer, act: Action) {
   const offside = (q:Footballer) => q.x*d > p.x*d && q.x*d > line && q.x*d > 52.5*d;
   return m.players
     .filter((q) => q.team === p.team && q.id !== p.id && active(q) && !offside(q))
-    .map((q) => ({
-      p: q,
-      score:
+    .map((q) => {
+      // 0.10 a runner is judged where the ball will meet him (the end of his run).
+      const aim = runPoint(m, q), ox = q.x, oy = q.y, running = aim.x !== ox || aim.y !== oy;
+      if (running) { q.x = aim.x; q.y = aim.y; }
+      const score =
         (act === "safe"
           ? 0
-          : (q.x - p.x) * d * (act === "through" ? 0.9 : 0.55)) -
+          : (q.x - p.x) * d * (act === "through" || running ? 0.9 : 0.55)) -
         dist(p, q) * 0.18 -
         pressure(m, q) * 16 -
         laneRisk(m, p, q) * 26 +
         (q.pos === "GK" ? -10 : 0) +
-        (act === "safe" ? 0 : shotQuality(m,q) * 65 * (.5+p.a.vision/100)),
-    }))
+        (m.oneTwo && m.oneTwo.to === q.id && m.clock <= m.oneTwo.until ? ONE_TWO_BONUS : 0) +
+        (act === "safe" ? 0 : shotQuality(m,q) * 65 * (.5+p.a.vision/100));
+      q.x = ox; q.y = oy;
+      return { p: q, score };
+    })
     .sort((a, b) => b.score - a.score);
 }
 export function actionChance(m:Match,action:Action,options:AttackOptions={}) {
   const p=m.ball.owner===null?null:m.players[m.ball.owner];
   if(!p)return 0;
-  const target=options.targetId??targets(m,p,action)[0]?.p.id;
+  const target=options.targetId??(action==='cross'?crossTarget(m,p)?.id:action==='cutback'?cutbackTarget(m,p)?.id:['header','volley','closeShot','longShot','curl','shoot','dribble','hold'].includes(action)?undefined:targets(m,p,action)[0]?.p.id);
   return attackChance(m,action,{...options,targetId:target});
 }
 export function availableActions(m:Match):Action[]{
-  return (['closeShot','longShot','curl','dribble','pass'] as Action[]).filter(a=>attackAllowed(m,a));
+  return (['header','volley','closeShot','longShot','curl','cross','cutback','dribble','pass'] as Action[]).filter(a=>attackAllowed(m,a));
 }
 export function chooseAction(m: Match, p: Footballer): Action {
-  const acts = (["safe","forward","through","dribble","shoot","hold"] as Action[]).filter(a=>attackAllowed(m,a));
+  const acts = (["safe","forward","through","dribble","shoot","hold","cross","cutback","header","volley"] as Action[]).filter(a=>attackAllowed(m,a));
   const d = direction(m, p.team),
     distance = Math.hypot((d > 0 ? 105 : 0) - p.x, 34 - p.y);
   let best: Action = "safe",
@@ -544,12 +615,16 @@ export function chooseAction(m: Match, p: Footballer): Action {
   for (const a of acts) {
     let utility = actionChance(m, a);
     if (a === "shoot")
-      utility = actionChance(m,a) * 7.5 + (distance < 22 ? .65 : distance < 35 ? .15 : -.32) - (actionChance(m,a)<.04?1:0);
+      utility = actionChance(m,a) * 7.5 + (distance < 22 ? .65 : distance < 35 ? AI.midRangeShot : -.32) - (actionChance(m,a)<.04?1:0);
     if (a === "forward") utility += 0.12;
     if (a === "through") utility += p.a.vision / 550;
     if (a === "safe") utility -= 0.05;
     if (a === "dribble") utility += pressure(m, p) < 0.6 ? 0.24 : -0.22;
     if (a === "hold") utility -= 0.42;
+    // 0.10 meet a cross first time; deliver from wide areas; cut back from the byline; corners are crossed.
+    if (a === "header" || a === "volley") utility = actionChance(m, a) * 7.5 + AI.aerial;
+    if (a === "cross") utility = actionChance(m, a) * AI.crossWeight + (Math.abs(p.y - 34) > 18 ? AI.crossWide : 0) + boxMates(m, p).length * AI.crossPerTarget + (m.setPiece === "corner" ? 3 : 0);
+    if (a === "cutback") utility = actionChance(m, a) * AI.cutbackWeight + AI.cutback;
     utility += (random(m) - 0.5) * (1 - p.a.decisions / 120) * 0.42;
     if (utility > score) {
       best = a;
@@ -581,7 +656,9 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
   insightAttempt(m,p,passTo?passInsightKeys(dist(p,passTo)):attackKeys(action==='shoot'&&Math.hypot((d>0?105:0)-p.x,34-p.y)>22?'longShot':action));
   m.decision = false;
   m.nextAI = 2.5;
-  if (["shoot","closeShot","longShot","curl"].includes(action)) {
+  if (action === "cross" || action === "cutback") { deliver(m, p, action, chance, options); return; }
+  if (["shoot","closeShot","longShot","curl","header","volley"].includes(action)) {
+    m.aerial = undefined; m.setPiece = undefined;
     p.stats.shots++;
     m.shots[p.team]++;
     const xg = chance;
@@ -616,7 +693,7 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
       shotType: action,
     };
     m.ball.owner = null;
-    event(m, `${p.name}, ${ACTIONS[action]}! 골문을 노립니다!`);
+    event(m, action === "header" ? `${p.name}, 헤더! 골문을 노립니다!` : action === "volley" ? `${p.name}, 발리 슛! 골문을 노립니다!` : `${p.name}, ${ACTIONS[action]}! 골문을 노립니다!`);
     return;
   }
   if (action === "dribble" || action === "hold") {
@@ -661,15 +738,21 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
     return;
   }
   p.stats.passes++;
-  event(m,`${p.name}, ${q.name}을 향해 패스를 보냅니다.`);
+  const aim = runPoint(m, q), intoSpace = aim.x !== q.x || aim.y !== q.y;
+  if (m.oneTwo && m.oneTwo.to === q.id && m.clock <= m.oneTwo.until) event(m, `${p.name} ↔ ${q.name} 원투 패스!`);
+  else if (intoSpace) event(m, `${p.name}, 수비 뒷공간으로 침투하는 ${q.name}에게 스루패스!`);
+  else event(m,`${p.name}, ${q.name}을 향해 패스를 보냅니다.`);
+  // 0.10 give-and-go: after the user's pass the user keeps running and the receiver looks for the return.
+  if (p.id === m.userId && userOn(m) && !intoSpace) { m.oneTwo = { to: p.id, until: m.clock + 12 }; startRun(m, p); p.run!.x = d * Math.max(p.x * d + 8, Math.min(p.run!.x * d, p.x * d + 14)); }
+  else if (m.oneTwo && m.oneTwo.to === q.id) m.oneTwo = undefined;
   m.ball.flight = {
     from: p.id,
     to: q.id,
-    x: clamp(q.x + (action === "through" ? 4 * d : 0), 2, 103),
-    y: q.y,
+    x: clamp(intoSpace ? aim.x : q.x + (action === "through" ? 4 * d : 0), 2, 103),
+    y: clamp(intoSpace ? aim.y : q.y, 2, 66),
     kind: "pass",
     progress: 0,
-    duration: Math.max(0.5, dist(p, q) / 18),
+    duration: Math.max(0.5, dist(p, intoSpace ? aim : q) / 18),
     startX: p.x,
     startY: p.y,
     success: random(m) < chance,
@@ -745,6 +828,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
       ty = p.homeY;
     p.mode = "shape";
     if (attack) {
+      const ownGoal = d > 0 ? 0 : 105, oppGoal = 105 - ownGoal;
       if (attack.id === p.id) {
         p.mode = "attack";
         tx = clamp(p.x + d * 9, 3, 102);
@@ -754,19 +838,39 @@ export function step(m: Match, dt = 0.5, auto = false) {
         tx = clamp(tx + (attack.x - 52.5) * 0.35 + d * (m.tactics?.[p.team] === "역습" ? 13 : m.tactics?.[p.team] === "수비" ? 5 : 9), 4, 100);
         if(p.pos === "CM") tx=clamp(d*Math.max(tx*d,attack.x*d-12),4,101);
         ty = p.homeY + (attack.y - 34) * 0.22;
-        const progress=attack.x*d+(d<0?105:0),phase=m.clock/42+p.id*1.7;
+        const progress=attack.x*d+(d<0?105:0),ballGoal=105-progress,ballSide=Math.sign(attack.y-34)||1;
+        const backLine=offsideLine(m,p.team);
         if(['ST','LW','RW'].includes(p.pos)){
-          const run=5+Math.sin(phase)*3+p.a.positioning/25;
+          const run=5+wobble(m,p.id,1)*3+p.a.positioning/25;
           tx=clamp(d*Math.max(tx*d,attack.x*d+run),5,100);
           if(p.pos!=='ST'&&progress>68)ty+=(34-ty)*.36;
-          ty+=Math.sin(phase)*4;
-          const backLine=m.players.filter(q=>q.team!==p.team&&active(q)).map(q=>q.x*d).sort((a,b)=>b-a)[1]??105;
-          if(attack.x*d<backLine)tx=d*Math.min(tx*d,backLine-1.5);
+          ty+=wobble(m,p.id,2)*4;
+          // 0.10 final third: the striker attacks the penalty spot / near post, the far winger the back post,
+          // the ball-side winger stays wide for the cross.
+          if(ballGoal<FINAL_THIRD){
+            if(p.pos==='ST'){tx=oppGoal-d*clamp(ballGoal*.32+6,7,14);ty=34+ballSide*clamp(Math.abs(attack.y-34)*.2,0,5)+wobble(m,p.id,3)*2.5;}
+            else if(Math.sign(p.homeY-34)!==ballSide){tx=oppGoal-d*clamp(ballGoal*.28+4,5,12);ty=34-ballSide*(8+wobble(m,p.id,4)*2);}
+            else ty=p.homeY+wobble(m,p.id,4)*3;
+          }
+          // 0.10 in the opponent half forwards play on the last line (the striker level with it, wingers just behind).
+          if(ballGoal<ON_LINE_RANGE)tx=d*Math.max(tx*d,backLine-(p.pos==='ST'?1:3));
+          // 0.10 timed run in behind: start level with the last line, then sprint beyond it while a teammate has the ball.
+          const running=p.run&&p.run.until>m.clock;
+          if(!running&&owner&&owner.team===p.team&&owner.id!==p.id&&ballGoal<RUN_BALL_RANGE&&p.x*d>=backLine-RUN_START_GAP&&
+            hashUnit(m,p.id,8,RUN_WINDOW)<RUN_CHANCE+p.a.positioning/500+(m.tactics?.[p.team]==='역습'?.08:0))startRun(m,p,backLine);
+          if(p.run&&p.run.until>m.clock){tx=p.run.x;ty=p.run.y;p.mode="attack";}
+          else if(attack.x*d<backLine)tx=d*Math.min(tx*d,backLine-.5);
         }else if(p.pos==='CM'){
-          ty=clamp(ty+Math.sin(phase)*5+(34-ty)*(progress>65?.2:0),7,61);
-        }else if(['LB','RB'].includes(p.pos)&&progress>55&&m.tactics?.[p.team]!=='수비')tx+=d*5;
+          ty=clamp(ty+wobble(m,p.id,2)*5+(34-ty)*(progress>65?.2:0),7,61);
+          // One midfielder (rotating every few minutes) arrives late at the edge of the box for cut-backs.
+          if(ballGoal<32&&lateRunner(m,p)){tx=oppGoal-d*clamp(17+wobble(m,p.id,5)*2,15,21);ty=34+wobble(m,p.id,6)*6;}
+        }else if(['LB','RB'].includes(p.pos)&&progress>55&&m.tactics?.[p.team]!=='수비'){
+          tx+=d*5;
+          // Ball-side full-back overlaps outside the winger.
+          if(Math.sign(p.homeY-34)===ballSide&&progress>62){tx=clamp(d*Math.max(tx*d,attack.x*d+4),4,101);ty=p.homeY<34?5:63;}
+        }
         // Seek a free receiving lane before the pass, rather than camping between defenders.
-        if(p.pos!=='GK'&&['ST','CM','LW','RW'].includes(p.pos)){
+        if(p.pos!=='GK'&&['ST','CM','LW','RW'].includes(p.pos)&&!(p.run&&p.run.until>m.clock)){
           if(!p.laneOffset||m.clock>=p.laneOffset.until){
           let bestY=ty,bestRisk=Infinity;
           for(const offset of [-12,-6,0,6,12]){
@@ -779,7 +883,8 @@ export function step(m: Match, dt = 0.5, auto = false) {
           }
           p.laneOffset={until:m.clock+12,value:bestY-ty};
           }
-          ty+=p.laneOffset.value;
+          // Inside the box the lane offset is kept small so the striker stays between the posts.
+          ty+=p.laneOffset.value*(ballGoal<FINAL_THIRD&&p.pos==='ST'?.4:1);
         }
         // Separate support lanes instead of stacking players on a single anchor.
         for(const q of m.players)if(q.team===p.team&&q.id!==p.id&&active(q)){
@@ -799,7 +904,12 @@ export function step(m: Match, dt = 0.5, auto = false) {
           tx = clamp(tx + (attack.x - 52.5) * 0.35 - d * 7, 4, 101);
           ty = p.homeY + (attack.y - 34) * 0.25;
           const threat=m.players.filter(q=>q.team!==p.team&&q.pos!=='GK'&&active(q)&&dist(q,p)<18).sort((a,b)=>dist(a,p)-dist(b,p))[0];
-          if(threat){tx=tx*.65+(threat.x-d*3)*.35;ty=ty*.6+threat.y*.4;}
+          if(['CB','LB','RB'].includes(p.pos)){
+            // 0.10 the back line drops towards the box as the ball approaches and steps up when it goes away.
+            const depth=Math.abs(attack.x-ownGoal),line=clamp(depth*(LINE_DROP[m.tactics?.[p.team] as keyof typeof LINE_DROP]??LINE_DROP.default)+3,6,36)+(p.pos==='CB'?0:1.5);
+            tx=ownGoal+d*line;ty=p.homeY+(attack.y-34)*0.3;
+            if(threat&&depth<34){const t=Math.abs(threat.x-ownGoal);tx=ownGoal+d*Math.max(4,Math.min(line,t-1));ty=ty*.5+threat.y*.5;}
+          }else if(threat){tx=tx*.65+(threat.x-d*3)*.35;ty=ty*.6+threat.y*.4;}
         }
       }
     }
@@ -810,7 +920,10 @@ export function step(m: Match, dt = 0.5, auto = false) {
     }
     if (p.id === m.userId && m.userOnPitch !== false && owner?.id !== p.id) {
       if (m.offball === "run") {
-        tx = clamp(tx + d * 14, 5, 100);
+        // 0.10 '공간 침투': a real run in behind whenever a teammate has the ball (offside is judged at the pass).
+        if (owner && owner.team === p.team && !(p.run && p.run.until > m.clock)) startRun(m, p);
+        if (p.run && p.run.until > m.clock) { tx = p.run.x; ty = p.run.y; }
+        else tx = clamp(tx + d * 14, 5, 100);
         p.mode = "attack";
       }
       if (m.offball === "press") {
@@ -845,9 +958,20 @@ export function step(m: Match, dt = 0.5, auto = false) {
         (2.6 + p.a.speed / 32) *
         (0.55 + p.energy / 222) *
         (owner?.id === p.id ? 0.68 : 1) *
+        (p.run && p.run.until > m.clock ? RUN_SPEED : 1) *
+        // 0.10 off the ball players cover more ground (the ball carrier keeps the old pace).
+        (owner?.id === p.id ? 1 : OFF_BALL_PACE) *
         dt;
     const ratio = Math.min(1, v / (distance || 1));
-    movement.push({p,x:clamp(p.x+(tx-p.x)*ratio,1,104),y:clamp(p.y+(ty-p.y)*ratio,1,67)});
+    // 0.10 inertia: a player changes pace and direction gradually (faster with high acceleration).
+    let sx = (tx - p.x) * ratio, sy = (ty - p.y) * ratio;
+    if (p.vx !== undefined && p.vy !== undefined) {
+      const k = INERTIA_BASE + p.a.acceleration / 400;
+      sx = p.vx * (1 - k) + sx * k; sy = p.vy * (1 - k) + sy * k;
+      const len = Math.hypot(sx, sy); if (len > v) { sx *= v / len; sy *= v / len; }
+    }
+    p.vx = sx; p.vy = sy;
+    movement.push({p,x:clamp(p.x+sx,1,104),y:clamp(p.y+sy,1,67)});
   }
   for(const {p,x,y} of movement){p.x=x;p.y=y;}
   updateGuard(m);
@@ -885,8 +1009,12 @@ export function step(m: Match, dt = 0.5, auto = false) {
               (p) => p.team !== from.team && p.pos === "GK" && active(p),
             ) || m.players.find((p) => p.team !== from.team && active(p))!;
           if (f.onTarget) g.stats.saves++;
-          own(m, g);
-          event(m, "골키퍼 처리 · 공격 전환");
+          // 0.10 not every missed or saved shot ends with the keeper: corners and second balls.
+          const roll = random(m), close = Math.hypot((direction(m, from.team) > 0 ? 105 : 0) - f.startX, 34 - f.startY) < 20;
+          if (!f.onTarget && roll < SET_PIECE.cornerFromMiss) corner(m, from.team, f.y);
+          else if (f.onTarget && roll < SET_PIECE.cornerFromSave) { event(m, `${g.name}, 선방! 코너킥으로 걷어 냅니다`); corner(m, from.team, f.y); }
+          else if (f.onTarget && close && roll < SET_PIECE.cornerFromSave + SET_PIECE.rebound) secondBall(m, from.team);
+          else { own(m, g); event(m, "골키퍼 처리 · 공격 전환"); }
         }
       } else {
         const target = m.players[f.to!];
@@ -899,7 +1027,8 @@ export function step(m: Match, dt = 0.5, auto = false) {
           target.x = f.x;
           target.y = f.y;
           own(m, target);
-          event(m,`${Math.abs((direction(m,target.team)>0?105:0)-target.x)<22?"페널티 박스 근처에서":"빈 공간에서"} ${from.name}의 패스를 받은 ${target.name}!`);
+          if (f.aerial) { m.aerial = { to: target.id, until: m.clock + 9 }; m.nextAI = .5; event(m, `${target.name}, 박스 안에서 ${from.name}의 크로스를 맞이합니다!`); }
+          else event(m,`${Math.abs((direction(m,target.team)>0?105:0)-target.x)<16.5&&Math.abs(target.y-34)<20?"페널티 박스 안에서":Math.abs((direction(m,target.team)>0?105:0)-target.x)<22?"페널티 박스 근처에서":"빈 공간에서"} ${from.name}의 패스를 받은 ${target.name}!`);
           if (from.fx?.playmaker && target.team === from.team && target.id !== from.id)
             m.assistBoost = { to: target.id, mult: 1 + from.fx.playmaker };
         } else {
@@ -964,6 +1093,47 @@ export function step(m: Match, dt = 0.5, auto = false) {
       }
     }
   }
+}
+/** 0.10 cross (lofted, met in the air) or cut-back (ground) to the best target; offside is judged at release. */
+function deliver(m: Match, p: Footballer, action: "cross" | "cutback", chance: number, options: AttackOptions) {
+  const q = options.targetId !== undefined ? m.players.find(x => x.id === options.targetId) : action === "cross" ? crossTarget(m, p) : cutbackTarget(m, p);
+  if (!q) return;
+  const d = direction(m, p.team);
+  p.stats.passes++;
+  const corner = m.setPiece === "corner"; m.setPiece = undefined;
+  event(m, corner ? `${p.name}의 코너킥 크로스!` : action === "cross" ? `${p.name}, 박스 안으로 크로스!` : `${p.name}, 골라인 앞에서 컷백!`);
+  const aimX = clamp(q.x + d * (action === "cross" ? 1.5 : 0), 2, 103), aimY = clamp(q.y + (action === "cross" ? (34 - q.y) * .2 : 0), 2, 66);
+  m.ball.flight = {
+    from: p.id, to: q.id, x: aimX, y: aimY, kind: "pass", progress: 0,
+    duration: Math.max(0.5, dist(p, q) / (action === "cross" ? 15 : 18)),
+    startX: p.x, startY: p.y, success: random(m) < chance, xg: 0, aerial: action === "cross",
+  };
+  m.ball.owner = null;
+}
+/** 0.10 corner kick for `team`: best crosser at the flag, aerial threats in the box, defenders goal-side. */
+function corner(m: Match, team: number, ballY: number) {
+  const d = direction(m, team), line = d > 0 ? 104 : 1, goal = d > 0 ? 105 : 0, side = ballY < 34 ? 1 : 67;
+  const mates = m.players.filter(p => p.team === team && active(p) && p.pos !== "GK");
+  const taker = [...mates].filter(p => ["LW", "RW", "CM"].includes(p.pos)).sort((a, b) => b.a.curve - a.a.curve)[0] ?? mates[0];
+  const threats = mates.filter(p => p !== taker).sort((a, b) => (b.a.strength + b.a.positioning) - (a.a.strength + a.a.positioning)).slice(0, 5);
+  const slots = [[6, 31], [7, 38], [10, 34], [12, 27], [12, 41]];
+  for (const p of m.players) { p.run = undefined; p.vx = undefined; p.vy = undefined; }
+  threats.forEach((p, i) => { p.x = goal - d * slots[i][0]; p.y = slots[i][1]; });
+  const defenders = m.players.filter(p => p.team !== team && active(p) && p.pos !== "GK").sort((a, b) => (b.a.marking + b.a.strength) - (a.a.marking + a.a.strength));
+  threats.forEach((t, i) => { const q = defenders[i]; if (q) { q.x = t.x - d * 1.2; q.y = t.y + (i % 2 ? -.8 : .8); } });
+  const keeper = m.players.find(p => p.team !== team && p.pos === "GK" && active(p)); if (keeper) { keeper.x = goal - d * 2; keeper.y = 34; }
+  taker.x = line; taker.y = side;
+  event(m, `코너킥! ${taker.name}이 키커로 나섭니다`);
+  own(m, taker); m.setPiece = "corner"; m.cooldown = 2; m.nextAI = 1.5; m.lastPass = null;
+}
+/** 0.10 a save drops loose in the box: the closest attacker or defender reacts first. */
+function secondBall(m: Match, team: number) {
+  const d = direction(m, team), goal = d > 0 ? 105 : 0, spot = { x: goal - d * (6 + random(m) * 5), y: 34 + (random(m) - .5) * 14 };
+  const near = m.players.filter(p => active(p) && p.pos !== "GK").sort((a, b) => dist(a, spot) - dist(b, spot)).slice(0, 3);
+  const pick = near.sort((a, b) => (b.a.anticipation + (b.team === team ? 10 : 0) - dist(b, spot) * 4) - (a.a.anticipation + (a.team === team ? 10 : 0) - dist(a, spot) * 4))[0];
+  pick.x = spot.x; pick.y = spot.y;
+  event(m, pick.team === team ? `세컨드 볼! ${pick.name}이 박스 안에서 공을 잡습니다` : `세컨드 볼을 ${pick.name}이 먼저 걷어 냅니다`);
+  own(m, pick);
 }
 export function finishMatch(m: Match) {
   let limit = 0;
