@@ -42,12 +42,12 @@ export function SeasonPanel({c,update,onNeedContract}:{c:Career,update:(f:(c:Car
   <div className="note">프로: 8개 구단 리그 28라운드 + 국내 컵(8강·4강·결승) + 대륙 클럽 컵(4강·결승) + 국제 초청대회(4강·결승, 대표 발탁 시). 고교: 정규·교류전 25주 + 지역 토너먼트 4주 + 전국대회 5주(32강) + 스카우트 쇼케이스. 무승부 토너먼트 경기는 간소화된 승부차기로 결정됩니다. 구단·학교 이름은 실제 이름을 쓰지만 선수와 기록은 모두 가상입니다.</div>
  </>;
 }
-function BracketView({b,name,mine}:{b:Bracket,name:(id:string)=>string,mine:(id:string)=>boolean}){
+export function BracketView({b,name,mine}:{b:Bracket,name:(id:string)=>string,mine:(id:string)=>boolean}){
  return <div className="bracket-rounds">{b.rounds.map((ties,r)=><div className="bracket-round" key={r}><h4>{roundName(b,r)}</h4>{ties.map((t,i)=><div className={`tie${mine(t.a)||mine(t.b)?' mine':''}`} key={i}>
   <span className={t.winner===t.a?'win':''}>{name(t.a)}</span>{t.b?<><b>{t.score?t.score.join(':'):'vs'}{t.shootout?' (PK)':''}</b><span className={t.winner===t.b?'win':''}>{name(t.b)}</span></>:<small>부전승</small>}
  </div>)}</div>)}{b.champion&&<div className="bracket-round champion"><h4>우승</h4><div className="tie mine-none"><span className="win">🏆 {name(b.champion)}</span></div></div>}</div>;
 }
-function SchoolTable({ss,region,mine}:{ss:SchoolSeason,region:string,mine:string}){
+export function SchoolTable({ss,region,mine}:{ss:SchoolSeason,region:string,mine:string}){
  const ids=schoolRank(ss,ss.entrants.filter(e=>e.region===region).map(e=>e.id));
  return <section className="card table-wrap"><h3>{region} 지역 리그</h3><table><thead><tr><th>순위</th><th>학교</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>득실</th><th>승점</th></tr></thead><tbody>{ids.map((id,i)=>{const t=ss.table[id],e=ss.entrants.find(x=>x.id===id)!;return <tr key={id} className={id===mine?'mine':''}><td>{i+1}</td><td><strong>{e.name}{id===mine?' · 우리 학교':''}</strong></td><td>{t.p}</td><td>{t.w}</td><td>{t.d}</td><td>{t.l}</td><td>{t.gf} : {t.ga}</td><td><b>{t.pts}</b></td></tr>;})}</tbody></table><small className="muted">정규 시즌 상위 16개교가 지역 토너먼트에 진출합니다 (학교 수가 2의 거듭제곱이 아니면 상위 시드 부전승).</small></section>;
 }
