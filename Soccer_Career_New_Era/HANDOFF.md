@@ -1,3 +1,19 @@
+# 0.11.0 (2026-10-18, Claude, `claude/v0.11-matchup-odds` ← `claude/v0.10-attacking-play`)
+- 시작 상태: Codex 최신 `958d9ba` 이후 Codex 쪽 변경은 없었다. Claude PR #11(0.9.1)과 #12(0.10)가 위에 쌓여 있어, 0.10 브랜치에서 시작했다.
+- 확률 모델을 다시 썼다(tactical.ts `attackOdds` / `defenseOdds` / `interferers` / `edge`, 계수는 `ODDS`).
+  - `attackChance`와 `defenseChance`는 위 함수의 `.p`를 돌려준다. 그래서 engine `act`와 `defend`, AI의 `chooseAction`, 화면이 모두 같은 함수를 쓴다.
+  - AI 기본 태클(engine `step`)도 `tackleEdge`를 쓴다.
+- 규칙과 수식은 GAME_DESIGN 최상단에 있다. 측정과 계수를 정한 근거는 reports/v011-odds.md에 있다.
+- 화면: '상대와의 거리'(`opponentDistanceLabel`), 안내 문구, 이유(`why`), 대상을 고르기 전 흐린 게이지(`Chance preview`).
+- 테스트: `tests/matchup.test.ts`(필수 11종 + 보조 1), `tests/e2e/v11.spec.ts`(PC·모바일). 기존 v07 e2e 문구 하나를 바꿨다('6m 이내 수비수' → '6m 이내 상대').
+- 재현: `npx tsx scripts/odds-compare.ts 400 out.json`. 0.10과 비교하려면 0.10 커밋에서 같은 명령을 실행한다.
+- 한계:
+  - 방향 가중과 도달거리는 하나의 공통 모양이라, 포지션이나 특성별 차이는 없다.
+  - 패스 받는 동료의 압박은 성공률이 아니라 다음 행동(수신 뒤 판정)에서 반영된다.
+  - 실제 iPhone Safari는 실행하지 않았다(WebKit은 CI의 iPhone 13 프로필).
+
+---
+
 # 0.10.0 (2026-10-18, Claude, `claude/v0.10-attacking-play` ← `claude/v0.9.1-on-transfers`)
 - 공격 움직임을 다시 썼다(engine.ts `step`의 support/recover 분기). 조정값은 모두 export 상수에 모았다.
   - 움직임: `FINAL_THIRD`, `RUN_*`, `LINE_DROP`(감독 성향별), `ON_LINE_RANGE`, `OFF_BALL_PACE`, `INERTIA_BASE`
