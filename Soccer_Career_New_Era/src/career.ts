@@ -398,8 +398,9 @@ export function selection(c:Career):Selection{
   const start=!p.injuryWeeks&&(guaranteed||(status==='핵심 주전'&&(index>=0||yourScore>=rivalScore-8))||(status==='주전'&&(index>=0||yourScore>=rivalScore-4)));
   if(start&&index<0){lineup[targetIndex]={...hero,slotPos:lineup[targetIndex].slotPos};index=targetIndex;}
   if(!start&&index>=0){const slot=lineup[index].slotPos,repl=club.roster.filter(r=>!r.injuryWeeks&&!lineup.some(x=>x.id===r.id)).sort((a,b)=>selectionScore(b.a,b.pos,slot,b.age,b.energy,b.form,club.coach)-selectionScore(a.a,a.pos,slot,a.age,a.energy,a.form,club.coach))[0];if(repl){lineup[index]={...repl,slotPos:slot};index=-1;}}
-  const benchMinute=index>=0||p.injuryWeeks?undefined:status==='로테이션'||status==='주전'||status==='핵심 주전'?60:yourScore>=rivalScore-16?75:undefined;
-  const role=p.injuryWeeks?'부상 결장':index>=0?(guaranteed&&status!=='핵심 주전'&&status!=='주전'?'선발 (주전 보장)':'선발'):benchMinute===60?'교체 대기 · 60분 투입':benchMinute===75?'교체 대기 · 75분 투입':'명단 제외';
+  // goalkeepers are not brought on as substitutes (a keeper change mid-match is an injury case only)
+  const benchMinute=index>=0||p.injuryWeeks||p.pos==='GK'?undefined:status==='로테이션'||status==='주전'||status==='핵심 주전'?60:yourScore>=rivalScore-16?75:undefined;
+  const role=p.injuryWeeks?'부상 결장':index>=0?(guaranteed&&status!=='핵심 주전'&&status!=='주전'?'선발 (주전 보장)':'선발'):benchMinute===60?'교체 대기 · 60분 투입':benchMinute===75?'교체 대기 · 75분 투입':p.pos==='GK'&&!p.injuryWeeks?'벤치 대기 (교체 골키퍼)':'명단 제외';
   return {lineup,hero,index,targetIndex,yourScore,rivalScore,role,benchMinute,status,guaranteed};
  }
  if(!p.injuryWeeks&&index<0&&trial&&p.energy>=70&&yourScore>=rivalScore-3){lineup[targetIndex]={...hero,slotPos:p.pos};index=targetIndex;}
@@ -431,6 +432,8 @@ export function startCareerMatch(c:Career){
  m.userId=plan.index>=0?plan.index:plan.targetIndex;m.userOnPitch=plan.index>=0;
  if(!m.userOnPitch&&plan.benchMinute)m.benchEntry={minute:plan.benchMinute,name:c.player.name,a:matchAttributesOf(c),energy:c.player.energy,number:10};
  // 0.15 a substitute's 감독 미션 is scaled to the minutes left (a 'max' mission is unchanged)
+ // a late (75′) substitute gets no mission: too little time for a fair objective
+ if(m.benchEntry&&m.benchEntry.minute>=75)m.mission=undefined;
  if(m.benchEntry&&m.mission&&m.mission.cmp!=='max'){const t=Math.max(1,Math.ceil(m.mission.target*(90-m.benchEntry.minute)/90));if(t!==m.mission.target){m.mission.label=m.mission.label.replace(String(m.mission.target),String(t));m.mission.target=t;}}
  if(m.userOnPitch&&c.player.energy<70){
    const replacement=own.roster.filter(r=>!lineup.some(x=>x.id===r.id)).sort((a,b)=>selectionScore(b.a,b.pos,c.player.pos,b.age,b.energy,b.form,own.coach)-selectionScore(a.a,a.pos,c.player.pos,a.age,a.energy,a.form,own.coach))[0];
