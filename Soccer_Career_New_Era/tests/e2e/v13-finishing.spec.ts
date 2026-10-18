@@ -22,9 +22,9 @@ test('an unmarked shot from 8 m reads as a real chance (중간 or better)',async
   m.ball={x:u.x,y:u.y,owner:u.id,flight:null};
   for(const p of m.players)if(p.team===1&&p.pos!=='GK'&&Math.hypot(p.x-u.x,p.y-u.y)<9){p.x=d>0?60:45;}
   await load(page,c);
-  await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'슛',exact:true}).click();
-  const tile=page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/근거리 슛|슈팅/}).first();
-  await expect(tile).toContainText(/(중간|높은|매우 높은) 확률/);
+  /* 0.15 sidebar: shot buttons are always listed; the band is the button's title */
+  const tile=page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:'근거리 슛',exact:true});
+  await expect(tile).toHaveAttribute('title',/(중간|높은|매우 높은) 확률/);
 });
 
 test('a successful dribble takes a few seconds: the clock runs and teammates and opponents move',async({page})=>{

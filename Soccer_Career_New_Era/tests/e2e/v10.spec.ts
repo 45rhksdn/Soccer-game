@@ -18,7 +18,7 @@ test('a cross reaching me in the box offers 헤더 and 발리, not a dribble',as
   await load(page,c);
   const attack=page.getByRole('group',{name:'공격 선택'});await expect(attack).toBeVisible();
   await expect(attack.getByRole('button',{name:/헤더/})).toBeVisible();await expect(attack.getByRole('button',{name:/발리/})).toBeVisible();
-  await expect(page.getByRole('group',{name:'드리블 방향'})).toHaveCount(0);
+  /* 0.15 sidebar: the pad stays on screen, greyed out */await expect(page.getByRole('button',{name:'드리블 ↑',exact:true})).toBeDisabled();
   await expect(page.locator('.live-commentary')).toContainText('크로스가 날아옵니다');
   await attack.getByRole('button',{name:/헤더/}).click();
   await expect(page.locator('.live-commentary')).toContainText(/헤더|골|GOAL|선방|코너킥|세컨드 볼|처리/);
@@ -28,7 +28,6 @@ test('wide in the final third with a teammate in the box: 크로스 is offered a
     // Two defenders deeper than the striker keep him onside.
     m.players.filter(p=>p.team===1&&p.pos==='CB').forEach((p,i)=>{p.x=goal-d*(5+i);p.y=28+i*14;});});
   await load(page,c);
-  await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'패스',exact:true}).click();
   const attack=page.getByRole('group',{name:'공격 선택'});await expect(attack.getByRole('button',{name:/크로스/})).toBeVisible();
   await expect(attack.getByRole('button',{name:/크로스/}).locator('.cm-track i')).toHaveCount(1);
   await attack.getByRole('button',{name:/크로스/}).click();

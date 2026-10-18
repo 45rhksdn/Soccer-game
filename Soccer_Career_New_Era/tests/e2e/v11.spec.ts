@@ -19,7 +19,7 @@ test('relative distance and per-direction odds survive the compact UI',async({pa
  await load(page,setup(false,[{dx:3,dy:0},{dx:2,dy:4}]));
  await expect(page.locator('.cm-distance')).toContainText('상대와의 거리 3.0m');
  await expect(page.locator('.cm-distance')).toContainText('주변 상대 2명');
- await page.getByLabel('성공률 안내').click();await expect(page.locator('.cm-distance')).toContainText('능력 차이가 성공률');
+ /* 0.15 sidebar: the explanation is always shown under the distance */await expect(page.locator('.cm-distance')).toContainText('능력 차이 반영');
  const up=await page.getByRole('button',{name:'드리블 ↑',exact:true}).getAttribute('title'),down=await page.getByRole('button',{name:'드리블 ↓',exact:true}).getAttribute('title');expect(up).not.toBe(down);
  await load(page,setup(true,[{dx:2.5,dy:0}]));await expect(page.locator('.cm-distance')).toContainText('상대와의 거리 2.5m');
  await expect(page.getByRole('group',{name:'수비 선택'}).getByRole('button').first()).toHaveAttribute('title',/.+/);

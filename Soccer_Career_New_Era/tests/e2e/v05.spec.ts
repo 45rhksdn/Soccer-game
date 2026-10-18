@@ -29,7 +29,8 @@ test('럭키 opens a popup; it is not shown as news and the growth note keeps th
   const popup=page.getByRole('dialog');await expect(popup).toBeVisible();await expect(popup).toContainText('놀라운 성장!');await expect(popup).toContainText('훈련 중 무언가를 느꼈다!');
   await page.screenshot({path:`reports/${info.project.name}-lucky-popup.png`});
   await popup.getByRole('button',{name:'확인'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.locator('.today-result')).toContainText('럭키! ×10 · 패스훈련 · OVR +');
+  /* Codex 0.15: a lucky day shows only the popup; the day's result box is hidden (the amount stays in the growth history) */
+  await expect(page.locator('.today-result')).toHaveCount(0);
   // 0.9.1: 럭키 is no longer shown as news (popup only); the stat and amount never appear on home.
   await nav(page,'커리어 홈');const headlines=page.locator('.headline-news');await expect(headlines).toBeVisible();
   await expect(headlines).not.toContainText('느꼈다');await expect(page.locator('.feed')).not.toContainText('느꼈다');

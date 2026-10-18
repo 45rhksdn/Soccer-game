@@ -19,8 +19,6 @@ test('run mode retains pace reasons and stays selected across tab changes',async
  const c=setup(false,[{dx:-2,dy:0}]);const u=c.match!.players[c.match!.userId];u.a={...u.a,speed:90,acceleration:90};await load(page,c);
  const mode=page.getByRole('group',{name:'드리블 방식'});await mode.getByRole('button',{name:'치고 달리기',exact:true}).click();
  await expect(page.getByRole('button',{name:'치고 달리기 ↑',exact:true})).toHaveAttribute('title',/속도 우위/);
- await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'패스',exact:true}).click();
- await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'드리블',exact:true}).click();
  await expect(mode.getByRole('button',{name:'치고 달리기',exact:true})).toHaveAttribute('aria-pressed','true');
 });
 test('an open route retains the engine reason',async({page})=>{

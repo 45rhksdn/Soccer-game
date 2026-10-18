@@ -3,6 +3,7 @@ import {newCareer} from '../../src/career';
 import {createMatch,attributes,direction} from '../../src/engine';
 import {encode,decode} from '../../src/storage';
 
+// 0.15: updated from the compact pad to Codex's pitch-side rail (touch or list to pick a pass target).
 // v0.14 an unmarked chance reads as a real chance; a dribble plays out in time with everyone moving.
 const base=()=>newCareer({name:'마무리선수',age:17,pos:'ST',secondary:'LW',foot:'오른',height:180,weight:72,style:'플레이메이커',curve:'꾸준한 성장형'},0,177,{traits:[]});
 async function load(page:Page,c:ReturnType<typeof base>){await page.goto('/manifest.webmanifest');await page.evaluate(data=>new Promise<void>(r=>{const q=indexedDB.open('soccer-career-new-era',1);q.onupgradeneeded=()=>q.result.createObjectStore('saves');q.onsuccess=()=>{const t=q.result.transaction('saves','readwrite');t.objectStore('saves').put(data,'slot1');t.objectStore('saves').put(1,'activeSlot');t.oncomplete=()=>{q.result.close();r();};};}),encode(c));await page.goto('/');}
@@ -23,7 +24,7 @@ test('compact pad is ready immediately, warns about route defenders and preserve
  await expect(pad).toBeVisible();
  await expect(pad.getByRole('button',{name:'드리블 ↑',exact:true})).toContainText('!');
  expect(await pad.getByRole('button').count()).toBe(8);
- expect((await pad.boundingBox())!.width).toBeLessThanOrEqual(165);
+ expect((await pad.boundingBox())!.width).toBeLessThanOrEqual(200); /* 0.15 sidebar rail */
  await expect(page.locator('.live-commentary')).toBeVisible();
  await expect(page.getByRole('button',{name:'볼 지키기',exact:true})).toHaveCount(0);
  const before=await saved(page);
@@ -36,7 +37,6 @@ test('compact pad is ready immediately, warns about route defenders and preserve
 
 test('pass selects a teammate without executing and confirms the selected recipient',async({page})=>{
  const c=setup();await load(page,c);const before=await saved(page);
- await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'패스',exact:true}).click();
  const targets=page.getByRole('group',{name:'패스 받을 동료'});
  const btn=targets.getByRole('button').filter({hasText:/마무리선수/});
  const distances=await targets.locator('button > small').allTextContents();
@@ -45,18 +45,17 @@ test('pass selects a teammate without executing and confirms the selected recipi
  await expect(first).toHaveAttribute('aria-pressed','true');
  expect((await saved(page)).seed).toBe(before.seed);
  await page.locator('.match-board').screenshot({path:`reports/compact-${test.info().project.name}-pass.png`});
- await page.getByRole('button',{name:/에게 패스하기/}).click();
+ await page.locator('.cm-pass-card').getByRole('button',{name:'패스하기',exact:true}).click();
  await expect.poll(async()=> (await saved(page)).seed).not.toBe(before.seed);
 });
 
 test('shots execute immediately when the shot type is tapped',async({page})=>{
  const c=setup(false,[{dx:-25,dy:20}]);const m=c.match!,u=m.players[m.userId];u.x=direction(m,0)>0?97:8;m.ball.x=u.x;
  await load(page,c);const before=await saved(page);
- await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'슛',exact:true}).click();
  expect((await saved(page)).seed).toBe(before.seed);
  await page.locator('.match-board').screenshot({path:`reports/compact-${test.info().project.name}-shot.png`});
  await expect(page.locator('.cm-confirm')).toHaveCount(0);
- await page.getByRole('group',{name:'슛 종류'}).getByRole('button',{name:/근거리 슛/}).click();
+ await page.getByRole('button',{name:'근거리 슛',exact:true}).click();
  await expect.poll(async()=> (await saved(page)).seed).not.toBe(before.seed);
 });
 

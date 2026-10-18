@@ -22,7 +22,7 @@ test('vertical pitch: the whole pitch fits the screen, probabilities are words',
   // 0.11: shots show a band; pass / dribble show a provisional bar until a teammate / direction is chosen.
   await expect(page.getByRole('button',{name:'드리블 ↑',exact:true})).toHaveAttribute('title',/확률/);
   await noPercent(page,'.match-actions');
-  await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/}).click();await noPercent(page,'.match-actions');
+  await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/}).first().click();await noPercent(page,'.match-actions');
   await page.screenshot({path:`reports/${info.project.name}-v08-vertical.png`});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
@@ -53,9 +53,7 @@ test('defence choices show word probabilities; the popup is the new game-style b
 test('persistent pad and pass targets expose compact probability gauges',async({page})=>{
  await load(page,fixture());const pad=page.getByRole('group',{name:'드리블 방향'});
  await expect(pad.locator('.cm-track i')).toHaveCount(8);
- await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'패스',exact:true}).click();
  await expect(page.locator('.cm-targets .cm-track i').first()).toBeVisible();
- await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'드리블',exact:true}).click();
  await expect(pad).toBeVisible();
  await load(page,fixture(true));await expect(page.getByRole('group',{name:'수비 선택'})).not.toContainText('평균');
 });

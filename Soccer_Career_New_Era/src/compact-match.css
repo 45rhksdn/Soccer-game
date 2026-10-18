@@ -71,3 +71,9 @@
 .cm-sidebar-layout .cm-defense{grid-template-columns:1fr}.cm-sidebar-layout .cm-defense button{padding:10px 6px}.cm-sidebar-layout .cm-defense strong{font-size:11px}.cm-sidebar-layout .offball button{width:100%;font-size:10px}
 .cm-bottom .match-toolbar{background:#101c29;padding:8px 12px;gap:5px}.cm-bottom .match-toolbar button{padding:6px;font-size:11px}
 @media(max-width:600px){.match-layout.cm-match.cm-sidebar-layout{grid-template-columns:minmax(0,1fr) 124px}.cm-sidebar-layout .match-actions{padding:6px}.cm-location-actions{gap:4px}.cm-location-actions button{min-height:49px;padding:5px 2px}.cm-location-actions button span{font-size:9px}.cm-sidebar-layout .cm-pad button{min-height:36px}.cm-sidebar-layout .cm-mode{flex-wrap:wrap}.cm-sidebar-layout .cm-mode button{font-size:8px}.cm-sidebar-layout .cm-distance{font-size:9px}.cm-pass-card{font-size:10px;padding:6px;left:4px;right:4px}.cm-pass-card span{font-size:10px}}
+/* 0.15 integration: a keyboard / screen-reader friendly list of pass targets next to touch selection */
+.cm-targets{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.cm-targets button{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px;min-height:32px;padding:3px 6px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;font-size:11px;flex:1 1 46%;min-width:0}
+.cm-targets button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-targets button[aria-pressed=true]{border-color:#7ef0c4;background:rgba(126,240,196,.16)}
+.cm-targets button .cm-chance{grid-column:1/-1}

@@ -31,7 +31,7 @@ test('daily schedule → live action → growth/rival → reload mid-week and mi
  await expect(page.getByRole('button',{name:'12×',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'2×',exact:true})).toBeVisible();
  await expect(page.getByRole('group',{name:'공격 선택'})).toBeVisible({timeout:60000});
  await page.getByRole('button',{name:'1×',exact:true}).click();
- const before=await page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL());await page.getByRole('button',{name:'일시정지',exact:true}).click();await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/}).click();await page.locator('.cm-targets button:not(:disabled)').first().click();await page.getByRole('button',{name:/에게 패스하기/}).click();await expect(page.locator('.offball')).toBeVisible();await page.getByRole('button',{name:'계속',exact:true}).click();await expect.poll(()=>page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL())).not.toBe(before);
+ const before=await page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL());await page.getByRole('button',{name:'일시정지',exact:true}).click();/* 0.15 sidebar: pick a teammate from the list, then confirm on the pass card */await page.locator('.cm-targets button:not(:disabled)').first().click();await page.locator('.cm-pass-card').getByRole('button',{name:'패스하기',exact:true}).click();await expect(page.locator('.offball')).toBeVisible();await page.getByRole('button',{name:'계속',exact:true}).click();await expect.poll(()=>page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL())).not.toBe(before);
  await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();await restUntilWeek(page,2,'휴양하기');await expect(page.getByRole('heading',{name:'이번주 성장노트'})).toBeVisible();await expect(page.locator('.save-state')).toHaveText('저장 완료');
  await nav(page,'라이벌');await expect(page.getByRole('heading',{name:/평생의 라이벌/})).toBeVisible();await expect(page.getByRole('heading',{name:'라이벌 최근 경기'})).toBeVisible();await page.screenshot({path:`reports/${info.project.name}-rival.png`,fullPage:true});
  // Daily progress survives reloads, including a match in progress.
@@ -117,7 +117,7 @@ test('오늘의 일정: one tap per day, match-day screen (calendar weekday), th
  test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await create(page);
  await expect(page.getByRole('heading',{name:'오늘의 일정 진행'})).toBeVisible();await expect(page.getByRole('button',{name:'이번주 일정 진행',exact:true})).toHaveCount(0);
  const acts=['패스훈련','속력훈련','공격훈련','휴식하기','드리블훈련','휴식하기'];let md=0;
- for(;md<7&&!(await matchNow(page));md++){await page.getByRole('button',{name:`오늘 ${acts[md]}`}).click();await expect(page.locator('.today-result')).toContainText(`${WD[md]}요일 · `);}
+ for(;md<7&&!(await matchNow(page));md++){await page.getByRole('button',{name:`오늘 ${acts[md]}`}).click();/* a lucky day shows only the popup (Codex 0.15) */if(await page.locator('.today-result').count())await expect(page.locator('.today-result')).toContainText(`${WD[md]}요일 · `);}
  await page.screenshot({path:`reports/${info.project.name}-today-match.png`,fullPage:true});
  await expect(page.getByText('오늘은 경기가 있는 날입니다')).toBeVisible();await expect(page.getByRole('button',{name:'오늘 패스훈련'})).toHaveCount(0);
  await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();
