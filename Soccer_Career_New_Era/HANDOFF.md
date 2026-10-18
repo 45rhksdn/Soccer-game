@@ -6,7 +6,7 @@
   - MatchInteraction: 드리블 패드에 방식 전환, 고른 방향의 이유 줄.
 - `AttackOptions.run`은 저장되지 않는 행동 옵션이라 저장 형식은 바뀌지 않는다.
 - 테스트: `tests/dribble-pace.test.ts` 9개(빈 공간, 부드러운 감소, 속도 단조성, 추격, 정면 차단, 전진 거리, 실제 판정률, AI 무난수, 수비 속도).
-- 측정: reports/v012-dribble.md. 결과: TEST_REPORT 최상단.
+- 측정: reports/v012-dribble.md. 결과: TEST_REPORT 최상단(단위 186, Chromium e2e 72 통과).
 - 한계:
   - 속도는 한 번의 행동 안에서만 비교한다. 여러 단계에 걸친 실제 달리기 경쟁(상대가 따라오는 궤적)은 시뮬레이션하지 않는다.
   - 치고 달리기는 터치라인이나 골라인 밖으로 공이 나가는 결과가 없다(경기장 안으로 잘라냄).
