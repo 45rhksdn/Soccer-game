@@ -19,3 +19,10 @@ Branch: codex/compact-match-controls. Claude v0.15 is in progress; no v0.15 bran
 - New Playwright workflow checks PC Chromium, phone Chromium and iPhone-profile WebKit, saves screenshots. Results recorded after execution.
 - Historical UI tests updated where the interaction contract intentionally changed (no cancel-pad step, pass and shot confirmation).
 - No claim of a physical iPhone test or complete season balance retest.
+
+## Final check
+- 2026-10-18 19:52 KST: no `claude/v0.15*` remote branch yet. No unpublished Claude working tree can be inspected; this patch does not overwrite that branch.
+- GitHub Actions run 39120699795, commit 61d7d5f: focused browser tests **12/12 passed** (4 each desktop Chromium, iPhone-size Chromium, iPhone-profile WebKit; production build; 28.5 s).
+- Screenshot review: compact-mobile-dribble + compact-desktop-pass; no horizontal overflow, pad/gauges/commentary/selected pass path visible. Fixture intentionally overlaps unrelated players to isolate the choice scenario.
+- Final test-only fix opens collapsed match missions before checking them. Runtime code is unchanged since the successful focused browser run.
+- Full historical browser suite is not claimed passing; old interaction tests were adapted, but only the focused 12 were used as the UI acceptance gate. Real iPhone and long careers were not retested.
