@@ -1,6 +1,7 @@
 /** Pure action rules. Percentages shown by the UI are the exact engine probabilities. */
 import {clamp,direction,type Match,type Footballer,type Action,type Attr,type DefenseAction,type SignatureAction} from './engine';
-export type AttackOptions={targetId?:number;vector?:{x:number;y:number}};
+/** `run`: 0.12 치고 달리기 — the dribble is played as a long knock-on and a sprint (with `vector`). */
+export type AttackOptions={targetId?:number;vector?:{x:number;y:number};run?:boolean};
 export const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.hypot(a.x-b.x,a.y-b.y);
 const active=(p:Footballer)=>!p.red&&!p.injured;
 /** Nearest opponent field players (keepers are judged separately) and how many stand within 6 m. */
@@ -105,8 +106,15 @@ export const PASS={base:.74,skill:.22,anticipation:.03,shortRange:12,perMetre:.0
  */
 export const ODDS={
  edgeScale:25,
- reachFront:8,reachSide:6,dirFloor:.2,dirPow:1.3,cover:[1,.7,.45,.3],gkReach:3,closeBlend:2.5,
- dribble:{free:.48,freeSkill:.48,block:.62,edgeShare:.75},
+ reachFront:8,reachSide:6,dirFloor:.2,dirPow:1.3,cover:[1,.7,.45,.3],gkReach:3,closeBlend:3,
+ // 0.12 a dribble fails in two ways: a loose touch (no opponent needed) or a defender winning the ball.
+ dribble:{touch:.93,touchSkill:.065,touchTired:.05,block:.8,edgeShare:.75},
+ // 0.12 치고 달리기: a longer, looser touch; its duel is a sprint (pace), the path reaches farther.
+ run:{touch:.84,touchSkill:.1,touchTired:.08,block:.72,paceShare:.85,skillShare:.2,reach:1.45,energy:3},
+ // 0.12 pace race per hinderer: how much a pace gap shrinks (faster) or grows (slower) his interference,
+ // scaled by where he stands — a chaser from behind most, a defender right in the path least.
+ pace:{faster:.7,slower:1,behind:1,side:.7,frontNear:.2,frontFar:.45,frontFarAt:8,tackle:.12,defend:.08},
+ advance:{dribbleMin:3,dribbleMax:7,runMin:8,runMax:10},
  passer:{block:.2,edgeShare:.6},
  lane:{reach:2.5,reachRead:1.5,base:.13,skill:.24},
  shot:{press:.7,edgeShare:.6,gkBase:.33,gkPerMetre:.015,gkMax:.62,gk:.24,pressMax:.75},
@@ -116,20 +124,20 @@ export const ODDS={
 const smooth01=(x:number)=>{const t=clamp(x,0,1);return t*t*(3-2*t);};
 /** Ability edge in −1…1 for a gap of `delta` rating points (logistic; ±25 → ±0.46, ±50 → ±0.76). */
 export const edge=(delta:number)=>2/(1+Math.exp(-delta/ODDS.edgeScale))-1;
-export type Interference={o:Footballer,i:number,where:'front'|'side'|'behind',dist:number};
+export type Interference={o:Footballer,i:number,where:'front'|'side'|'behind',dist:number,cos:number};
 /** How strongly each opponent hinders an action by `p` heading along (ux, uy), strongest first. */
-export function interferers(m:Match,p:Footballer,ux:number,uy:number):Interference[]{
+export function interferers(m:Match,p:Footballer,ux:number,uy:number,reachScale=1):Interference[]{
  const len=Math.hypot(ux,uy)||1;ux/=len;uy/=len;const out:Interference[]=[];
  for(const o of m.players){
   if(o.team===p.team||!active(o))continue;
   const dx=o.x-p.x,dy=o.y-p.y,d=Math.hypot(dx,dy)||.01;
   if(o.pos==='GK'&&d>ODDS.gkReach)continue; // a keeper only counts when he comes to challenge
-  const cos=(dx*ux+dy*uy)/d,reach=ODDS.reachSide+(ODDS.reachFront-ODDS.reachSide)*Math.max(0,cos);
+  const cos=(dx*ux+dy*uy)/d,reach=(ODDS.reachSide+(ODDS.reachFront-ODDS.reachSide)*Math.max(0,cos))*reachScale;
   const prox=smooth01(1-d/reach);if(prox<=0)continue;
   // Right next to the player the direction is ill-defined: blend towards the side weight so passing by is smooth.
   const raw=ODDS.dirFloor+(1-ODDS.dirFloor)*Math.pow((1+cos)/2,ODDS.dirPow),sideW=ODDS.dirFloor+(1-ODDS.dirFloor)*Math.pow(.5,ODDS.dirPow);
   const dir=sideW+(raw-sideW)*smooth01(d/ODDS.closeBlend);
-  out.push({o,i:prox*dir,where:cos>.5?'front':cos>-.5?'side':'behind',dist:d});
+  out.push({o,i:prox*dir,where:cos>.5?'front':cos>-.5?'side':'behind',dist:d,cos});
  }
  return out.sort((a,b)=>b.i-a.i);
 }
@@ -141,6 +149,36 @@ export const pressSkill=(o:Footballer)=>o.a.marking*.5+o.a.anticipation*.3+o.a.d
 export const laneRead=(o:Footballer)=>o.a.anticipation*.4+o.a.positioning*.35+o.a.defending*.25;
 export const ballCarry=(o:Footballer)=>o.a.control*.45+o.a.dribbling*.4+o.a.strength*.15;
 export const keeperQuality=(g:Footballer)=>(g.a.positioning*.4+g.a.anticipation*.35+g.a.composure*.25)/100;
+/** 0.12 sprint pace: top speed and acceleration, worn down by fatigue. */
+export const paceOf=(p:Footballer)=>(p.a.speed*.6+p.a.acceleration*.4)*(.85+.15*clamp(p.energy,0,100)/100);
+/** How much a pace gap matters against an opponent at this angle (cos of his bearing vs. the run) and distance. */
+export function paceWeight(cos:number,d:number,run=false){
+ const P=ODDS.pace,front=run?P.frontNear:P.frontNear+(P.frontFar-P.frontNear)*smooth01((d-2)/(P.frontFarAt-2));
+ const side=run?1:P.side;
+ return cos<=0?side+(P.behind-side)*(-cos):side+(front-side)*cos;
+}
+/** Interference after the pace race: faster → smaller, slower → larger (never above 1). */
+export function paced(x:Interference,myPace:number,run=false){
+ const e=edge(myPace-paceOf(x.o)),w=paceWeight(x.cos,x.dist,run);
+ return {e,i:Math.min(1,x.i*(1-(e>0?ODDS.pace.faster:ODDS.pace.slower)*e*w))};
+}
+/** Clean-touch chance of a dribble (or a knock-on) — the part no defender is needed for. */
+export function touchChance(p:Footballer,run=false){
+ const k=run?ODDS.run:ODDS.dribble,skill=run?p.a.control*.3+p.a.dribbling*.3+p.a.speed*.4:p.a.control*.5+p.a.dribbling*.5;
+ return clamp(k.touch+k.touchSkill*skill/100-k.touchTired*(1-clamp(p.energy,0,100)/100),.5,.995);
+}
+/** Metres gained by a successful dribble (3–7 m by space ahead and pace) or 치고 달리기 (8–10 m by pace). */
+export function dribbleAdvance(m:Match,p:Footballer,vector:{x:number,y:number},run=false){
+ const A=ODDS.advance,paceN=clamp((paceOf(p)-40)/50,0,1);
+ if(run)return A.runMin+(A.runMax-A.runMin)*paceN;
+ const ahead=interferers(m,p,vector.x,vector.y).filter(x=>x.cos>0).reduce((n,x)=>n+x.i,0),space=1-clamp(ahead,0,1);
+ return A.dribbleMin+(A.dribbleMax-A.dribbleMin)*(space*.5+paceN*.5);
+}
+/** Pace gap (−1…1 edge) between two players, weighted by where `chaser` stands relative to `runner`'s heading. */
+export function paceDuel(m:Match,runner:Footballer,chaser:Footballer){
+ const d=direction(m,runner.team),dx=chaser.x-runner.x,dy=chaser.y-runner.y,dd=Math.hypot(dx,dy)||.01;
+ return edge(paceOf(runner)-paceOf(chaser))*paceWeight(dx*d/dd,dd);
+}
 const opponentKeeper=(m:Match,p:Footballer)=>m.players.find(q=>q.team!==p.team&&q.pos==='GK'&&active(q));
 /** Lane threat of one opponent on a pass from p to aim (0 when he is not between them). */
 function laneThreat(o:Footballer,p:Footballer,aim:{x:number,y:number},skill:number){
@@ -164,7 +202,7 @@ export function attackOdds(m:Match,a:Action,opts:AttackOptions={}):Odds{
  const p=m.players[m.ball.owner!],d=direction(m,p.team),goal={x:d>0?105:0,y:34};
  const passing=['pass','safe','forward','through','cross','cutback'].includes(a);
  const reasons:[number,string][]=[];
- let base=0,pen=0,mult=1;
+ let base=0,pen=0,mult=1,energyless=false;
  const shotLike=(r:number,b:number)=>{
    // Shots: distance/angle/skill base, lane block, then pressure and the keeper as multipliers.
    const list=interferers(m,p,goal.x-p.x,goal.y-p.y),skill=p.a.composure*.5+p.a.finishing*.3+p.a.strength*.2;
@@ -183,17 +221,28 @@ export function attackOdds(m:Match,a:Action,opts:AttackOptions={}):Odds{
  }
  else if(['shoot','closeShot','longShot','curl'].includes(a))base=shotLike(goalDistance(m,p),baseShotChance(m,p,a));
  else if(a==='dribble'||a==='hold'){
-   const v=opts.vector??{x:d,y:0},list=interferers(m,p,v.x,v.y);
+   const v=opts.vector??{x:d,y:0},run=a==='dribble'&&!!opts.run,list=interferers(m,p,v.x,v.y,run?ODDS.run.reach:1);
    if(a==='dribble'){
-     const skill=dribbleSkill(p);base=ODDS.dribble.free+ODDS.dribble.freeSkill*skill/100;
-     const parts=list.map(x=>({x,e:edge(skill-dribbleStop(x.o))}));
-     pen=covered(parts.map(({x,e})=>x.i*ODDS.dribble.block*(1-ODDS.dribble.edgeShare*e)));
-     const top=parts[0];if(top&&top.x.i>.15)reasons.push([Math.abs(top.e)>.15?.7:0,top.e>0?'돌파 능력 우세':'돌파 능력 열세']);
+     // 0.12 success = clean touch × not dispossessed. With nobody in the chosen path only the touch can fail.
+     const skill=dribbleSkill(p),myPace=paceOf(p),touch=touchChance(p,run);
+     const parts=list.map(x=>{const r=paced(x,myPace,run),e=run?edge(myPace-paceOf(x.o))*paceWeight(x.cos,x.dist,true)*ODDS.run.paceShare+edge(skill-dribbleStop(x.o))*ODDS.run.skillShare:edge(skill-dribbleStop(x.o));
+       return {x,pe:r.e,e,v:r.i*(run?ODDS.run.block:ODDS.dribble.block)*(1-(run?1:ODDS.dribble.edgeShare)*clamp(e,-1,1))};});
+     const steal=clamp(covered(parts.map(x=>x.v)),0,1);
+     base=touch*(1-steal);energyless=true;
+     const top=parts[0];
+     if(top&&top.x.i>.12){
+       if(!run)reasons.push([Math.abs(top.e)>.15?.7:0,top.e>0?'돌파 능력 우세':'돌파 능력 열세']);
+       reasons.push([Math.abs(top.pe)>.15&&top.x.where!=='front'?.75:Math.abs(top.pe)>.3?.5:0,top.pe>0?'속도 우위':'속도 열세']);
+     }
+     const open=!top||top.x.i<.05;
+     if(open)reasons.push([.8,'진행 방향 공간 열림'],[!run&&touch<.93?.6:0,'볼 터치 불안']);
+     else reasons.push(...placeWhy(list));
+     if(run&&open)reasons.push([.4,'긴 터치 위험']);
    }else{
      base=.55+.35*p.a.strength/100;
      pen=covered(list.map(x=>x.i*ODDS.hold.block*(1-ODDS.hold.edgeShare*edge(p.a.strength-x.o.a.strength))));
+     reasons.push(...placeWhy(list));
    }
-   reasons.push(...placeWhy(list));
  }
  else{
    const target=m.players.find(q=>q.id===opts.targetId)??(a==='cross'?crossTarget(m,p):a==='cutback'?cutbackTarget(m,p):undefined);
@@ -225,7 +274,8 @@ export function attackOdds(m:Match,a:Action,opts:AttackOptions={}):Odds{
  const playmaker=m.assistBoost?.to===p.id?m.assistBoost.mult:1;
  // 0.9 시그니처 (user only): a small multiplier on the action's base chance.
  const sig=p.fx?.signature?.[passing?'pass':a as SignatureAction]??0;
- return {p:clamp(base*mult*(1+sig)*(.8+p.energy/500)*playmaker-pen+boost,0,.99),why:why(reasons)};
+ // A dribble already carries fatigue in its touch and pace (0.12); other actions keep the energy factor.
+ return {p:clamp(base*mult*(1+sig)*(energyless?1:.8+p.energy/500)*playmaker-pen+boost,0,.99),why:why(reasons)};
 }
 export function attackChance(m:Match,a:Action,opts:AttackOptions={}){return attackOdds(m,a,opts).p;}
 /** Tackle duel shared by the user's 스탠딩 태클 and the AI's challenges (same edge as a dribble). */
@@ -237,9 +287,11 @@ export function defenseOdds(m:Match,a:DefenseAction,predicted=false):Odds{
  const gap=distance(u,o),k=a==='slide'?ODDS.slide:a==='press'?ODDS.press:ODDS.tackle;
  const skill=a==='slide'?u.a.sliding:a==='press'?u.a.marking:u.a.defending;
  const e=a==='slide'?edge(u.a.sliding*.75+u.a.strength*.25-ballCarry(o)):a==='press'?edge(u.a.marking*.6+u.a.anticipation*.25+u.a.speed*.15-ballCarry(o)):tackleEdge(u,o);
- const base=k.base+k.skill*skill/100+.10*u.a.strength/100-(a==='press'?gap*.018:a==='tackle'?gap*.035:0)+k.edge*e;
+ // 0.12 tackle / press: a pace race against the carrier (strongest when chasing from behind); a slide is a lunge.
+ const pace=a==='slide'?0:-paceDuel(m,o,u);
+ const base=k.base+k.skill*skill/100+.10*u.a.strength/100-(a==='press'?gap*.018:a==='tackle'?gap*.035:0)+k.edge*e+ODDS.pace.defend*pace;
  const sig=u.fx?.signature?.[a as SignatureAction]??0;
- const reasons:[number,string][]=[[Math.abs(e)>.15?.7:0,e>0?'수비 능력 우세':'수비 능력 열세'],[a!=='slide'&&gap>3.5?.5:0,'거리 멂'],[a!=='slide'&&gap<2?.4:0,'바짝 붙음']];
+ const reasons:[number,string][]=[[Math.abs(e)>.15?.7:0,e>0?'수비 능력 우세':'수비 능력 열세'],[a!=='slide'&&gap>3.5?.5:0,'거리 멂'],[a!=='slide'&&gap<2?.4:0,'바짝 붙음'],[Math.abs(pace)>.2?.6:0,pace>0?'속도 우위':'속도 열세']];
  return {p:clamp(base*(1+sig)*(.8+u.energy/500)+(predicted?u.a.anticipation/100*.10:0),.02,.95),why:why(reasons)};
 }
 export function defenseChance(m:Match,a:DefenseAction,predicted=false):number{return defenseOdds(m,a,predicted).p;}
