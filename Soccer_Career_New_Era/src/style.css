@@ -2268,3 +2268,4 @@ td strong {
 .legacy-archive small{display:block;color:#66766e;margin-top:5px}
 .rival-intro{line-height:1.7;color:#52675b;max-width:800px}
 @media(max-width:600px){.candidate-grid{grid-template-columns:1fr}.candidate-story{min-height:0}.origin-detail,.legacy-archive{overflow-wrap:anywhere}.compare{max-width:100%;overflow-x:auto}}
+.candidate-detail[open]+.trait-list,.candidate-detail[open]+.trait-empty{display:none}
