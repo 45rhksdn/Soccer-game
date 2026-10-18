@@ -81,7 +81,7 @@ test('retirement reward: shared by all slots, granted once even after reloads, r
   await create(page,'현역선수');
   // A retired career built with the game's own code, written into slot 2.
   const c=newCareer({name:'은퇴선수',age:16,pos:'ST',secondary:'LW',foot:'오른',height:180,weight:72,style:'테크니션',curve:'꾸준한 성장형'},1,99,{id:'e2e-retired'});
-  c.world.records=Array.from({length:3},(_,i)=>({year:2026+i,club:'검증팀',league:'검증리그',rank:1,appearances:10,minutes:900,goals:0,assists:0,rating:6.5}));c.player.age=35;c.world.phase='offseason';c.world.contract.years=1;c.world.clubId=c.world.clubs.find(x=>x.league>0)!.id;nextSeason(c);
+  c.world.records=Array.from({length:3},(_,i)=>({year:2026+i,club:'검증팀',league:'검증리그',rank:1,appearances:10,minutes:900,goals:0,assists:0,rating:6.5,champion:'검증팀'}));c.player.age=35;c.world.phase='offseason';c.world.contract.years=1;c.world.clubId=c.world.clubs.find(x=>x.league>0)!.id;nextSeason(c);
   const save=encode(c);
   await editDb(page,`store.put(arg,'slot2');store.put(arg,'archive3');`,save);
   await page.goto('/');await nav(page,'선수 변경하기');

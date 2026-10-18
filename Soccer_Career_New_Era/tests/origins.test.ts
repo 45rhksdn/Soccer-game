@@ -28,7 +28,7 @@ it('rival specialty differs without an artificial total ability advantage; persi
 it('early retirement archives but cannot farm rewards; completed seasons reward once and keep age records',()=>{
  const c=newCareer(profile,0,21);retire(c);const early=recordRetirement(emptyLegacy(),c);
  expect(early.legacy.retired).toHaveLength(1);expect(early.rewarded).toBe(false);expect(potentialBonus(early.legacy)).toBe(0);expect(scoutLevel(early.legacy)).toBe(0);
- const mature=newCareer(profile,0,22);mature.world.records=Array.from({length:3},(_,i)=>({year:2026+i,club:'학교',league:'고교',rank:1,appearances:10,minutes:900,goals:0,assists:3,rating:7}));
+ const mature=newCareer(profile,0,22);mature.world.records=Array.from({length:3},(_,i)=>({year:2026+i,club:'학교',league:'고교',rank:1,appearances:10,minutes:900,goals:0,assists:3,rating:7,champion:'학교'}));
  recordAge(mature);recordAge(mature);expect(mature.story!.ageRecords).toHaveLength(1);retire(mature);
  const out=recordRetirement(early.legacy,mature);expect(out.rewarded).toBe(true);expect(potentialBonus(out.legacy)).toBe(1);expect(scoutLevel(out.legacy)).toBe(1);
  expect(recordRetirement(out.legacy,decode(encode(mature))).rewarded).toBe(false);
