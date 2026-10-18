@@ -1,7 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 import {newCareer} from '../../src/career';
 import {createMatch,attributes} from '../../src/engine';
-import {encode} from '../../src/storage';
+import {encode,decode} from '../../src/storage';
 
 // v0.8: vertical match screen, on-pitch dribble direction, word probabilities, game-style popup.
 const fixture=(defending=false)=>{const c=newCareer({name:'세로선수',age:17,pos:'CM',secondary:'ST',foot:'오른',height:180,weight:70,style:'플레이메이커',curve:'꾸준한 성장형'},0,177,{traits:[]});
@@ -36,8 +36,12 @@ test('dribble: tapping the pitch picks the direction',async({page})=>{
   const canvas=page.locator('canvas.pitch.vertical'),box=(await canvas.boundingBox())!;
   await canvas.click({position:{x:box.width/2,y:8}}); // toward the goal we attack (top)
   await expect(page.locator('.pitch-hint')).toHaveCount(0);
-  // The dribble was played: the commentary moved on (new attack choice after a successful dribble, or a turnover).
-  await expect(page.locator('.live-commentary p')).not.toHaveText(before);
+  // The dribble was played: the saved match shows the player carried the ball on (a successful dribble hands the
+  // choice back, often with the same commentary line) or the ball was lost.
+  const saved=async()=>decode(await page.evaluate(()=>new Promise<string>(r=>{const q=indexedDB.open('soccer-career-new-era',1);q.onsuccess=()=>{const g=q.result.transaction('saves').objectStore('saves').get('slot1');g.onsuccess=()=>{q.result.close();r(g.result);};};}))).match!;
+  const start=fixture().match!,u0=start.players[start.userId];let moved=false;
+  for(let i=0;i<50&&!moved;i++){const m=await saved(),u=m.players[m.userId];moved=Math.hypot(u.x-u0.x,u.y-u0.y)>=2.5||m.ball.owner!==m.userId;if(!moved)await page.waitForTimeout(100);}
+  expect(moved).toBe(true);void before;
   expect(errors).toEqual([]);
 });
 

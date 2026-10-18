@@ -6,6 +6,7 @@
 - 규칙과 수식은 GAME_DESIGN 최상단에 있다. 측정과 계수를 정한 근거는 reports/v011-odds.md에 있다.
 - 화면: '상대와의 거리'(`opponentDistanceLabel`), 안내 문구, 이유(`why`), 대상을 고르기 전 흐린 게이지(`Chance preview`).
 - 테스트: `tests/matchup.test.ts`(필수 11종 + 보조 1), `tests/e2e/v11.spec.ts`(PC·모바일). 기존 v07 e2e 문구 하나를 바꿨다('6m 이내 수비수' → '6m 이내 상대').
+- 검증 결과: TEST_REPORT 최상단(단위 177개, Chromium e2e 66개 통과, WebKit은 PR CI).
 - 재현: `npx tsx scripts/odds-compare.ts 400 out.json`. 0.10과 비교하려면 0.10 커밋에서 같은 명령을 실행한다.
 - 한계:
   - 방향 가중과 도달거리는 하나의 공통 모양이라, 포지션이나 특성별 차이는 없다.
