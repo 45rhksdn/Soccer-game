@@ -43,5 +43,6 @@ export default defineConfig({
       ? [{ name: "iphone-webkit", use: { ...devices["iPhone 13"] } }]
       : []),
   ],
-  reporter: [["list"], ["json", { outputFile: "reports/playwright.json" }]],
+  // On CI failures are also GitHub annotations (readable from the PR checks without downloading logs).
+  reporter: [["list"], ["json", { outputFile: "reports/playwright.json" }], ...(process.env.CI ? [["github"] as ["github"]] : [])],
 });
