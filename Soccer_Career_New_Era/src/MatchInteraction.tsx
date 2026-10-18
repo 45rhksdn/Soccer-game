@@ -24,21 +24,29 @@ const ICON:Record<string,string>={
 function Icon({name}:{name:string}){return <svg className="tile-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICON[name]??ICON.pass}/></svg>;}
 
 /** 0.8.1: when 드리블 is chosen its tile turns into an eight-way pad (each arrow shows its chance bar). */
-function DribblePad({m,onPick,onCancel}:{m:Match,onPick:(v:{x:number,y:number})=>void,onCancel:()=>void}){
+function DribblePad({m,run,onRun,onPick,onCancel}:{m:Match,run:boolean,onRun:(run:boolean)=>void,onPick:(v:{x:number,y:number})=>void,onCancel:()=>void}){
  const cells=[['↖',-1,-1],['↑',0,-1],['↗',1,-1],['←',-1,0],null,['→',1,0],['↙',-1,1],['↓',0,1],['↘',1,1]] as const;
+ const [focus,setFocus]=useState<string|null>(null);
+ const odds=(x:number,y:number)=>attackOdds(m,'dribble',{vector:screenToEngineVector(m,x,y),run});
+ const shown=cells.find(c=>c&&c[0]===focus)??cells[1]!;
+ const top=odds(shown[1],shown[2]);
  return <div className="action-card attack dribble-pad selected" role="group" aria-label="드리블 방향">
-  <span className="tile-top"><strong>드리블 방향</strong><button type="button" className="pad-close" aria-label="드리블 취소" onClick={onCancel}>×</button></span>
-  <div className="pad">{cells.map((c,i)=>{if(!c)return <span key={i} className="pad-center" aria-hidden="true">●</span>;const [label,x,y]=c,vector=screenToEngineVector(m,x,y),odds=attackOdds(m,'dribble',{vector}),p=odds.p,hint=[chanceLabel(p),...odds.why].join(' · ');
-   return <button key={label} type="button" className={`pad-cell lv${chanceLevel(p)}`} aria-label={`드리블 ${label}`} title={hint} aria-description={hint} onClick={()=>onPick(vector)}><b>{label}</b><span className="mini"><span style={{width:`${Math.round(p*100)}%`}}/></span></button>;})}</div>
-  <small>경기장을 눌러도 됩니다 · 위쪽이 공격 방향</small>
+  <span className="tile-top"><strong>{run?'치고 달리기 방향':'드리블 방향'}</strong><button type="button" className="pad-close" aria-label="드리블 취소" onClick={onCancel}>×</button></span>
+  {/* 0.12 two ways to beat a man: a short dribble, or knock it long and sprint (8–10 m, decided by space and pace). */}
+  <div className="pad-mode" role="radiogroup" aria-label="드리블 방식"><button type="button" role="radio" aria-checked={!run} className={!run?'on':''} onClick={()=>onRun(false)}>짧은 드리블</button><button type="button" role="radio" aria-checked={run} className={run?'on':''} onClick={()=>onRun(true)}>치고 달리기</button></div>
+  <div className="pad">{cells.map((c,i)=>{if(!c)return <span key={i} className="pad-center" aria-hidden="true">●</span>;const [label,x,y]=c,vector=screenToEngineVector(m,x,y),o=odds(x,y),p=o.p,hint=[chanceLabel(p),...o.why].join(' · ');
+   return <button key={label} type="button" className={`pad-cell lv${chanceLevel(p)}`} aria-label={`${run?'치고 달리기':'드리블'} ${label}`} title={hint} aria-description={hint} onMouseEnter={()=>setFocus(label)} onFocus={()=>setFocus(label)} onClick={()=>onPick(vector)}><b>{label}</b><span className="mini"><span style={{width:`${Math.round(p*100)}%`}}/></span></button>;})}</div>
+  <p className="pad-why" aria-live="polite"><b>{shown[0]}</b> {chanceLabel(top.p)}{top.why.length>0&&` · ${top.why.join(' · ')}`}</p>
+  <small>{run?'길게 차고 달려 8~10m 전진 · 공간과 속도 승부':'짧게 치고 나가 3~7m 전진'} · 경기장을 눌러도 됩니다</small>
  </div>;
 }
 export function MatchInteraction({m,onChange,toolbar}:{m:Match;onChange:()=>void;toolbar?:ReactNode}){
  const [mode,setMode]=useState<'pass'|'dribble'|null>(null);
+ const [run,setRun]=useState(false);
  const u=m.players[m.userId],o=m.ball.owner===null?null:m.players[m.ball.owner];
  // 0.11 상대와의 거리: attacking — nearest opponent field player; defending — the opponent on the ball.
  const near=nearbyOpponents(m,u),gap=m.defending&&o?distance(u,o):near.distance;
- const execute=(a:Action,opts:AttackOptions={})=>{act(m,a,opts);setMode(null);onChange();};
+ const execute=(a:Action,opts:AttackOptions={})=>{act(m,a,opts);setMode(null);setRun(false);onChange();};
  // Screen directions on the vertical pitch (up = toward the goal we attack).
  const directions=[['↖',-1,-1],['↑',0,-1],['↗',1,-1],['←',-1,0],['→',1,0],['↙',-1,1],['↓',0,1],['↘',1,1]] as const;
  const dribbleMode=m.decision&&mode==='dribble';
@@ -47,9 +55,9 @@ export function MatchInteraction({m,onChange,toolbar}:{m:Match;onChange:()=>void
  useEffect(()=>{root.current?.closest('.match-board')?.scrollIntoView({block:'start'});},[]);
  return <div className="match-layout" ref={root}>
   <div className="match-field">
-   <div className="pitch-wrap interactive-pitch"><Pitch match={m} selectable={m.decision&&mode==='pass'} onPlayer={id=>execute('pass',{targetId:id})} dribble={dribbleMode} onDribble={vector=>execute('dribble',{vector})}/>
+   <div className="pitch-wrap interactive-pitch"><Pitch match={m} selectable={m.decision&&mode==='pass'} onPlayer={id=>execute('pass',{targetId:id})} dribble={dribbleMode} onDribble={vector=>execute('dribble',run?{vector,run}:{vector})}/>
     <div className="live-badge">{m.decision?'공격 선택':m.defending?'수비 선택':m.ended?'경기 종료':'LIVE'}</div>
-    {dribbleMode&&<div className="pitch-hint">경기장을 눌러 드리블 방향을 정하세요</div>}
+    {dribbleMode&&<div className="pitch-hint">경기장을 눌러 {run?'치고 달리기':'드리블'} 방향을 정하세요</div>}
     {m.decision&&mode==='pass'&&<div className="pitch-hint">노란 테두리 동료를 눌러 패스하세요</div>}
    </div>
   </div>
@@ -60,7 +68,7 @@ export function MatchInteraction({m,onChange,toolbar}:{m:Match;onChange:()=>void
     {(m.decision||m.defending)&&<div className="distance-strip"><strong>상대와의 거리 {opponentDistanceLabel(gap)}</strong>{m.decision&&<span>6m 이내 상대 {near.count}명 · 상대 위치에 따라 압박 영향이 달라집니다</span>}<small>상대와의 거리·위치 및 능력 차이가 성공률에 영향을 줍니다.</small></div>}
     {m.defending?<div className="action-grid defense-grid" role="group" aria-label="수비 선택">{PLAYER_DEFENSE_ACTIONS.map(a=><button key={a} className="action-card defense" aria-label={`수비 ${DEFENSE_ACTIONS[a].label}`} onClick={()=>{defend(m,a);setMode(null);onChange();}}><span className="tile-top"><strong>{DEFENSE_ACTIONS[a].label}</strong><Icon name={a}/></span>{(()=>{const o=defenseOdds(m,a);return <Chance p={o.p} why={o.why}/>;})()}<small>{DEFENSE_ACTIONS[a].desc}</small></button>)}</div>
     :m.decision?<>
-     <div className="action-grid" role="group" aria-label="공격 선택">{availableActions(m).map(a=>a==='dribble'&&mode==='dribble'?<DribblePad key={a} m={m} onPick={vector=>execute('dribble',{vector})} onCancel={()=>setMode(null)}/>:<button key={a} className={`action-card attack${mode===a?' selected':''}`} onClick={()=>a==='pass'||a==='dribble'?setMode(mode===a?null:a):execute(a)}><span className="tile-top"><strong>{ACTIONS[a]}</strong><Icon name={a}/></span>{a==='pass'?<Chance p={actionChance(m,'pass')} preview="동료를 고르면 확정"/>:a==='dribble'?<Chance p={actionChance(m,'dribble',{vector:screenToEngineVector(m,0,-1)})} preview="방향을 고르면 확정"/>:(()=>{const o=attackOdds(m,a);return <Chance p={o.p} why={o.why}/>;})()}</button>)}</div>
+     <div className="action-grid" role="group" aria-label="공격 선택">{availableActions(m).map(a=>a==='dribble'&&mode==='dribble'?<DribblePad key={a} m={m} run={run} onRun={setRun} onPick={vector=>execute('dribble',run?{vector,run}:{vector})} onCancel={()=>{setMode(null);setRun(false);}}/>:<button key={a} className={`action-card attack${mode===a?' selected':''}`} onClick={()=>a==='pass'||a==='dribble'?setMode(mode===a?null:a):execute(a)}><span className="tile-top"><strong>{ACTIONS[a]}</strong><Icon name={a}/></span>{a==='pass'?<Chance p={actionChance(m,'pass')} preview="동료를 고르면 확정"/>:a==='dribble'?<Chance p={actionChance(m,'dribble',{vector:screenToEngineVector(m,0,-1)})} preview="방향을 고르면 확정"/>:(()=>{const o=attackOdds(m,a);return <Chance p={o.p} why={o.why}/>;})()}</button>)}</div>
      {mode==='pass'&&<div className="target-options" role="group" aria-label="패스 받을 동료"><p>경기장의 동료를 누르거나 아래에서 고르세요. 오프사이드 위치의 동료는 고를 수 없습니다.</p>{passTargets(m).map(q=><button key={q.id} disabled={offside(m,q)} onClick={()=>execute('pass',{targetId:q.id})}><span>#{q.number} {q.name}{offside(m,q)?' (오프사이드)':''} · {distance(u,q).toFixed(0)}m</span>{!offside(m,q)&&(()=>{const o=attackOdds(m,'pass',{targetId:q.id});return <Chance tone="light" p={o.p} why={o.why}/>;})()}</button>)}</div>}
     </>:<div className="offball">{(['shape','run','press','defend','call'] as const).map((a,i)=><button disabled={m.userOnPitch===false} className={m.offball===a?'secondary selected':'secondary'} key={a} onClick={()=>{m.offball=a;onChange();}}>{['전술 위치 유지','공간 침투','압박','수비 가담','패스 요청'][i]}</button>)}</div>}
    </section>}

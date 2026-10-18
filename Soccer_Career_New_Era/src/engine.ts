@@ -1,4 +1,4 @@
-import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, runPoint, crossTarget, cutbackTarget, boxMates, tackleEdge, ODDS, type AttackOptions } from "./tactical";
+import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, runPoint, crossTarget, cutbackTarget, boxMates, tackleEdge, ODDS, dribbleAdvance, paceDuel, attackOdds, type AttackOptions } from "./tactical";
 /** Weight of an open shooting lane when attackers pick their receiving spot near goal. */
 export const SHOT_LANE_WEIGHT = 3;
 /** Pure seeded football simulation. No DOM, timers, or external services. Pitch 105 x 68m. */
@@ -392,7 +392,7 @@ export const ON_LINE_RANGE = 62;
 /** Pass-target bonus for returning a give-and-go to the user. */
 export const ONE_TWO_BONUS = 8;
 /** AI preferences for the 0.10 actions (balance.test keeps the totals in range). */
-export const AI = { hopelessShot: .07, midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35 } as const;
+export const AI = { hopelessShot: .07, midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35, dribbleOpen: .02, lossMetres: 25 } as const;
 /** Missed shots that go out for a corner; saves parried for a corner; saves that drop loose in the box. */
 export const SET_PIECE = { cornerFromMiss: .3, cornerFromSave: .18, rebound: .14 } as const;
 /** Share of the new step taken each tick (the rest keeps the previous step), before acceleration. */
@@ -606,6 +606,24 @@ export function actionChance(m:Match,action:Action,options:AttackOptions={}) {
 export function availableActions(m:Match):Action[]{
   return (['header','volley','closeShot','longShot','curl','cross','cutback','dribble','pass'] as Action[]).filter(a=>attackAllowed(m,a));
 }
+/**
+ * 0.12 how the AI dribbles (pure, no RNG): forward, or the better diagonal; 치고 달리기 when the knock-on is
+ * nearly as safe as a short dribble (it gains twice the ground). Same odds as the user's choice.
+ */
+export function aiDribble(m: Match, p: Footballer): AttackOptions {
+  const d = direction(m, p.team);
+  let best: AttackOptions = { vector: { x: d, y: 0 } }, score = -Infinity;
+  for (const vector of [{ x: d, y: 0 }, { x: d, y: .7 }, { x: d, y: -.7 }]) {
+    if (p.y + vector.y * 6 < 2 || p.y + vector.y * 6 > 66) continue;
+    for (const run of [false, true]) {
+      // Expected ground: metres gained on success minus the cost of losing the ball.
+      const opts = run ? { vector, run } : { vector }, o = attackOdds(m, "dribble", opts).p;
+      const s = o * dribbleAdvance(m, p, vector, run) * (vector.y ? .9 : 1) - (1 - o) * AI.lossMetres;
+      if (s > score) { score = s; best = opts; }
+    }
+  }
+  return best;
+}
 export function chooseAction(m: Match, p: Footballer): Action {
   const acts = (["safe","forward","through","dribble","shoot","hold","cross","cutback","header","volley"] as Action[]).filter(a=>attackAllowed(m,a));
   const d = direction(m, p.team),
@@ -619,7 +637,7 @@ export function chooseAction(m: Match, p: Footballer): Action {
     if (a === "forward") utility += 0.12;
     if (a === "through") utility += p.a.vision / 550;
     if (a === "safe") utility -= 0.05;
-    if (a === "dribble") utility += pressure(m, p) < 0.6 ? 0.24 : -0.22;
+    if (a === "dribble") utility = attackOdds(m, a, aiDribble(m, p)).p + (pressure(m, p) < 0.6 ? AI.dribbleOpen : -0.22);
     if (a === "hold") utility -= 0.42;
     // 0.10 meet a cross first time; deliver from wide areas; cut back from the byline; corners are crossed.
     if (a === "header" || a === "volley") utility = actionChance(m, a) * 7.5 + AI.aerial;
@@ -697,17 +715,23 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
     return;
   }
   if (action === "dribble" || action === "hold") {
+    const vector=options.vector??{x:d,y:0},length=Math.hypot(vector.x,vector.y)||1,run=action==="dribble"&&!!options.run;
+    // 0.12 metres gained: dribble 3–7 m (space ahead, pace), 치고 달리기 8–10 m (pace); decided before the roll.
+    const step=action==="dribble"?dribbleAdvance(m,p,vector,run):1;
+    const landing={x:clamp(p.x+vector.x/length*step,1,104),y:clamp(p.y+vector.y/length*step,1,67)};
     if (random(m) < chance) {
-      const vector=options.vector??{x:d,y:0},length=Math.hypot(vector.x,vector.y)||1;
-      p.x=clamp(p.x+vector.x/length*(action==="dribble"?4:1),1,104);
-      p.y=clamp(p.y+vector.y/length*(action==="dribble"?4:1),1,67);
-      if(action==="dribble"){p.energy=Math.max(0,p.energy-1);p.stats.dribbles=(p.stats.dribbles??0)+1;own(m,p);event(m,`${p.name}, 수비를 피해 공간으로 치고 나갑니다!`);}
+      p.x=landing.x;
+      p.y=landing.y;
+      if(action==="dribble"){p.energy=Math.max(0,p.energy-(run?ODDS.run.energy:1));p.stats.dribbles=(p.stats.dribbles??0)+1;own(m,p);event(m,run?`${p.name}, 공을 길게 치고 달립니다! 수비를 따돌립니다!`:`${p.name}, 수비를 피해 공간으로 치고 나갑니다!`);}
       m.ball.x = p.x;
       m.ball.y = p.y;
     } else {
+      // A lost knock-on goes to whoever reaches the ball first (nearest to where it was played); otherwise the nearest defender.
+      const at=run?landing:p;
       const q = m.players
         .filter((q) => q.team !== p.team && active(q))
-        .sort((a, b) => dist(a, p) - dist(b, p))[0];
+        .sort((a, b) => dist(a, at) - dist(b, at))[0];
+      if(run)p.energy=Math.max(0,p.energy-ODDS.run.energy);
       p.stats.losses++;
       q.stats.tackles++;
       own(m, q);
@@ -775,7 +799,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
   if (m.ended || ((m.decision || m.defending) && !auto)) return;
   if (m.defending) defend(m, "none"); // auto mode (fast simulation) never waits for a defensive choice
   if (m.decision && auto) {
-    act(m, chooseAction(m, m.players[m.userId]));
+    { const u = m.players[m.userId], a = chooseAction(m, u); act(m, a, a === "dribble" ? aiDribble(m, u) : {}); }
   }
   const prev = m.clock;
   m.clock += dt * 6;
@@ -1077,7 +1101,8 @@ export function step(m: Match, dt = 0.5, auto = false) {
           owner.x = clamp(owner.x, 4, 101);
         } else if (
           // 0.11 the AI's challenge uses the same tackle duel as the user's 스탠딩 태클.
-          random(m) < clamp(ODDS.tackle.base + ODDS.tackle.edge * tackleEdge(near, owner), .1, .85)
+          // 0.12 plus the pace race: a quicker carrier escapes a chaser, a slower one is caught.
+          random(m) < clamp(ODDS.tackle.base + ODDS.tackle.edge * tackleEdge(near, owner) - ODDS.pace.tackle * paceDuel(m, owner, near), .1, .85)
         ) {
           near.stats.tackles++;
           owner.stats.losses++;
@@ -1089,7 +1114,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
       if (m.ball.owner === owner.id && m.nextAI <= 0) {
         if (owner.id === m.userId && m.userOnPitch !== false && !auto) {
           m.decision = true;
-        } else act(m, chooseAction(m, owner));
+        } else { const a = chooseAction(m, owner); act(m, a, a === "dribble" ? aiDribble(m, owner) : {}); }
       }
     }
   }
