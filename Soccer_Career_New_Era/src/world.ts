@@ -61,7 +61,28 @@ export function generateOffers(w:World,p:{a:Attributes,pos:Position,age:number,e
   }
   // Never leave a professional player without a market: the two closest-level clubs that can afford it bid.
   if(!w.offers.some(o=>o.clubId!==w.clubId))for(const {club,fit} of pro.filter(x=>x.club.id!==w.clubId&&x.club.budget>=roleSalary(ability,x.club.league)*2).sort((a,b)=>Math.abs(a.fit-2)-Math.abs(b.fit-2)).slice(0,2))w.offers.push(make(club,fit,false,false));
+  w.offers=pickOffers(w,w.offers,new Map(pro.map(x=>[x.club.id,x.fit])));
   w.offers.sort((a,b)=>w.clubs.find(c=>c.id===a.clubId)!.league-w.clubs.find(c=>c.id===b.clubId)!.league);
+}
+/** At most this many clubs bid in one window (the current club's renewal included). */
+export const MAX_OFFERS=6;
+/**
+ * 0.9.1: keep the renewal and the clubs that showed interest, then fill the remaining places league by
+ * league in turn (best-fitting club of each league first), so the offers span as many leagues as possible.
+ */
+function pickOffers(w:World,offers:Offer[],fit:Map<string,number>){
+  if(offers.length<=MAX_OFFERS)return offers;
+  const league=(o:Offer)=>w.clubs.find(c=>c.id===o.clubId)!.league,score=(o:Offer)=>Math.abs((fit.get(o.clubId)??0)-2);
+  const picked=offers.filter(o=>o.clubId===w.clubId);
+  for(const o of offers.filter(o=>o.clubId!==w.clubId&&w.interestedClubIds?.includes(o.clubId)).sort((a,b)=>score(a)-score(b)))if(picked.length<MAX_OFFERS)picked.push(o);
+  const byLeague=new Map<number,Offer[]>();
+  for(const o of offers.filter(o=>!picked.includes(o)).sort((a,b)=>score(a)-score(b)))byLeague.set(league(o),[...(byLeague.get(league(o))??[]),o]);
+  // Leagues not represented yet go first in each round.
+  while(picked.length<MAX_OFFERS&&[...byLeague.values()].some(q=>q.length)){
+    const order=[...byLeague.keys()].filter(l=>byLeague.get(l)!.length).sort((a,b)=>picked.filter(o=>league(o)===a).length-picked.filter(o=>league(o)===b).length||score(byLeague.get(a)![0])-score(byLeague.get(b)![0]));
+    for(const l of order){if(picked.length>=MAX_OFFERS)break;picked.push(byLeague.get(l)!.shift()!);}
+  }
+  return picked;
 }
 export function negotiate(w:World,clubId:string){expireOffers(w);const o=w.offers.find(o=>o.clubId===clubId);if(!o||o.status!=='open'||o.negotiated)throw Error('협상 가능한 제안이 없습니다.');o.negotiated=true;const club=w.clubs.find(c=>c.id===clubId)!;if(random(w)<.68&&club.budget>=o.fee+o.salary*2.3){o.salary=Math.round(o.salary*1.15);w.news.unshift(`${club.name} · 연봉 15% 인상 수락`);}else{w.news.unshift(`${club.name} · 인상 거절, 기존 조건 유지`);}}
 export function acceptOffer(w:World,clubId:string,name:string){expireOffers(w);if(w.phase!=='offseason')throw Error('이적은 시즌 종료 후 가능합니다.');const o=w.offers.find(o=>o.clubId===clubId&&o.status==='open');if(!o)throw Error('유효한 제안이 아닙니다.');const buyer=w.clubs.find(c=>c.id===clubId)!,seller=clubOf(w);if(buyer.budget<o.fee+o.salary*o.years)throw Error('구단 예산이 부족합니다.');if(buyer.id!==seller.id){buyer.budget-=o.fee;seller.budget+=o.fee;w.ledger.push({year:w.year,from:buyer.id,to:seller.id,fee:o.fee,player:name});}w.clubId=buyer.id;w.contract={salary:o.salary,years:o.years};w.offers=[];w.news.unshift(`${name} · ${buyer.name}와 ${o.years}년 계약`);}

@@ -2,6 +2,7 @@ import {MatchInteraction} from "./MatchInteraction";
 import {traitNotice} from './traitPresentation';
 import {GrowthNotes,RivalPanel} from './WeeklyPanels';
 import {MissionResult,SignaturePanel,RivalCompare} from './EngagementPanels';
+import {headlines} from './engagement';
 import {TraitList} from './TraitBadges';
 import {ScoutPanel} from './ScoutPanel';
 import {PlayerSlots} from './PlayerSlots';
@@ -731,8 +732,6 @@ export default function App() {
                       <div className="eyebrow">
                         SEASON {c.world.year} / WEEK {String(c.week + 1).padStart(2, "0")}
                       </div>
-                      <h1>좋은 하루예요, {p!.name} 선수.</h1>
-                      <p>오늘의 작은 노력이, 내일의 경기를 바꿉니다.</p>
                     </div>
                     <span className="date">
                       <CalendarDays size={17} />
@@ -745,7 +744,7 @@ export default function App() {
                         {competitionName(c)}
                       </span>
                       <h2>지난주 주요 뉴스</h2>
-                      <div className="headline-news">{c.development.news.filter(n=>n.day>=c.day-7&&!n.text.startsWith('보유 특성')).slice(0,4).map((n,i)=><p key={i}>{traitNotice(n.text)}</p>)}{!c.development.news.some(n=>n.day>=c.day-7)&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
+                      <div className="headline-news">{headlines(c).map((n,i)=><p key={i}>{traitNotice(n.text)}</p>)}{!headlines(c).length&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
                     </div>
                     <div className="hero-number">
                       10
@@ -1035,7 +1034,7 @@ export default function App() {
                   </div>
                 </>
               )}
-              {c&&["team","season","market","career"].includes(tab)&&<WorldPanel c={c} tab={tab} update={update}/>}
+              {c&&["team","season","market","career"].includes(tab)&&<WorldPanel c={c} tab={tab} update={update} onNeedContract={(message)=>{inform(message);setTab("market");}}/>}
               {tab === "players" && (
                 <PlayerSlots
                   slots={slots}
@@ -1164,7 +1163,7 @@ export default function App() {
               SOCCER CAREER <b>NEW ERA</b>
             </span>
             <span>한 명의 선수. 무한한 가능성.</span>
-            <small>CAREER BETA · 0.9</small>
+            <small>CAREER BETA · 0.9.1</small>
           </footer>
         </main>
       </div>

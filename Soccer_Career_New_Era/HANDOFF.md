@@ -1,3 +1,9 @@
+# 0.9.1 추가 (2026-10-18, Claude, `claude/v0.9-engagement`)
+- 졸업이나 계약 만료 시 이적 시장으로 자동 이동한다(`career.contractNeeded` → `WorldPanel.onNeedContract`).
+- 제안 수 상한은 6개이고, 리그를 고르게 섞는다(`world.pickOffers`).
+- 뉴스 표시는 `engagement.headlines`가 고른다. 숨김 종류는 `development.HIDDEN_NEWS`(lucky, insight, rival)이고, 기록에는 남지만 피드와 헤드라인에는 나오지 않는다.
+- '에이전트와의 커리어 계획'은 이 저장소(모든 브랜치)와 배포 빌드 어디에도 없다. 사용자가 다른 배포본을 보고 있을 가능성이 있어 확인을 요청했다.
+
 # 0.9.0 추가 (2026-10-17, Claude, `claude/v0.9-engagement`)
 - 새 모듈 `src/engagement.ts`(규칙)와 `src/EngagementPanels.tsx`(화면)에서 감독 미션, 시그니처 도전, 라이벌 비교를 처리한다. 자세한 내용은 CHANGELOG 0.9.0에 있다.
 - 연결 지점:

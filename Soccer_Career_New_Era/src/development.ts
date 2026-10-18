@@ -16,7 +16,9 @@ export const DAILY={shooting:{label:'공격훈련',keys:['shooting','longShot','
 export type Daily=keyof typeof DAILY;
 /** News texts for 럭키 (training) and 깨달음 (match). Exact values live in the growth history, not here. */
 export const LUCKY_NEWS='훈련 중 무언가를 느꼈다!',INSIGHT_NEWS='경기 중에 깨달음을 얻었다!';
-export type News={day:number,text:string,kind:'rating'|'lucky'|'insight'|'interest'|'offer'|'career'};
+export type News={day:number,text:string,kind:'rating'|'lucky'|'insight'|'interest'|'offer'|'career'|'rival'};
+/** 0.9.1: kept for the record (tests, growth history) but never shown as news: 깨달음 / 럭키 and minor rival notes. */
+export const HIDDEN_NEWS:News['kind'][]=['lucky','insight','rival'];
 export type WeekNote={week:number,startDay:number,before:Attributes,after:Attributes,rivalBefore:Attributes,rivalAfter:Attributes,entries:string[]};
 /** Per-week trait state (라이벌 의식 multiplier waiting for the first training, 독학파 counters). */
 export type WeekBonus={drive?:number,focus?:Record<string,number>,focusDone?:boolean};
@@ -26,9 +28,9 @@ export type WeekState={startDay:number,cursor:number,before:Attributes,rivalBefo
 export type Development={traits:string[],experienceBank?:number,wallet:number,
  /** Bought / equipped items (equipment.ts). Absent in saves older than 0.5. */
  equipment?:EquipmentState,
- /** 0.9 (engagement.ts): career deeds for 시그니처 도전, earned signatures, 감독 미션 record, OVR lead over the rival. Absent in older saves. */
- deeds?:Partial<Record<DeedKey,number>>,signatures?:string[],missions?:{done:number,total:number},rivalAhead?:boolean,plan:Daily[],active?:WeekState,notes:WeekNote[],news:News[],rival:{id:string,player:Player,school:number,clubId:string,traits:string[],experienceBank?:number,retired:boolean,trainedWeek:number,lastPlayedWeek:number,history:{week:number,rating:number,goals:number,club:string}[],interests:string[],offers:Offer[]},interestIds:string[]};
-export function news(c:Career,text:string,kind:News['kind']='career'){c.development.news.unshift({day:c.day,text,kind});c.development.news=c.development.news.slice(0,150);c.feed.unshift(text);c.feed=c.feed.slice(0,40);}
+ /** 0.9 (engagement.ts): career deeds for 시그니처 도전, earned signatures and the 감독 미션 record. Absent in older saves. */
+ deeds?:Partial<Record<DeedKey,number>>,signatures?:string[],missions?:{done:number,total:number},plan:Daily[],active?:WeekState,notes:WeekNote[],news:News[],rival:{id:string,player:Player,school:number,clubId:string,traits:string[],experienceBank?:number,retired:boolean,trainedWeek:number,lastPlayedWeek:number,history:{week:number,rating:number,goals:number,club:string}[],interests:string[],offers:Offer[]},interestIds:string[]};
+export function news(c:Career,text:string,kind:News['kind']='career'){c.development.news.unshift({day:c.day,text,kind});c.development.news=c.development.news.slice(0,150);if(HIDDEN_NEWS.includes(kind))return;c.feed.unshift(text);c.feed=c.feed.slice(0,40);}
 export function ensureDevelopment(c:Career,opts:{traits?:string[]}={}){
  if(c.development)return;
  c.world.currentDay=c.day;for(const o of c.world.offers){o.issuedDay??=c.day;o.expiresDay??=c.day+14;}
@@ -38,7 +40,7 @@ export function ensureDevelopment(c:Career,opts:{traits?:string[]}={}){
  const userTraits=rollTraits(rng),rivalTraits=rollTraits(rng);
  c.development={traits:opts.traits?[...opts.traits]:userTraits,wallet:100,plan:['shooting','running','passing','rest','passing','rest','rest'],notes:[],news:[],interestIds:[],rival:{id:'career-rival',player:rp,school,clubId:'c'+school,traits:rivalTraits,retired:false,trainedWeek:-1,lastPlayedWeek:-1,history:[],interests:[],offers:[]}};
  if(rp.age>=19)c.development.rival.clubId=closestClub(c,rp).id;
- syncRival(c);news(c,`${rp.name} · 같은 나이, 같은 ${rp.pos} 포지션의 라이벌이 등장했습니다.`);news(c,c.development.traits.length?`보유 특성 ${c.development.traits.map(t=>`「${t}」`).join(' ')} · ${c.development.traits.map(t=>traitDef(t)?.summary??t).join(' / ')}`:'보유 특성 없음 · 순수한 노력으로 성장하는 선수');
+ syncRival(c);news(c,`${rp.name} · 같은 나이, 같은 ${rp.pos} 포지션의 라이벌이 등장했습니다.`,'rival');news(c,c.development.traits.length?`보유 특성 ${c.development.traits.map(t=>`「${t}」`).join(' ')} · ${c.development.traits.map(t=>traitDef(t)?.summary??t).join(' / ')}`:'보유 특성 없음 · 순수한 노력으로 성장하는 선수');
 }
 export function syncRival(c:Career){
  const r=c.development.rival,club=c.world.clubs.find(x=>x.id===r.clubId)!;
@@ -72,7 +74,7 @@ export function applyDaily(c:Career,p:Player,type:Daily,trait:TraitInput,rival=f
 function trainDay(c:Career,rival:boolean,type:Daily,state:WeekBonus){
  const d=c.development,p=rival?d.rival.player:c.player,traits=rival?d.rival.traits:d.traits,name=p.name;
  const trains=isTrainingDay(p,type);
- let bonus=1;if(trains&&state.drive&&state.drive>1){bonus=state.drive;state.drive=undefined;news(c,`${name} · 라이벌 의식! 훈련에 더욱 몰입합니다.`);}
+ let bonus=1;if(trains&&state.drive&&state.drive>1){bonus=state.drive;state.drive=undefined;news(c,`${name} · 라이벌 의식! 훈련에 더욱 몰입합니다.`,rival?'rival':'career');}
  let text=applyDaily(c,p,type,traits,rival,bonus);if(bonus>1)text+=` · 라이벌 의식 ×${bonus}`;
  const f=focusBonus(traits);
  if(trains&&f&&!state.focusDone){const counts=state.focus??={};counts[type]=(counts[type]??0)+1;
@@ -231,7 +233,7 @@ export function playRival(c:Career,main:Match){
  }
  if(rp){const v=rating(rp);r.history.unshift({week:c.week,rating:v,goals:rp.stats.goals,club:r.clubId});r.history=r.history.slice(0,200);r.lastPlayedWeek=c.week;r.player.energy=Math.min(100,rp.energy+30);grow(r.player,['passing','shooting','positioning'],.18);
   // Same match-injury rule as the user and NPCs; an injured rival is left out of lineups until recovered.
-  if(rp.stats.minutes>0&&!r.player.injuryWeeks){const weeks=matchInjury(c.seed^c.week,r.id,rp.energy,r.traits);if(weeks){r.player.injuryWeeks=weeks;news(c,`라이벌 ${r.player.name} · 경기 중 부상 · ${weeks}주 회복 필요`);}}if(v>=7.5)news(c,`라이벌 ${r.player.name} · 평점 ${v.toFixed(2)}의 활약!`,'rating');}
+  if(rp.stats.minutes>0&&!r.player.injuryWeeks){const weeks=matchInjury(c.seed^c.week,r.id,rp.energy,r.traits);if(weeks){r.player.injuryWeeks=weeks;news(c,`라이벌 ${r.player.name} · 경기 중 부상 · ${weeks}주 회복 필요`,'rival');}}if(v>=7.5)news(c,`라이벌 ${r.player.name} · 평점 ${v.toFixed(2)}의 활약!`,'rating');}
  syncRival(c);return score?{clubId:r.clubId,score}:undefined;
 }
 /** Clubs show interest only when their level at the player's position is within this many points of the player's own (0.6). */
@@ -244,16 +246,16 @@ export function scoutInterest(c:Career){
   const p=rival?c.development.rival.player:c.player,ids=rival?c.development.rival.interests:c.development.interestIds;
   if(p.age<17||random(c)>.35)continue;
   const candidates=c.world.clubs.filter(x=>x.league>0&&!ids.includes(x.id)&&x.id!==(rival?c.development.rival.clubId:c.world.clubId)&&Math.abs(clubLevel(x,p.pos)-roleAbility(p.a,p.pos))<=INTEREST_FIT&&x.budget>=roleSalary(roleAbility(p.a,p.pos),x.league)*2);
-  if(!candidates.length)continue;const club=candidates[Math.floor(random(c)*candidates.length)];ids.push(club.id);news(c,`${club.name} · ${rival?'라이벌 ':''}${p.name}에게 관심! 졸업 가능한 시즌 종료 후 정식 제안 예정`,'interest');
+  if(!candidates.length)continue;const club=candidates[Math.floor(random(c)*candidates.length)];ids.push(club.id);news(c,`${club.name} · ${rival?'라이벌 ':''}${p.name}에게 관심! 졸업 가능한 시즌 종료 후 정식 제안 예정`,rival?'rival':'interest');
  }
  c.world.interestedClubIds=[...c.development.interestIds];
 }
 export function announceOffers(c:Career){const d=c.development;c.world.currentDay=c.day;c.world.interestedClubIds=[...d.interestIds];generateOffers(c.world,{...c.player,age:c.player.age+1},c.history[0]?.rating||6.5);for(const o of c.world.offers)news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 14일 유효한 계약 제안 도착`,'offer');
- if(d.rival.player.age>=18){const rw=structuredClone(c.world);rw.clubId=d.rival.clubId;rw.contract={salary:0,years:0};rw.interestedClubIds=d.rival.interests;generateOffers(rw,{...d.rival.player,age:d.rival.player.age+1},d.rival.history[0]?.rating??6.5);d.rival.offers=rw.offers;for(const o of rw.offers.filter(o=>d.rival.interests.includes(o.clubId)))news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 라이벌 ${d.rival.player.name}에게 정식 제안`,'offer');}
+ if(d.rival.player.age>=18){const rw=structuredClone(c.world);rw.clubId=d.rival.clubId;rw.contract={salary:0,years:0};rw.interestedClubIds=d.rival.interests;generateOffers(rw,{...d.rival.player,age:d.rival.player.age+1},d.rival.history[0]?.rating??6.5);d.rival.offers=rw.offers;for(const o of rw.offers.filter(o=>d.rival.interests.includes(o.clubId)))news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 라이벌 ${d.rival.player.name}에게 정식 제안`,'rival');}
 }
 export function renewSearch(c:Career){if(c.world.phase!=='offseason'||c.match)throw Error('시즌 종료 후 구직할 수 있습니다.');expireOffers(c.world);if(c.world.offers.length)throw Error('아직 유효한 제안이 있습니다.');announceOffers(c);}
 export function ageRival(c:Career){const r=c.development.rival;r.player.age=c.player.age;r.player.energy=100;r.player.fatigue=0;r.retired=c.player.age>=36;if(!r.retired)applyAging(r.player.a,r.traits,r.player.age);
  const choices=r.offers.filter(o=>o.clubId!==c.world.clubId&&(o.expiresDay??Infinity)>c.day);
- if(r.player.age>=19&&(c.world.clubs.find(x=>x.id===r.clubId)!.league===0||choices.length)){const best=choices.sort((a,b)=>b.salary-a.salary)[0];const club=best?c.world.clubs.find(x=>x.id===best.clubId)!:closestClub(c,r.player);r.clubId=club.id;news(c,`${r.player.name} · ${club.name} 입단!`);}
+ if(r.player.age>=19&&(c.world.clubs.find(x=>x.id===r.clubId)!.league===0||choices.length)){const best=choices.sort((a,b)=>b.salary-a.salary)[0];const club=best?c.world.clubs.find(x=>x.id===best.clubId)!:closestClub(c,r.player);r.clubId=club.id;news(c,`라이벌 ${r.player.name} · ${club.name} 입단!`,'offer');}
  r.offers=[];if(c.player.age>=19){r.interests=[];c.development.interestIds=[];}c.world.interestedClubIds=[...c.development.interestIds];syncRival(c);
 }

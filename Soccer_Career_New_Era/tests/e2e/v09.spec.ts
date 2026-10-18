@@ -40,3 +40,16 @@ test('result 반영 with a completed mission unlocks 미션 마스터 and shows 
   await popup.getByRole('button',{name:'확인'}).click();await expect(popup).toHaveCount(0);
   await expect(page.locator('.signature-card')).toContainText('◆ 미션 마스터');
 });
+
+test('0.9.1: graduation — 다음 시즌 시작 opens the transfer market; home shows no greeting and two headlines',async({page})=>{
+  const c=base();c.player.age=18;c.world.phase='offseason';
+  c.development.news=[];for(const [t,k] of [['훈련 중 무언가를 느꼈다!','lucky'],['라이벌 강시우 · 경기 중 부상 · 2주 회복 필요','rival'],['몰입선수 · 평점 7.80의 맹활약!','rating'],['감독 미션 실패 · 「슈팅 2회 이상」 (1/2)','career'],['시그니처 획득! 「골 사냥꾼」 · 근거리 슛 성공률이 조금 오릅니다.','career']] as const)c.development.news.unshift({day:c.day,text:t,kind:k});
+  await load(page,c);
+  const hero=page.locator('.career-hero');await expect(hero.locator('.headline-news p')).toHaveCount(2);
+  await expect(hero).toContainText('시그니처 획득');await expect(hero).toContainText('맹활약');await expect(hero).not.toContainText('느꼈다');await expect(hero).not.toContainText('부상');
+  await expect(page.getByText('좋은 하루예요')).toHaveCount(0);await expect(page.getByText('오늘의 작은 노력이')).toHaveCount(0);
+  await page.getByRole('button',{name:'시즌 결산 · 다음 시즌'}).click();
+  await page.getByRole('button',{name:'다음 시즌 시작',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'다음 유니폼은 어디일까요?'})).toBeVisible();
+  await expect(page.getByText('졸업 예정입니다').first()).toBeVisible();
+});
