@@ -1,3 +1,4 @@
+import {contrastRival} from './origins';
 import {signatureFx,type DeedKey} from './engagement';
 import {ATTRS,LABELS,clamp,random,overall,createMatch,finishMatch,rating,type Attributes,type Attr,type Match} from './engine';
 import {grow,startCareerMatch,type Career,type Player} from './career';
@@ -37,6 +38,7 @@ export function ensureDevelopment(c:Career,opts:{traits?:string[]}={}){
  const rng={seed:(c.seed^0x532af)>>>0},school=(c.school+1+Math.floor(random(rng)*2))%3;
  const rp:Player={...structuredClone(c.player),name:['강시우','이태준','서도윤','정민재'][Math.floor(random(rng)*4)],energy:100,fatigue:0,injuryWeeks:0};
  for(const k of ATTRS)rp.a[k]=clamp(rp.a[k]+(random(rng)-.5)*6,20,99);
+ if(c.story)contrastRival(c.player,rp);
  const userTraits=rollTraits(rng),rivalTraits=rollTraits(rng);
  c.development={traits:opts.traits?[...opts.traits]:userTraits,wallet:100,plan:['shooting','running','passing','rest','passing','rest','rest'],notes:[],news:[],interestIds:[],rival:{id:'career-rival',player:rp,school,clubId:'c'+school,traits:rivalTraits,retired:false,trainedWeek:-1,lastPlayedWeek:-1,history:[],interests:[],offers:[]}};
  if(rp.age>=19)c.development.rival.clubId=closestClub(c,rp).id;

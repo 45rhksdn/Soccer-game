@@ -1,3 +1,4 @@
+import {OriginPanel} from './OriginPanel';
 import {MatchInteraction} from "./MatchInteraction";
 import {traitNotice} from './traitPresentation';
 import {GrowthNotes,RivalPanel} from './WeeklyPanels';
@@ -420,7 +421,7 @@ export default function App() {
         </div>
         <div className="version">
           <span className="dot" /> 오프라인 플레이 지원
-          <small>0.6 · 수비 선택 · 맞춤 이적 제안</small>
+          <small>0.13 · 선수 발굴 · 커리어 계승</small>
         </div>
       </aside>
       <div className="workspace">
@@ -477,6 +478,7 @@ export default function App() {
                     <ScoutPanel
                       scout={scout}
                       potentialBonus={potentialBonus(legacy)}
+                      legacy={legacy}
                       school={scoutSchool}
                       setSchool={setScoutSchool}
                       onReroll={(id) => {
@@ -940,6 +942,7 @@ export default function App() {
                       </div>
                     </section>
                   </div>
+                  <OriginPanel c={c} legacy={legacy}/>
                   <EquipmentPanel
                     c={c}
                     onBuy={(id) => update((n) => buyEquipment(n, id))}

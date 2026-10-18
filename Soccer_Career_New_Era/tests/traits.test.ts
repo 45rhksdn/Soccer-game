@@ -29,29 +29,29 @@ it('trait rolls: independent low chances, 0–3 traits, no duplicates or conflic
   console.log('    distribution',Object.fromEntries(TRAIT_DEFS.map(d=>[d.id,((count.get(d.id)??0)/N*100).toFixed(2)+'%'])),'sizes',sizes.map(n=>(n/N*100).toFixed(2)+'%'));
 });
 
-it('유리몸: training fatigue ×1.5 and injury chance ×1.5; 강철 체력 ×0.7',()=>{
+it('유리몸: training fatigue ×1.2 and injury chance ×1.25; 강철 체력 ×0.85',()=>{
   const base=career();base.player.fatigue=0;base.player.energy=100;
   const fatigue=(t:string[])=>{const c=structuredClone(base);applyDaily(c,c.player,'passing',t);return c.player.fatigue;};
-  expect(fatigue([])).toBeCloseTo(12,8);expect(fatigue(['유리몸'])).toBeCloseTo(18,8);expect(fatigue(['강철 체력'])).toBeCloseTo(8.4,8);
-  expect(injuryChanceMultiplier(['유리몸'])).toBe(1.5);expect(injuryChanceMultiplier(['회복력'])).toBe(.5);
+  expect(fatigue([])).toBeCloseTo(12,8);expect(fatigue(['유리몸'])).toBeCloseTo(14.4,8);expect(fatigue(['강철 체력'])).toBeCloseTo(10.2,8);
+  expect(injuryChanceMultiplier(['유리몸'])).toBe(1.25);expect(injuryChanceMultiplier(['회복력'])).toBe(.8);
   // Deterministic: a roll between the base and 유리몸 thresholds injures only the fragile player.
-  const lo=TRAINING_INJURY_CHANCE,hi=TRAINING_INJURY_CHANCE*1.5;
+  const lo=TRAINING_INJURY_CHANCE,hi=TRAINING_INJURY_CHANCE*1.25;
   let seed=0;for(;;seed++){const r={seed};random(r);const v=random(r);if(v>=lo&&v<hi&&(()=>{const q={seed};return random(q)>=.09;})())break;}
   const run=(t:string[])=>{const c=structuredClone(base);c.player.fatigue=70;c.seed=seed;applyDaily(c,c.player,'passing',t);return c.player.injuryWeeks??0;};
   expect(run([])).toBe(0);expect(run(['유리몸'])).toBe(1);
   // Statistical: 40,000 tired training days each.
   const rate=(t:string[])=>{let hurt=0;const c=structuredClone(base);for(let i=0;i<40000;i++){c.player.fatigue=70;c.player.energy=100;c.player.injuryWeeks=0;c.player.a=attributes(40);applyDaily(c,c.player,'passing',t);if(c.player.injuryWeeks)hurt++;}return hurt/40000;};
   const normal=rate([]),fragile=rate(['유리몸']);
-  expect(normal).toBeGreaterThan(.016);expect(normal).toBeLessThan(.024);expect(fragile/normal).toBeGreaterThan(1.3);expect(fragile/normal).toBeLessThan(1.7);
+  expect(normal).toBeGreaterThan(.016);expect(normal).toBeLessThan(.024);expect(fragile/normal).toBeGreaterThan(1.1);expect(fragile/normal).toBeLessThan(1.4);
   console.log('    training injury rate',(normal*100).toFixed(2)+'%','유리몸',(fragile*100).toFixed(2)+'%');
 });
 
-it('training growth: 천재 ×1.7, 노력파 ×1.2, 게으름 ×0.8, combinations multiply',()=>{
+it('training growth: 천재 ×1.25, 노력파 ×1.12, 게으름 ×0.9, combinations capped',()=>{
   const base=career();base.player.a=attributes(40);base.player.potential=95;base.seed=seedFor(.1,.2);
   const gain=(t:string[])=>{const c=structuredClone(base);applyDaily(c,c.player,'passing',t);return c.player.a.passing-40;};
   const plain=gain([]);
-  expect(gain(['천재'])/plain).toBeCloseTo(1.7,8);expect(gain(['노력파'])/plain).toBeCloseTo(1.2,8);expect(gain(['게으름'])/plain).toBeCloseTo(.8,8);
-  expect(gain(['천재','노력파'])/plain).toBeCloseTo(1.7*1.2,8);
+  expect(gain(['천재'])/plain).toBeCloseTo(1.25,8);expect(gain(['노력파'])/plain).toBeCloseTo(1.12,8);expect(gain(['게으름'])/plain).toBeCloseTo(.9,8);
+  expect(gain(['천재','노력파'])/plain).toBeCloseTo(1.35,8);
 });
 
 it('match-only effects: 강심장/새가슴 change the match copy, never permanent attributes',()=>{
@@ -62,12 +62,12 @@ it('match-only effects: 강심장/새가슴 change the match copy, never permane
   finishMatch(c.match!);settle(c);expect(c.player.a.composure).toBeGreaterThanOrEqual(60);
 });
 
-it('injury weeks and aging: 회복력 shortens; the 0.5 age model declines from 33, 조기 노화 3 years early at ×1.5',()=>{
+it('injury weeks and aging: 회복력 shortens; the 0.5 age model declines from 33, 조기 노화 1 year early at ×1.15',()=>{
   expect(injuryWeeks([],2)).toBe(2);expect(injuryWeeks(['회복력'],2)).toBe(1);expect(injuryWeeks(['회복력'],1)).toBe(1);
   expect(agingDecline([],29,29,.8)).toBe(0);expect(agingDecline([],30,29,.8)).toBeCloseTo(.8,8);
-  expect(agingDecline(['조기 노화'],27,29,.8)).toBeCloseTo(1.2,8);expect(agingDecline(['조기 노화'],26,29,.8)).toBe(0);
+  expect(agingDecline(['조기 노화'],29,29,.8)).toBeCloseTo(.92,8);expect(agingDecline(['조기 노화'],26,29,.8)).toBe(0);
   const make=(t:string[],age=29)=>{const c=career(5);c.player.age=age;c.development.rival.player.age=age;c.player.a=attributes(70);c.world.phase='offseason';c.world.clubId=c.world.clubs.find(x=>x.league===1)!.id;c.world.contract={salary:100,years:2};c.development.traits=t;nextSeason(c);return c.player.a.speed;};
-  expect(make([])).toBe(70);expect(make(['조기 노화'])).toBeCloseTo(70-1.2*1.5,8); // turning 30
+  expect(make([])).toBe(70);expect(make(['조기 노화'],31)).toBeCloseTo(70-1.2*1.15,8); // turning 30
   expect(make([],31)).toBe(70);expect(make([],32)).toBeCloseTo(70-1.2,8); // peak 32, first decline at 33
 });
 

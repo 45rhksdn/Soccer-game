@@ -48,7 +48,7 @@ it('round trip with every 0.5 field (equipment, injuries, id) is lossless',()=>{
 });
 
 it('reward duplication across slots: three slots holding the same and different players',()=>{
-  const make=(id:string)=>{const c=newCareer({name:id,age:16,pos:'ST',secondary:'LW',foot:'오른',height:180,weight:72,style:'테크니션',curve:'꾸준한 성장형'},0,5,{id});c.player.age=35;c.world.phase='offseason';c.world.contract.years=1;c.world.clubId=c.world.clubs.find(x=>x.league>0)!.id;return c;};
+  const make=(id:string)=>{const c=newCareer({name:id,age:16,pos:'ST',secondary:'LW',foot:'오른',height:180,weight:72,style:'테크니션',curve:'꾸준한 성장형'},0,5,{id});c.world.records=Array.from({length:3},(_,i)=>({year:2026+i,club:'검증팀',league:'검증리그',rank:1,appearances:10,minutes:900,goals:0,assists:0,rating:6.5,champion:'검증팀'}));c.player.age=35;c.world.phase='offseason';c.world.contract.years=1;c.world.clubId=c.world.clubs.find(x=>x.league>0)!.id;return c;};
   const slot1=make('A'),slot2=make('B');
   for(const c of [slot1,slot2])nextSeason(c);
   const slot3=decode(encode(slot1)),backup1=decode(encode(slot1)),archive2=structuredClone(slot2);

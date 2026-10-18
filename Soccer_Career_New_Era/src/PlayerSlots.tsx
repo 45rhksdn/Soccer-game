@@ -1,3 +1,4 @@
+import {LegacyArchive} from './OriginPanel';
 import type {SlotInfo} from './storage';
 import {potentialBonus,RETIREMENT_POTENTIAL_MAX_BONUS,type Legacy} from './legacy';
 import {TraitList} from './TraitBadges';
@@ -12,7 +13,8 @@ export function PlayerSlots({slots,current,hasCareer,legacy,onSwitch,onNew,onRes
     <div className="page-heading"><div><div className="eyebrow">CHANGE PLAYER</div><h1>선수 변경하기</h1><p>최대 3명의 선수 커리어를 슬롯별로 따로 보관하고 전환합니다. 전환 전에 현재 선수를 먼저 저장합니다.</p></div></div>
     <section className="card legacy" aria-label="은퇴 누적 보상">
       <strong>은퇴 누적 보상</strong>
-      <p className="muted">은퇴한 선수 {retired}명 · 새 선수 후보의 잠재력 최대 상한 +{bonus}{bonus>=RETIREMENT_POTENTIAL_MAX_BONUS?' (최대)':''}. 세 슬롯이 함께 쓰는 기록이며, 같은 선수는 저장을 복원하거나 선수를 바꿔도 한 번만 반영됩니다. 최소 잠재력과 기존 선수의 잠재력은 바뀌지 않습니다.</p>
+      <p className="muted">보존된 은퇴 선수 {retired}명 · 새 선수 후보의 잠재력 최대 상한 +{bonus}{bonus>=RETIREMENT_POTENTIAL_MAX_BONUS?' (최대)':''}. 새 보상은 3시즌 이상 완료 후 은퇴할 때 주어집니다. 세 슬롯이 함께 쓰는 기록이며, 같은 선수는 저장을 복원하거나 선수를 바꿔도 한 번만 반영됩니다. 최소 잠재력과 기존 선수의 잠재력은 바뀌지 않습니다.</p>
+      <LegacyArchive legacy={legacy}/>
     </section>
     <div className="player-slots">
       {[1,2,3].map(n=>{const s=slots.find(x=>x.slot===n),sum=s?.summary,isCurrent=hasCareer&&n===current;

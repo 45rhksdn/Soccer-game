@@ -15,11 +15,11 @@ function completePass(m:Match,from:Footballer,to:Footballer){
   m.decision=false;m.nextAI=99;m.cooldown=99;step(m,.5,false);
 }
 
-it('강철몸: fatigue −40 %, injury −60 %, rest recovery +50 %',()=>{
-  expect(trainingFatigueMultiplier(['강철몸'])).toBeCloseTo(.6,8);expect(injuryChanceMultiplier(['강철몸'])).toBeCloseTo(.4,8);expect(restRecoveryMultiplier(['강철몸'])).toBe(1.5);
-  const c=career();c.player.fatigue=0;applyDaily(c,c.player,'passing',['강철몸']);expect(c.player.fatigue).toBeCloseTo(7.2,8);
+it('강철몸: fatigue −20 %, injury −30 %, rest recovery +15 %',()=>{
+  expect(trainingFatigueMultiplier(['강철몸'])).toBeCloseTo(.8,8);expect(injuryChanceMultiplier(['강철몸'])).toBeCloseTo(.7,8);expect(restRecoveryMultiplier(['강철몸'])).toBe(1.15);
+  const c=career();c.player.fatigue=0;applyDaily(c,c.player,'passing',['강철몸']);expect(c.player.fatigue).toBeCloseTo(9.6,8);
   const rest=(t:string[],type:'rest'|'vacation')=>{const x=career();x.player.fatigue=95;applyDaily(x,x.player,type,t);return 95-x.player.fatigue;};
-  expect(rest([],'rest')).toBe(25);expect(rest(['강철몸'],'rest')).toBe(37.5);expect(rest(['강철몸'],'vacation')).toBe(90);
+  expect(rest([],'rest')).toBe(25);expect(rest(['강철몸'],'rest')).toBeCloseTo(28.75,8);expect(rest(['강철몸'],'vacation')).toBeCloseTo(69,8);
 });
 
 it('플레이메이커: the receiver’s next action gets ×1.1 once, never stacks, and is dropped on a turnover',()=>{
@@ -35,14 +35,14 @@ it('플레이메이커: the receiver’s next action gets ×1.1 once, never stac
   const n=match(),u=n.players[n.userId],v=mate(n,u);completePass(n,u,v);expect(n.assistBoost??null).toBeNull();
 });
 
-it('분위기 메이커: a goal halves the team’s stamina drain for 10 minutes; conceding ends it',()=>{
+it('분위기 메이커: a goal reduces the team’s stamina drain for 5 minutes; conceding ends it',()=>{
   const m=match(9),me=m.players[m.userId];me.fx=matchFx(['분위기 메이커']);
   m.ball={x:me.x,y:me.y,owner:null,flight:{from:me.id,to:null,x:105,y:34,kind:'shot',progress:.999,duration:1,startX:me.x,startY:me.y,success:true,xg:.3,onTarget:true}};
   m.decision=false;step(m,.5,true);
-  expect(m.momentum![me.team]).toBeGreaterThan(m.clock);expect(m.momentumDrain![me.team]).toBe(.5);
+  expect(m.momentum![me.team]).toBeGreaterThan(m.clock);expect(m.momentumDrain![me.team]).toBe(.8);
   const t=mate(m,me),control=structuredClone(m);control.momentum=[0,0];
   const before=t.energy;t.energy=control.players[t.id].energy=80;step(m,.5,true);step(control,.5,true);
-  expect(80-m.players[t.id].energy).toBeCloseTo((80-control.players[t.id].energy)/2,6);void before;
+  expect(80-m.players[t.id].energy).toBeCloseTo((80-control.players[t.id].energy)*.8,6);void before;
   const opp=m.players.find(p=>p.team!==me.team&&p.pos!=='GK')!;
   m.ball={x:opp.x,y:opp.y,owner:null,flight:{from:opp.id,to:null,x:0,y:34,kind:'shot',progress:.999,duration:1,startX:opp.x,startY:opp.y,success:true,xg:.3,onTarget:true}};
   step(m,.5,true);expect(m.momentum![me.team]).toBe(0);
@@ -71,13 +71,13 @@ function weekGain(traits:string[],userRating:number,rivalRating:number){
   c.development.rival.history=[{week:0,rating:rivalRating,goals:0,club:'c1'}];
   prepareWeek(c,['passing','rest','rest','rest','rest','rest','rest']);return {c,gain:c.player.a.passing-40};
 }
-it('라이벌 의식: first training of the week ×2 only when the rival out-rated you last week',()=>{
+it('라이벌 의식: first training of the week ×1.35 only when the rival out-rated you last week',()=>{
   const plain=weekGain([],6,7.5).gain,driven=weekGain(['라이벌 의식'],6,7.5),ahead=weekGain(['라이벌 의식'],8,7.5).gain;
-  expect(driven.gain/plain).toBeCloseTo(2,6);expect(ahead/plain).toBeCloseTo(1,6);
+  expect(driven.gain/plain).toBeCloseTo(1.35,6);expect(ahead/plain).toBeCloseTo(1,6);
   expect(driven.c.development.news.some(n=>n.text.includes('라이벌 의식'))).toBe(true);
 });
 
-it('독학파: three sessions of the same training add one extra session, once per week',()=>{
+it('독학파: three sessions of the same training add half an extra session, once per week',()=>{
   const run=(t:string[],plan:string[])=>{const c=career(8);c.player.a=attributes(40);c.player.potential=95;c.development.traits=t;c.development.rival.traits=[];prepareWeek(c,plan as never);return c;};
   const plan=['passing','passing','passing','passing','rest','rest','rest'];
   const plain=run([],plan),focused=run(['독학파'],plan);

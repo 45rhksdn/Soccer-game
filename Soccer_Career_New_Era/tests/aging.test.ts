@@ -22,12 +22,12 @@ it('growth slows with age for every curve and nearly stops after the peak (32)',
   expect(npcGrowthRate(20)).toBeGreaterThan(npcGrowthRate(27));expect(npcGrowthRate(30)).toBeGreaterThan(0);expect(npcGrowthRate(33)).toBe(0);
 });
 
-it('no decline up to 32; from 33 pace drops first and faster each year; 조기 노화 starts at 30 at ×1.5',()=>{
+it('no decline up to 32; from 33 pace drops first and faster each year; 조기 노화 starts at 32 at ×1.15',()=>{
   for(const k of ATTRS)for(let age=16;age<=32;age++)expect(agingLoss([],age,k)).toBe(0);
-  expect(declineStart([])).toBe(33);expect(declineStart(['조기 노화'])).toBe(30);
+  expect(declineStart([])).toBe(33);expect(declineStart(['조기 노화'])).toBe(32);
   expect(agingLoss([],33,'speed')).toBeGreaterThan(agingLoss([],33,'shooting'));expect(agingLoss([],33,'shooting')).toBeGreaterThan(agingLoss([],33,'vision'));
   expect(agingLoss([],35,'speed')).toBeGreaterThan(agingLoss([],34,'speed'));
-  expect(agingLoss(['조기 노화'],30,'speed')).toBeCloseTo(agingLoss([],33,'speed')*1.5,10);
+  expect(agingLoss(['조기 노화'],32,'speed')).toBeCloseTo(agingLoss([],33,'speed')*1.15,10);
   const a=attributes(21);applyAging(a,[],36);for(const k of ATTRS)expect(a[k]).toBeGreaterThanOrEqual(20);
 });
 
@@ -41,8 +41,8 @@ it('user, rival and NPCs age with the same model',()=>{
   expect(c.player.age).toBe(33);expect(c.player.a).toEqual(expected);expect(r.player.a).toEqual(expected);
   for(const k of ATTRS)expect(npc.a[k]).toBeCloseTo(expected[k],10);
   // Growth types still differ: a 조기 노화 NPC declines earlier.
-  const w=newCareer(profile,0,92).world,p=w.clubs[19].roster[4];p.traits=['조기 노화'];p.age=29;p.a=attributes(80);p.potential=80;advanceWorldYear(w);
-  expect(p.a.speed).toBeCloseTo(80-agingLoss(['조기 노화'],30,'speed'),10);
+  const w=newCareer(profile,0,92).world,p=w.clubs[19].roster[4];p.traits=['조기 노화'];p.age=31;p.a=attributes(80);p.potential=80;advanceWorldYear(w);
+  expect(p.a.speed).toBeCloseTo(80-agingLoss(['조기 노화'],32,'speed'),10);
   void ageRival;
 });
 
