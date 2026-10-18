@@ -5,7 +5,7 @@ import {matchInjury,npcRecovery,clearInjuries,newWorld,clubOf,nextOpponent,choos
 import {createMatch,userPerformance} from './engine';
 import {injuryChanceMultiplier,injuryWeeks,matchFx,trustGainMultiplier,seedFrom} from './traits';
 import {matchAttributesOf} from './equipment';
-import {createMission,settleMission,recordDeeds,deedsOf,rivalNews,type MissionState,type Signature} from './engagement';
+import {createMission,settleMission,recordDeeds,deedsOf,type MissionState,type Signature} from './engagement';
 import {growthAgeFactor,experienceAgeFactor,applyAging,EXPERIENCE_KEYS} from './aging';
 import {
   ATTRS,
@@ -291,7 +291,7 @@ export function settle(c: Career):SettleResult {
     gain,
   });
   if(appeared&&r>=7.5)news(c,`${c.player.name} · 평점 ${r.toFixed(2)}의 맹활약!`,'rating');
-  const mission=settleMission(c,m),signatures=recordDeeds(c,p.stats);rivalNews(c);
+  const mission=settleMission(c,m),signatures=recordDeeds(c,p.stats);
   if(c.world && m.competition){
     for(const [i,fp] of m.players.entries()){
       const id=m.rosterIds?.[i];const rp=c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===id);
@@ -379,12 +379,18 @@ function completeSeason(c:Career){
  returnFromLoan(w);announceOffers(c);
  c.feed.unshift(`${w.year} 시즌 종료 · ${rank}위 · 평균 ${mean.toFixed(2)}`);
 }
+/** Why the next season cannot start without a new contract (graduation or an expired contract), or null. */
+export function contractNeeded(c:Career){
+ const w=c.world;if(w.phase!=='offseason')return null;
+ if(c.player.age>=18&&clubOf(w).league===0)return '졸업 예정입니다. 이적 시장에서 프로 계약을 선택해 주세요.';
+ if(clubOf(w).league>0&&w.contract.years===0)return '계약이 만료되었습니다. 재계약 또는 이적을 선택해 주세요.';
+ return null;
+}
 export function nextSeason(c:Career){
  ensureDevelopment(c);if(c.match)throw Error('진행 중인 경기를 완료하세요.');
  // Days are the unit of play: an unfinished week is closed (recorded in the growth notes) instead of blocking the new season.
  if(c.development.active)finishWeek(c);const w=c.world;if(w.phase!=='offseason')throw Error('시즌 종료 후 가능합니다.');
- if(c.player.age>=18&&clubOf(w).league===0)throw Error('졸업 예정입니다. 이적 시장에서 프로 계약을 선택해 주세요.');
- if(clubOf(w).league>0&&w.contract.years===0)throw Error('계약이 만료되었습니다. 재계약 또는 이적을 선택해 주세요.');
+ const need=contractNeeded(c);if(need)throw Error(need);
  c.player.age++;ageRival(c);if(c.player.age>=36){w.year++;retire(c);return;}
  applyAging(c.player.a,c.development.traits,c.player.age);
  advanceWorldYear(w);clearInjuries(w,[c.development.rival.id]);c.development.rival.player.injuryWeeks=0;syncRival(c);c.week=Math.max(c.week,Math.round((w.year-2026)*365.25/7));c.day=c.week*7;w.currentDay=c.day;w.currentSeasonStart=c.week;

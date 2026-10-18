@@ -1,9 +1,9 @@
 import {it,expect} from 'vitest';
-import {newCareer,settle} from '../src/career';
+import {newCareer,settle,nextSeason,contractNeeded} from '../src/career';
 import {finishMatch,emptyStats,createMatch,attributes,type Stat} from '../src/engine';
-import {prepareWeek,type Daily} from '../src/development';
+import {prepareWeek,news,type Daily} from '../src/development';
 import {attackChance,defenseChance} from '../src/tactical';
-import {createMission,missionValue,missionState,settleMission,recordDeeds,deedsOf,signatureFx,unlockSignatures,rivalNews,seasonCompare,SIGNATURES,MISSION_REWARD} from '../src/engagement';
+import {createMission,missionValue,missionState,settleMission,recordDeeds,deedsOf,signatureFx,unlockSignatures,headlines,seasonCompare,SIGNATURES,MISSION_REWARD} from '../src/engagement';
 import {encode,decode} from '../src/storage';
 
 const profile=(pos:'ST'|'CM'|'CB'|'GK'='ST')=>({name:'몰입선수',age:17,pos,secondary:pos==='ST'?'LW' as const:'CM' as const,foot:'오른',height:180,weight:72,style:'플레이메이커',curve:'꾸준한 성장형'});
@@ -98,17 +98,24 @@ it('미션 마스터 unlocks from mission successes and raises the trust reward'
   settleMission(c,m);expect(c.player.trust).toBe(50+MISSION_REWARD.masterTrust);
 });
 
-it('라이벌: weekly head-to-head news and an OVR overtake message only when the lead changes',()=>{
-  const c=career(),r=c.development.rival;
-  c.history.unshift({id:c.week,date:'',opponent:'',score:[0,0],rating:7.2,stats:stats({}),shots:[0,0],xg:[0,0],gain:0} as never);
-  r.history.unshift({week:c.week,rating:6.4,goals:0,club:r.clubId});
-  rivalNews(c);expect(c.development.news[0].text).toContain('당신의 승리');
-  const ahead=c.development.rivalAhead;expect(typeof ahead).toBe('boolean');
-  const count=c.development.news.length;rivalNews(c);
-  expect(c.development.news.length).toBe(count+1); // the weekly line again, no overtake line
-  for(const k of Object.keys(r.player.a) as (keyof typeof r.player.a)[])r.player.a[k]=ahead?99:1;
-  rivalNews(c);expect(c.development.news.some(n=>/앞질렀습니다/.test(n.text))).toBe(true);
-  const cmp=seasonCompare(c);expect(cmp.me.apps).toBe(1);expect(cmp.rival.apps).toBe(1);expect(cmp.me.avg).toBeCloseTo(7.2);
+it('home headlines: two most important lines, no 깨달음/럭키, rival only for transfers and high ratings',()=>{
+  const c=career();c.development.news=[];c.feed=[];
+  news(c,'훈련 중 무언가를 느꼈다!','lucky');news(c,'경기 중에 깨달음을 얻었다!','insight');
+  news(c,'라이벌 강시우 · 경기 중 부상 · 2주 회복 필요','rival');news(c,'감독 미션 실패 · 「슈팅 2회 이상」 (1/2)');
+  news(c,'라이벌 강시우 · 평점 7.80의 활약!','rating');news(c,'몰입선수 · 평점 7.60의 맹활약!','rating');
+  expect(headlines(c).map(n=>n.text)).toEqual(['몰입선수 · 평점 7.60의 맹활약!','라이벌 강시우 · 평점 7.80의 활약!']);
+  news(c,'라이벌 강시우 · 서울 FC 입단!','offer');
+  expect(headlines(c)[0].text).toContain('입단');expect(headlines(c)).toHaveLength(2);
+  // Hidden kinds stay in the record but never reach the feed.
+  expect(c.development.news.some(n=>n.kind==='lucky')).toBe(true);
+  expect(c.feed.some(f=>f.includes('느꼈다')||f.includes('깨달음')||f.includes('부상'))).toBe(false);
+  expect(seasonCompare(c).me.apps).toBe(0);
+});
+
+it('0.9.1: contractNeeded explains graduation; nextSeason refuses with the same message',()=>{
+  const c=career();expect(contractNeeded(c)).toBeNull();
+  c.world.phase='offseason';c.player.age=18;expect(contractNeeded(c)).toContain('졸업 예정');
+  expect(()=>nextSeason(c)).toThrow(contractNeeded(c)!);
 });
 
 it('save round trip keeps deeds, signatures, mission record and the live match mission',()=>{

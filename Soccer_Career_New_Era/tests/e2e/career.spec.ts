@@ -91,7 +91,7 @@ test('player switching keeps up to three careers independent; replaced players c
  await nav(page,'선수 변경하기');await page.screenshot({path:`reports/${info.project.name}-players.png`,fullPage:true});
  await expect(page.locator('.player-slot').nth(0)).toContainText('테스트선수');await expect(page.locator('.player-slot').nth(1)).toContainText('플레이 중');
  await page.locator('.player-slot').nth(0).getByRole('button',{name:'이 선수로 전환'}).click();
- await expect(page.locator('.page-heading')).toContainText('WEEK 02');await expect(page.locator('.page-heading')).toContainText('테스트선수');
+ await expect(page.locator('.page-heading')).toContainText('WEEK 02');await expect(page.locator('.career-hero .hero-number')).toContainText('테스트선수');
  await page.waitForTimeout(6000);state=await db();expect(state.slot1).toBe('테스트선수@1');expect(state.slot2).toBe(`${scouted}@0`);expect(state.activeSlot).toBe('1');
  // Replace slot 2 with a hand-made player; the scouted player is archived, then restored.
  await nav(page,'선수 변경하기');await page.locator('.player-slot').nth(1).getByRole('button',{name:'이 슬롯에 새 선수 시작'}).click();

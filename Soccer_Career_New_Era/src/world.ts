@@ -79,8 +79,29 @@ export function generateOffers(w:World,p:{a:Attributes,pos:Position,age:number,e
   w.offers.push(o);
  }
  if(!w.offers.some(o=>o.clubId!==w.clubId))for(const {club} of pro.filter(x=>x.club.id!==w.clubId).sort((a,b)=>Math.abs(a.fit-2)-Math.abs(b.fit-2))){const o=make(club);if(club.budget>=o.fee+o.salary*o.years)w.offers.push(o);if(w.offers.filter(x=>x.clubId!==w.clubId).length>=2)break;}
+ w.offers=pickOffers(w,w.offers,new Map(pro.map(x=>[x.club.id,x.fit])));
  const priority=w.priority??'출전';
  w.offers.sort((a,b)=>{const score=(o:Offer)=>{const cl=w.clubs.find(c=>c.id===o.clubId)!;return (o.clubId===w.targetClubId?1000:0)+(priority==='연봉'?o.salary:priority==='성장'?cl.development*100:priority==='우승'?cl.reputation:-(Math.abs(ability-clubLevel(cl,p.pos)-3)));};return score(b)-score(a);});
+}
+/** 0.9.1: at most this many clubs bid in one window (the current club's renewal included). */
+export const MAX_OFFERS=6;
+/**
+ * Keeps the renewal, the target club and the clubs with formal interest, then fills the remaining places
+ * league by league in turn (best-fitting club of each league first), so offers span as many leagues as possible.
+ */
+function pickOffers(w:World,offers:Offer[],fit:Map<string,number>){
+ if(offers.length<=MAX_OFFERS)return offers;
+ const league=(o:Offer)=>w.clubs.find(c=>c.id===o.clubId)!.league,score=(o:Offer)=>Math.abs((fit.get(o.clubId)??0)-2);
+ const must=(o:Offer)=>o.clubId===w.clubId?0:o.clubId===w.targetClubId?1:w.interestedClubIds?.includes(o.clubId)?2:9;
+ const picked=offers.filter(o=>must(o)<9).sort((a,b)=>must(a)-must(b)||score(a)-score(b)).slice(0,MAX_OFFERS);
+ const byLeague=new Map<number,Offer[]>();
+ for(const o of offers.filter(o=>!picked.includes(o)).sort((a,b)=>score(a)-score(b)))byLeague.set(league(o),[...(byLeague.get(league(o))??[]),o]);
+ // Each round, leagues with the fewest offers so far go first.
+ while(picked.length<MAX_OFFERS&&[...byLeague.values()].some(q=>q.length)){
+  const order=[...byLeague.keys()].filter(l=>byLeague.get(l)!.length).sort((a,b)=>picked.filter(o=>league(o)===a).length-picked.filter(o=>league(o)===b).length||score(byLeague.get(a)![0])-score(byLeague.get(b)![0]));
+  for(const l of order){if(picked.length>=MAX_OFFERS)break;picked.push(byLeague.get(l)!.shift()!);}
+ }
+ return picked;
 }
 export type Negotiation='salary'|'short'|'role'|'loan';
 export function negotiate(w:World,clubId:string,choice:Negotiation='salary'){
