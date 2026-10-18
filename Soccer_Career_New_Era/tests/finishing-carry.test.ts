@@ -1,6 +1,6 @@
 import {it,expect} from 'vitest';
 import {createMatch,attributes,direction,act,actionChance,CARRY,ATTRS,type Attributes} from '../src/engine';
-import {attackOdds,dribbleAdvance,ODDS} from '../src/tactical';
+import {attackOdds,dribbleAdvance,dribbleMinimum,stopsCarry,ODDS} from '../src/tactical';
 
 // v0.13: unmarked chances are finished at realistic rates; a dribble takes time and both teams move meanwhile.
 type Place={x:number,y:number,a?:Partial<Attributes>|number};
@@ -54,7 +54,8 @@ it('a successful dribble takes time: the clock runs and both teams move while th
     act(m,'dribble',{vector:v});
     if(m.ball.owner!==m.userId)continue;
     done=true;
-    expect(Math.abs(u.x-x0)).toBeCloseTo(gain,9);expect(m.decision).toBe(true);
+    const carried=Math.abs(u.x-x0);expect(carried).toBeLessThanOrEqual(gain+1e-9);expect(carried).toBeGreaterThanOrEqual(Math.min(gain,dribbleMinimum(s.m,s.u,v))-.51);expect(m.decision).toBe(true);
+    if(carried<gain-1e-6)expect(m.players.some(o=>stopsCarry(m,u,o,u,s.d,0))).toBe(true);
     expect(m.clock-t0).toBeGreaterThan(0);expect(m.clock-t0).toBeLessThanOrEqual(CARRY.maxSlices*CARRY.dt*6);
     const moved=(team:number)=>m.players.filter(p=>p.team===team&&p.id!==m.userId&&Math.hypot(p.x-before[p.id].x,p.y-before[p.id].y)>.3).length;
     expect(moved(0)).toBeGreaterThan(3);expect(moved(1)).toBeGreaterThan(3);

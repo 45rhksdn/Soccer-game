@@ -1,4 +1,4 @@
-import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, runPoint, crossTarget, cutbackTarget, boxMates, tackleEdge, ODDS, dribbleAdvance, paceDuel, attackOdds, type AttackOptions } from "./tactical";
+import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, runPoint, crossTarget, cutbackTarget, boxMates, tackleEdge, ODDS, dribbleAdvance, dribbleMinimum, dribbleTargets, stopsCarry, paceDuel, attackOdds, type AttackOptions } from "./tactical";
 /** Weight of an open shooting lane when attackers pick their receiving spot near goal. */
 export const SHOT_LANE_WEIGHT = 3;
 /** Pure seeded football simulation. No DOM, timers, or external services. Pitch 105 x 68m. */
@@ -212,6 +212,8 @@ export type Match = {
   /** 0.6: clock of the last defensive prompt (prompts are spaced by DEFENSE_PROMPT_GAP). */
   defensePromptAt?: number;
   beatenBoost?: {to:number; amount:number; until:number};
+  /** 0.14 defenders just dribbled past by `by`: they hinder his next choice 70% less (tactical.beatenFactor). */
+  dribbleBeat?: {by:number; ids:number[]};
   goalNoticeSeen?:number;
   goals?: {id:number;time:number;scorer:string;assister:string|null;team:number}[];
   competition?: string;
@@ -394,8 +396,8 @@ export const ON_LINE_RANGE = 62;
 /** Pass-target bonus for returning a give-and-go to the user. */
 export const ONE_TWO_BONUS = 8;
 /** AI preferences for the 0.10 actions (balance.test keeps the totals in range). */
-/** 0.13 carry: time slices of a dribble (each 3 game seconds), at most 3. */
-export const CARRY = { dt: .5, maxSlices: 3 } as const;
+/** 0.13 carry: time slices of a dribble (each 3 game seconds), at most 8 (0.14 longer carries); probe = stop-check step (m). */
+export const CARRY = { dt: .5, maxSlices: 8, probe: .5 } as const;
 export const AI = { hopelessShot: .07, midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35, dribbleOpen: .02, lossMetres: 25, shotWeight: 7.5 } as const;
 /** Missed shots that go out for a corner; saves parried for a corner; saves that drop loose in the box. */
 export const SET_PIECE = { cornerFromMiss: .3, cornerFromSave: .18, rebound: .14 } as const;
@@ -457,6 +459,7 @@ function own(m: Match, p: Footballer) {
   if (m.aerial && m.aerial.to !== p.id) m.aerial = undefined;
   if (m.setPiece && m.ball.owner !== p.id) m.setPiece = undefined;
   if (m.assistBoost && m.assistBoost.to !== p.id) m.assistBoost = null;
+  if (m.dribbleBeat && m.dribbleBeat.by !== p.id) m.dribbleBeat = undefined;
   m.ball = { x: p.x, y: p.y, owner: p.id, flight: null };
   m.decision = p.id === m.userId && m.userOnPitch !== false;
   m.nextAI = Math.hypot((direction(m,p.team)>0?105:0)-p.x,34-p.y)<18 || attackChance(m,"shoot")>=.20 ? .5 : 1.8;
@@ -672,6 +675,7 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
     chance = actionChance(m, action,options),
     boost = boostFor(m, p);
   if(m.beatenBoost?.to===p.id)m.beatenBoost=undefined;
+  m.dribbleBeat=undefined; // used by this choice's odds above; a new dribble past someone sets it again
   if (m.assistBoost?.to === p.id) m.assistBoost = null; // one action only, never stacks
   // 깨달음 grows exactly the attributes that decide this action (a pass: by its length).
   const passTo=["pass","safe","forward","through"].includes(action)?(options.targetId===undefined?targets(m,p,action)[0]?.p:m.players.find(q=>q.id===options.targetId)):undefined;
@@ -727,15 +731,20 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
   if (action === "dribble" || action === "hold") {
     const vector=options.vector??{x:d,y:0},length=Math.hypot(vector.x,vector.y)||1,run=action==="dribble"&&!!options.run;
     // 0.12 metres gained: dribble 3–7 m (space ahead, pace), 치고 달리기 8–10 m (pace); decided before the roll.
-    const step=action==="dribble"?dribbleAdvance(m,p,vector,run):1;
+    // 0.14 planned metres (×2.5 contested … ×5 open; 치고 달리기 1.3× an open dribble), the old distance always gained.
+    const step=action==="dribble"?dribbleAdvance(m,p,vector,run):1,min=action==="dribble"?Math.min(step,dribbleMinimum(m,p,vector,run)):1;
     const landing={x:clamp(p.x+vector.x/length*step,1,104),y:clamp(p.y+vector.y/length*step,1,67)};
+    const beaten=action==="dribble"?dribbleTargets(m,p,vector):[];
     if (random(m) < chance) {
       const start={x:p.x,y:p.y};
-      p.x=landing.x;
-      p.y=landing.y;
-      // 0.13 the user's dribble plays out in time: teammates and opponents move while he carries the ball.
-      if(action==="dribble"&&p.id===m.userId&&m.userOnPitch!==false)carry(m,p,start,run);
-      if(action==="dribble"){p.energy=Math.max(0,p.energy-(run?ODDS.run.energy:1));p.stats.dribbles=(p.stats.dribbles??0)+1;own(m,p);event(m,run?`${p.name}, 공을 길게 치고 달립니다! 수비를 따돌립니다!`:`${p.name}, 수비를 피해 공간으로 치고 나갑니다!`);}
+      if(action==="dribble")m.dribbleBeat=beaten.length?{by:p.id,ids:beaten}:undefined;
+      // 0.13/0.14 the user's dribble plays out in time (both teams move) and stops early when an opponent who is
+      // not chasing from behind comes within 6 m; the AI's carry follows the same stop rule against today's positions.
+      let halted=false;
+      if(action==="dribble"&&p.id===m.userId&&m.userOnPitch!==false)halted=carry(m,p,start,landing,min,run);
+      else if(action==="dribble"){const end=carryStop(m,p,start,landing,min);p.x=end.x;p.y=end.y;halted=end.stopped;}
+      else{p.x=landing.x;p.y=landing.y;}
+      if(action==="dribble"){p.energy=Math.max(0,p.energy-(run?ODDS.run.energy:1));p.stats.dribbles=(p.stats.dribbles??0)+1;own(m,p);event(m,run?`${p.name}, 공을 길게 치고 달립니다! 수비를 따돌립니다!`:`${p.name}, 수비를 피해 공간으로 치고 나갑니다!`);if(halted)carryHalted(m,p);}
       m.ball.x = p.x;
       m.ball.y = p.y;
     } else {
@@ -976,20 +985,46 @@ function moveTeams(m: Match, dt: number, owner: Footballer | null, attack: Footb
  * slices while both teams keep moving (supporting runs, pressing, the back line dropping). The clock runs on, but
  * never across half time or full time. No random numbers and no extra duels: the dribble roll already decided it.
  */
-function carry(m: Match, p: Footballer, from: { x: number; y: number }, run: boolean) {
-  const to = { x: p.x, y: p.y }, gap = Math.hypot(to.x - from.x, to.y - from.y);
+function carry(m: Match, p: Footballer, from: { x: number; y: number }, to: { x: number; y: number }, min: number, run: boolean): boolean {
+  const gap = Math.hypot(to.x - from.x, to.y - from.y), ux = (to.x - from.x) / (gap || 1), uy = (to.y - from.y) / (gap || 1);
   const pace = (2.6 + p.a.speed / 32) * (0.55 + p.energy / 222) * 0.68 * (run ? RUN_SPEED : 1) * CARRY.dt;
   const limit = m.clock < 2700 ? 2700 : m.endAt;
   const slices = Math.max(0, Math.min(CARRY.maxSlices, Math.ceil(gap / pace), Math.floor((limit - m.clock - 1e-9) / (CARRY.dt * 6))));
+  let done = 0;
+  const blocked = (at: { x: number; y: number }) => done >= min && m.players.some(o => stopsCarry(m, p, o, at, ux, uy));
   for (let i = 1; i <= slices; i++) {
-    p.x = from.x + (to.x - from.x) * i / slices; p.y = from.y + (to.y - from.y) * i / slices;
-    p.vx = (to.x - from.x) / slices; p.vy = (to.y - from.y) / slices;
+    const target = gap * i / slices;
+    let stopped = false;
+    while (done < target - 1e-9) {
+      done = Math.min(target, done + CARRY.probe);
+      const at = { x: from.x + ux * done, y: from.y + uy * done };
+      p.x = at.x; p.y = at.y;
+      if (blocked(at)) { stopped = true; break; }
+    }
+    p.vx = ux * gap / slices; p.vy = uy * gap / slices;
     m.ball.x = p.x; m.ball.y = p.y;
     m.clock += CARRY.dt * 6;
     m.possession[p.team] += CARRY.dt;
-    moveTeams(m, CARRY.dt, p, p, p.id);
+    moveTeams(m, CARRY.dt, p, p, p.id); // everyone else at their own pace: a quick carrier gains on chasers
+    if (stopped || blocked(p)) return true;
   }
+  if (!slices) { const end = carryStop(m, p, from, to, min); p.x = end.x; p.y = end.y; return end.stopped; }
   p.x = to.x; p.y = to.y;
+  return false;
+}
+/** Where a carry from `from` to `to` ends against the current positions (stops at the first blocking opponent past `min`). */
+function carryStop(m: Match, p: Footballer, from: { x: number; y: number }, to: { x: number; y: number }, min: number) {
+  const gap = Math.hypot(to.x - from.x, to.y - from.y), ux = (to.x - from.x) / (gap || 1), uy = (to.y - from.y) / (gap || 1);
+  for (let done = Math.min(min, gap); done < gap + 1e-9; done = Math.min(gap, done + CARRY.probe)) {
+    const at = { x: from.x + ux * done, y: from.y + uy * done };
+    if (m.players.some(o => stopsCarry(m, p, o, at, ux, uy))) return { ...at, stopped: true };
+    if (done >= gap) break;
+  }
+  return { x: to.x, y: to.y, stopped: false };
+}
+function carryHalted(m: Match, p: Footballer) {
+  const o = m.players.filter(q => q.team !== p.team && active(q)).sort((a, b) => dist(a, p) - dist(b, p))[0];
+  if (o) event(m, `${p.name}, 앞을 막아선 ${o.name} 앞에서 멈춰 섭니다`);
 }
 export function step(m: Match, dt = 0.5, auto = false) {
   if (m.ended || ((m.decision || m.defending) && !auto)) return;
@@ -1210,6 +1245,7 @@ export function finishMatch(m: Match) {
 export const DEFENSIVE_WIN_RATING = 0.04, DEFENSIVE_WIN_CAP = 0.24;
 /** Rating penalty of a missed or fouled user tackle, and its cap per match. */
 export const FAILED_TACKLE_RATING = 0.05, FAILED_TACKLE_CAP = 0.3;
+export const DRIBBLE_RATING = .03, DRIBBLE_RATING_CAP = .25;
 export function rating(p: Footballer) {
   const s = p.stats;
   const midfielder = p.pos === "CM";
@@ -1226,6 +1262,8 @@ export function rating(p: Footballer) {
     accuracy + distribution + progression + creation +
     Math.min(.8, (s.tackles + s.interceptions) * (["CB", "LB", "RB"].includes(p.pos) ? .075 : midfielder ? .04 : .012)) +
     Math.min(1.3, s.saves * .13) +
+    // 0.14 successful dribbles count a little (+0.03 each, at most +0.25).
+    Math.min(DRIBBLE_RATING_CAP, (s.dribbles ?? 0) * DRIBBLE_RATING) +
     Math.min(.45, (s.grit ?? 0) * .15) +
     // 0.6 defensive choices (user only; zero for every simulated player).
     Math.min(DEFENSIVE_WIN_CAP, (s.defensiveWins ?? 0) * DEFENSIVE_WIN_RATING) - Math.min(FAILED_TACKLE_CAP, (s.failedTackles ?? 0) * FAILED_TACKLE_RATING) +

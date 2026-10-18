@@ -653,7 +653,8 @@ export default function App() {
                         <p>
                           {p!.name} · 슈팅 {userPerformance(m).stats.shots} ·
                           골 {userPerformance(m).stats.goals} · 도움{" "}
-                          {userPerformance(m).stats.assists}
+                          {userPerformance(m).stats.assists} · 드리블 성공{" "}
+                          {userPerformance(m).stats.dribbles ?? 0}
                         </p>
                         <p>패스 {userPerformance(m).stats.completed}/{userPerformance(m).stats.passes} · 전진 패스 {userPerformance(m).stats.progressivePasses ?? 0} · 키패스 {userPerformance(m).stats.keyPasses ?? 0} · 기대 도움 {(userPerformance(m).stats.expectedAssists ?? 0).toFixed(2)}</p>
                         <MissionResult m={m}/>
@@ -691,6 +692,7 @@ export default function App() {
                       </div>
                       {[
                         ["슈팅", m.shots[0], m.shots[1]],
+                        ["드리블 성공", ...([0, 1] as const).map((t) => m.players.filter((q) => q.team === t).reduce((n, q) => n + (q.stats.dribbles ?? 0), 0))],
                         ["기대 득점", m.xg[0].toFixed(2), m.xg[1].toFixed(2)],
                         [
                           "점유율",
@@ -969,7 +971,7 @@ export default function App() {
                     </section>
                   ) : (
                     <>
-                      <div className="metrics">
+                      <div className="metrics five">
                         {[
                           ["출전", c.history.filter(r=>r.stats.minutes>0).length],
                           [
@@ -980,6 +982,7 @@ export default function App() {
                             "도움",
                             c.history.reduce((a, r) => a + r.stats.assists, 0),
                           ],
+                          ["드리블 성공", c.history.reduce((a, r) => a + (r.stats.dribbles ?? 0), 0)],
                           [
                             "평균 평점",
                             (
@@ -1001,6 +1004,7 @@ export default function App() {
                               <th>경기일 / 상대</th>
                               <th>결과</th>
                               <th>골 / 도움</th>
+                              <th>드리블</th>
                               <th>패스 성공</th><th>전진 / 키패스</th>
                               <th>평점</th>
                               <th>성장 합계</th>
@@ -1021,6 +1025,7 @@ export default function App() {
                                 <td>
                                   {r.stats.goals} / {r.stats.assists}
                                 </td>
+                                <td>{r.stats.dribbles ?? 0}</td>
                                 <td>
                                   {r.stats.completed} / {r.stats.passes}
                                 </td><td>{r.stats.progressivePasses ?? 0} / {r.stats.keyPasses ?? 0}</td>

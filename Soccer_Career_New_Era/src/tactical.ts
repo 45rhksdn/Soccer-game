@@ -114,7 +114,13 @@ export const ODDS={
  // 0.12 pace race per hinderer: how much a pace gap shrinks (faster) or grows (slower) his interference,
  // scaled by where he stands — a chaser from behind most, a defender right in the path least.
  pace:{faster:.7,slower:1,behind:1,side:.7,frontNear:.2,frontFar:.45,frontFarAt:8,tackle:.12,defend:.08},
- advance:{dribbleMin:3,dribbleMax:7,runMin:8,runMax:10},
+ advance:{dribbleMin:3,dribbleMax:7,runMin:8,runMax:10,
+  // 0.14 farther carries: a contested dribble ×2.5, an open one ×5 (smoothly by the space ahead); an open
+  // 치고 달리기 goes 1.3× an open dribble (never less than 2.5× its old 8–10 m). A carry stops early when an
+  // opponent who is not chasing from behind comes within stopRadius (after the old distance is covered).
+  contested:2.5,open:5,runOverDribble:1.3,stopRadius:6},
+ // 0.14 a defender just beaten by a dribble hinders the dribbler's next choice 70% less.
+ beaten:{factor:.3,minI:.12},
  passer:{block:.2,edgeShare:.6},
  lane:{reach:2.5,reachRead:1.5,base:.13,skill:.24},
  // 0.13 keeper: close in he barely reacts (from 5 m), farther out he sees it coming (+3%/m, up to 62%).
@@ -140,10 +146,12 @@ export function interferers(m:Match,p:Footballer,ux:number,uy:number,reachScale=
   // Right next to the player the direction is ill-defined: blend towards the side weight so passing by is smooth.
   const raw=ODDS.dirFloor+(1-ODDS.dirFloor)*Math.pow((1+cos)/2,ODDS.dirPow),sideW=ODDS.dirFloor+(1-ODDS.dirFloor)*Math.pow(.5,ODDS.dirPow);
   const dir=sideW+(raw-sideW)*smooth01(d/ODDS.closeBlend);
-  out.push({o,i:prox*dir,where:cos>.5?'front':cos>-.5?'side':'behind',dist:d,cos});
+  out.push({o,i:prox*dir*beatenFactor(m,p,o),where:cos>.5?'front':cos>-.5?'side':'behind',dist:d,cos});
  }
  return out.sort((a,b)=>b.i-a.i);
 }
+/** 0.14 1 for most opponents; ODDS.beaten.factor for one the ball carrier has just dribbled past. */
+export function beatenFactor(m:Match,p:Footballer,o:Footballer){return m.dribbleBeat&&m.dribbleBeat.by===p.id&&m.dribbleBeat.ids.includes(o.id)?ODDS.beaten.factor:1;}
 /** Σ cover[k] × value_k over the strongest contributions (each opponent once). */
 const covered=(values:number[])=>values.sort((a,b)=>b-a).slice(0,ODDS.cover.length).reduce((n,v,k)=>n+v*ODDS.cover[k],0);
 export const dribbleSkill=(p:Footballer)=>p.a.dribbling*.6+p.a.speed*.15+p.a.acceleration*.1+p.a.anticipation*.15;
@@ -171,11 +179,35 @@ export function touchChance(p:Footballer,run=false){
  return clamp(k.touch+k.touchSkill*skill/100-k.touchTired*(1-clamp(p.energy,0,100)/100),.5,.995);
 }
 /** Metres gained by a successful dribble (3–7 m by space ahead and pace) or 치고 달리기 (8–10 m by pace). */
-export function dribbleAdvance(m:Match,p:Footballer,vector:{x:number,y:number},run=false){
+export function dribbleBase(m:Match,p:Footballer,vector:{x:number,y:number},run=false){
  const A=ODDS.advance,paceN=clamp((paceOf(p)-40)/50,0,1);
- if(run)return A.runMin+(A.runMax-A.runMin)*paceN;
- const ahead=interferers(m,p,vector.x,vector.y).filter(x=>x.cos>0).reduce((n,x)=>n+x.i,0),space=1-clamp(ahead,0,1);
- return A.dribbleMin+(A.dribbleMax-A.dribbleMin)*(space*.5+paceN*.5);
+ if(run)return {metres:A.runMin+(A.runMax-A.runMin)*paceN,space:dribbleSpace(m,p,vector)};
+ const space=dribbleSpace(m,p,vector);
+ return {metres:A.dribbleMin+(A.dribbleMax-A.dribbleMin)*(space*.5+paceN*.5),space};
+}
+/** 1 = nobody ahead in the chosen direction, 0 = fully blocked. */
+export function dribbleSpace(m:Match,p:Footballer,vector:{x:number,y:number}){
+ const ahead=interferers(m,p,vector.x,vector.y).filter(x=>x.cos>0).reduce((n,x)=>n+x.i,0);return 1-clamp(ahead,0,1);
+}
+/** Planned metres of a successful dribble / 치고 달리기 (before an opponent may stop the carry early). */
+export function dribbleAdvance(m:Match,p:Footballer,vector:{x:number,y:number},run=false){
+ const A=ODDS.advance,d=dribbleBase(m,p,vector,false),dribble=d.metres*(A.contested+(A.open-A.contested)*d.space);
+ if(!run)return dribble;
+ return Math.max(dribbleBase(m,p,vector,true).metres*A.contested,dribble*A.runOverDribble);
+}
+/** Metres always gained before the stop rule applies (the pre-0.14 distance). */
+export const dribbleMinimum=(m:Match,p:Footballer,vector:{x:number,y:number},run=false)=>dribbleBase(m,p,vector,run).metres;
+/** True when `o` stops a carry at `at` heading along (ux, uy): an opponent within stopRadius ahead in the path (not a chaser) and not just beaten. */
+export function stopsCarry(m:Match,p:Footballer,o:Footballer,at:{x:number,y:number},ux:number,uy:number){
+ if(o.team===p.team||!active(o))return false;
+ if(m.dribbleBeat?.by===p.id&&m.dribbleBeat.ids.includes(o.id))return false;
+ const dx=o.x-at.x,dy=o.y-at.y,d=Math.hypot(dx,dy);if(d>ODDS.advance.stopRadius)return false;
+ // In the path means ahead of the carrier (cos > 0.2); anyone level or behind is a chaser and never stops it.
+ const l=Math.hypot(ux,uy)||1;return d>.5&&(dx*ux+dy*uy)/(l*d)>.2;
+}
+/** The defenders a dribble along `vector` goes at (beaten on success): in front or beside, clearly in the way. */
+export function dribbleTargets(m:Match,p:Footballer,vector:{x:number,y:number}){
+ return interferers(m,p,vector.x,vector.y).filter(x=>x.where!=='behind'&&x.i>=ODDS.beaten.minI).map(x=>x.o.id);
 }
 /** Pace gap (−1…1 edge) between two players, weighted by where `chaser` stands relative to `runner`'s heading. */
 export function paceDuel(m:Match,runner:Footballer,chaser:Footballer){
@@ -268,12 +300,14 @@ export function attackOdds(m:Match,a:Action,opts:AttackOptions={}):Odds{
    const near=interferers(m,p,aim.x-p.x,aim.y-p.y),threats:number[]=[];let laneMax=0,pressMax=0;
    for(const o of m.players){
      if(o.team===p.team||!active(o)||o.pos==='GK')continue;
-     const lane=a==='cross'?0:laneThreat(o,p,aim,skill),hit=near.find(x=>x.o===o),press=hit?hit.i*ODDS.passer.block*(1-ODDS.passer.edgeShare*edge(skill-pressSkill(o))):0;
+     const lane=a==='cross'?0:laneThreat(o,p,aim,skill)*beatenFactor(m,p,o),hit=near.find(x=>x.o===o),press=hit?hit.i*ODDS.passer.block*(1-ODDS.passer.edgeShare*edge(skill-pressSkill(o))):0;
      laneMax=Math.max(laneMax,lane);pressMax=Math.max(pressMax,press);threats.push(Math.max(lane,press));
    }
    pen=covered(threats);
    reasons.push([laneMax>.08?laneMax*3:0,'패스 길 차단'],[pressMax>.05?pressMax*3:0,'패스 전 압박']);
  }
+ // 0.14 the reward for a dribble past a defender is visible on every option until the next choice.
+ if(m.dribbleBeat?.by===p.id&&m.dribbleBeat.ids.length)reasons.push([.85,'제친 수비수 영향 −70%']);
  const boost=m.beatenBoost?.to===p.id&&m.clock<=m.beatenBoost.until?m.beatenBoost.amount:0;
  const playmaker=m.assistBoost?.to===p.id?m.assistBoost.mult:1;
  // 0.9 시그니처 (user only): a small multiplier on the action's base chance.

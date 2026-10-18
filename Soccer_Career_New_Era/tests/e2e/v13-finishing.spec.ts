@@ -38,3 +38,18 @@ test('a successful dribble takes a few seconds: the clock runs and teammates and
     await expect(page.getByRole('group',{name:'공격 선택'})).toBeVisible();
   }else expect(m.players[m.ball.owner!].team).toBe(1);
 });
+
+test('dribbling past a defender: the reward badge and reason stay until the next choice',async({page})=>{
+  // Retry a few seeds so both the win path is exercised (a loss is also checked).
+  for(const seed of [9973,1,2,3,4,5]){
+    const c=setup(false,[{dx:3,dy:.5}]);c.match!.seed=seed;await load(page,c);
+    await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/드리블/}).click();
+    await page.getByRole('group',{name:'드리블 방향'}).getByRole('button',{name:'드리블 ↑',exact:true}).click();
+    let m=await saved(page);for(let i=0;i<50&&m.ball.owner===m.userId&&!m.dribbleBeat;i++){await page.waitForTimeout(100);m=await saved(page);}
+    if(m.ball.owner!==m.userId)continue;
+    await expect(page.locator('.beat-badge')).toContainText('제친 수비수 1명의 영향 −70%');
+    await expect(page.getByRole('group',{name:'공격 선택'})).toContainText('제친 수비수 영향 −70%');
+    return;
+  }
+  throw new Error('no winning dribble in the seeds tried');
+});

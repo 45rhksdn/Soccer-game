@@ -1,6 +1,6 @@
 import {it,expect} from 'vitest';
 import {createMatch,attributes,direction,act,actionChance,aiDribble,ATTRS,type Match,type Attributes} from '../src/engine';
-import {attackOdds,defenseOdds,dribbleAdvance,touchChance,paceOf,chanceLevel,ODDS} from '../src/tactical';
+import {attackOdds,defenseOdds,dribbleAdvance,dribbleMinimum,stopsCarry,touchChance,paceOf,chanceLevel,ODDS} from '../src/tactical';
 
 // v0.12 dribbles: an open path is near-certain, pace races against nearby opponents, and 치고 달리기.
 type Place={x:number,y:number,a?:Partial<Attributes>|number};
@@ -76,21 +76,24 @@ it('pace alone does not open a defender standing right in the path',()=>{
   expect(dribble(even.m,even.d,true)).toBeLessThan(dribble(even.m,even.d)); // and worse than a dribble at equal pace
 });
 
-it('치고 달리기: 8–10 m by pace, a short dribble 3–7 m by space and pace; space and pace decide the knock-on',()=>{
+it('distances (0.14): contested ×2.5 and open ×5 of the old 3–7 m; an open knock-on 1.3× an open dribble; space and pace decide the knock-on',()=>{
   const slow=scene({x:50,y:34,a:speed(40)},[]),fast=scene({x:50,y:34,a:speed(90)},[]);
-  expect(dribbleAdvance(slow.m,slow.u,fwd(slow.d),true)).toBeCloseTo(ODDS.advance.runMin,0);
-  expect(dribbleAdvance(fast.m,fast.u,fwd(fast.d),true)).toBeCloseTo(ODDS.advance.runMax,0);
-  const crowded=scene({x:50,y:34,a:speed(40)},[{x:53,y:34}]);
-  expect(dribbleAdvance(crowded.m,crowded.u,fwd(crowded.d))).toBeGreaterThanOrEqual(3);
-  expect(dribbleAdvance(fast.m,fast.u,fwd(fast.d))).toBeLessThanOrEqual(7);
-  expect(dribbleAdvance(fast.m,fast.u,fwd(fast.d))).toBeGreaterThan(dribbleAdvance(crowded.m,crowded.u,fwd(crowded.d)));
+  const A=ODDS.advance;
+  // Open space: 5× the old dribble distance; the knock-on goes 1.3× that.
+  for(const s of [slow,fast]){const old=dribbleMinimum(s.m,s.u,fwd(s.d));expect(dribbleAdvance(s.m,s.u,fwd(s.d))).toBeCloseTo(old*A.open,9);
+    expect(dribbleAdvance(s.m,s.u,fwd(s.d),true)).toBeCloseTo(dribbleAdvance(s.m,s.u,fwd(s.d))*A.runOverDribble,9);}
+  expect(dribbleAdvance(fast.m,fast.u,fwd(fast.d))).toBeGreaterThan(dribbleAdvance(slow.m,slow.u,fwd(slow.d)));
+  // A man in the way: between 2.5× and 5× of the old distance, and less than in open space.
+  const crowded=scene({x:50,y:34,a:speed(40)},[{x:53,y:34}]),old=dribbleMinimum(crowded.m,crowded.u,fwd(crowded.d)),now=dribbleAdvance(crowded.m,crowded.u,fwd(crowded.d));
+  expect(now).toBeGreaterThanOrEqual(old*A.contested-1e-9);expect(now).toBeLessThan(old*A.open);expect(now).toBeLessThan(dribbleAdvance(slow.m,slow.u,fwd(slow.d)));
+  expect(dribbleAdvance(crowded.m,crowded.u,fwd(crowded.d),true)).toBeGreaterThanOrEqual(dribbleMinimum(crowded.m,crowded.u,fwd(crowded.d),true)*A.contested-1e-9);
   // An open knock-on is very likely, a little riskier than a short dribble (the long touch).
   const p=dribble(fast.m,fast.d,true);expect(chanceLevel(p)).toBe(4);expect(p).toBeLessThan(dribble(fast.m,fast.d));
   // A defender 8 m ahead hardly bothers a short dribble but does threaten a long knock-on.
   const ahead=scene({x:50,y:34},[{x:58,y:34}]);expect(dribble(ahead.m,ahead.d,true)).toBeLessThan(dribble(ahead.m,ahead.d)-.05);
 });
 
-it('the knock-on in play: the shown chance is the real rate; success moves 8–10 m, a loss goes to the nearest to the ball',()=>{
+it('the knock-on in play: the shown chance is the real rate; success carries until the plan or a blocking opponent, a loss goes to the nearest to the ball',()=>{
   const base=scene({x:50,y:34,a:speed(75)},[{x:49,y:36,a:speed(65)},{x:60,y:37}]);
   const shown=dribble(base.m,base.d,true),gain=dribbleAdvance(base.m,base.u,fwd(base.d),true);let ok=0;const N=1500;
   for(let k=0;k<N;k++){
@@ -98,7 +101,9 @@ it('the knock-on in play: the shown chance is the real rate; success moves 8–1
     act(m,'dribble',{vector:fwd(base.d),run:true});
     // A lost knock-on costs exactly the sprint; a won one also the few seconds of running that follow (0.13 carry).
     if(m.ball.owner===m.userId){expect(u.energy).toBeLessThanOrEqual(e0-ODDS.run.energy);expect(u.energy).toBeGreaterThan(e0-ODDS.run.energy-.5);}else expect(u.energy).toBe(e0-ODDS.run.energy);
-    if(m.ball.owner===m.userId){ok++;expect(Math.abs(u.x-x0)).toBeCloseTo(gain,6);}
+    // 0.14 the carry covers at least the old distance and stops early only when an opponent who is not chasing comes within 6 m.
+    if(m.ball.owner===m.userId){ok++;const moved=Math.abs(u.x-x0);expect(moved).toBeGreaterThanOrEqual(Math.min(gain,dribbleMinimum(base.m,base.u,fwd(base.d),true))-.51);expect(moved).toBeLessThanOrEqual(gain+1e-6);
+      if(moved<gain-1e-6)expect(m.players.some(o=>stopsCarry(m,u,o,u,base.d,0))).toBe(true);}
     else{const landing={x:x0+base.d*gain,y:34},q=m.players[m.ball.owner!];expect(q.team).toBe(1);
       const nearest=m.players.filter(p=>p.team===1).sort((a,b)=>Math.hypot(a.x-landing.x,a.y-landing.y)-Math.hypot(b.x-landing.x,b.y-landing.y))[0];
       expect(q.id).toBe(nearest.id);}

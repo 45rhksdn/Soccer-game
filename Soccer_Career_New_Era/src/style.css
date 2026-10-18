@@ -2289,3 +2289,6 @@ td strong {
 .student-attrs{width:100%;font-size:12.5px;border-collapse:collapse;margin-top:6px}
 .student-attrs td{padding:3px 6px;border-bottom:1px solid #eceee9}
 .student-attrs td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+/* 0.14 records: 출전 · 골 · 도움 · 드리블 성공 · 평균 평점 */
+@media (min-width:901px){.metrics.five{grid-template-columns:repeat(5,1fr)}}
+.distance-strip .beat-badge{display:inline-block;margin-top:6px;padding:4px 10px;border-radius:999px;background:#111;color:#fff;font-style:normal;font-size:12px;font-weight:700}

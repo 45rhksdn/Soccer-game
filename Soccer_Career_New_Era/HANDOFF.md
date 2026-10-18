@@ -5,6 +5,9 @@
 - 추가 요청(16:30~): 12× 제거(1×·2×·4×), 지역·학교·희망 포지션 → 학생 한 명(사연·특성·스카우트 평가) 생성 흐름.
   - ScoutPanel의 후보 목록·비교표를 `StudentCard`로 바꿨다. `forecast.ts`, `scouting.generateCandidates`에 희망 포지션 인자와 `scoutKey`를 추가했다.
   - 레거시 보상 중 '후보 수 증가'는 학생 한 명 방식이라 의미가 없어졌다. 대신 스카우트 평가의 확신 문구와 코치 관찰(growthOutlook)에 반영된다. 잠재력 상한 보너스는 그대로다.
+- 추가 요청(18:20~): 드리블 성공 보상(제친 수비수 −70%), 거리 ×2.5/×5/치고 달리기 1.3×, 6m 멈춤, 드리블 성공 기록·평점.
+  - 코드: tactical `beatenFactor`, `dribbleBase`, `dribbleSpace`, `dribbleMinimum`, `stopsCarry`, `dribbleTargets`, `ODDS.advance`/`ODDS.beaten`. engine `m.dribbleBeat`, `carry` 멈춤, `carryStop`, `DRIBBLE_RATING`. App 기록 표시, MatchInteraction 배지.
+  - 테스트: `tests/dribble-reward.test.ts` 4개, e2e `v13-finishing`에 보상 배지, `career` 기록 페이지 확인. 거리 기대값이 바뀐 `dribble-pace`·`finishing-carry`·`tactical` 테스트를 새 규칙으로 갱신했다.
 - 추가 테스트: `tests/stories-assists.test.ts` 8개, `tests/e2e/v14.spec.ts`. 새 흐름에 맞춰 갱신: `career.spec`(스카우팅, 선수 변경), Codex `v13.spec`(후보 1명, 비교표 없음), `v07.spec`(희망 포지션 선택). 갱신: `midfielder.test`(슛 후 lastPass 대신 flight.assistFrom 확인).
 - 코드:
   - tactical: `ODDS.shot`(gkFrom/gkPerMetre/aerialSave/block, 압박 1.2), `ODDS.close`.
