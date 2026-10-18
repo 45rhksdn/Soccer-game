@@ -1,13 +1,13 @@
 {
   "matches": 200,
-  "passes": 3354,
-  "completed": 2309,
-  "keyPasses": 88,
-  "xA": 8.306208276955696,
-  "assists": 8,
-  "goodReceipts": 2,
-  "shotsFromGoodReceipts": 2,
+  "passes": 3356,
+  "completed": 2300,
+  "keyPasses": 65,
+  "xA": 6.714559660190781,
+  "assists": 11,
+  "goodReceipts": 7,
+  "shotsFromGoodReceipts": 0,
   "goalsFromGoodReceipts": 0,
-  "qualityAtReceipt": 0.3438350473973729,
-  "qualityAtShot": 0.24820767168025215
+  "qualityAtReceipt": 0,
+  "qualityAtShot": 0
 }
