@@ -76,6 +76,8 @@ test('scouting: region map → real school → wished position → one student (
  await page.screenshot({path:`reports/${info.project.name}-scouting.png`,fullPage:true});
  await page.reload();await page.getByRole('button',{name:'새로운 커리어 시작'}).click();await openSchool(page,'대구','현풍고');expect(await names(page)).toEqual(first);
  await page.getByRole('button',{name:'다른 학생 만나 보기'}).click();await expect(page.getByText('2번째 만남')).toBeVisible();const second=await names(page);expect(second).not.toEqual(first);
+ /* the reroll is saved asynchronously: wait until IndexedDB has it before reloading */
+ await expect.poll(()=>page.evaluate(()=>new Promise<number>(r=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const g=q.result.transaction('saves').objectStore('saves').get('scouting');g.onsuccess=()=>{q.result.close();const v=g.result as {lists?:Record<string,number>}|undefined;r(Math.max(0,...Object.values(v?.lists??{})));};};}))).toBe(1);
  await page.reload();await page.getByRole('button',{name:'새로운 커리어 시작'}).click();await openSchool(page,'대구','현풍고');expect(await names(page)).toEqual(second);
  const chosen=second[0];await page.getByRole('button',{name:`${chosen} 선수로 커리어 시작`}).click();
  await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.getByText('현풍고 축구부 입단').first()).toBeVisible();
