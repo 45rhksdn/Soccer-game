@@ -13,15 +13,17 @@ async function tapDays(page:Page,acts:string[]){for(const a of acts)await page.g
 /** Day index (0 = 월) of the week stored in the active slot, to wait for the autosave before reloading. */
 const savedDay=(page:Page)=>page.evaluate(()=>new Promise<number>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const s=q.result.transaction('saves').objectStore('saves');const a=s.get('activeSlot');a.onsuccess=()=>{const r=s.get('slot'+(a.result??1));r.onsuccess=()=>{q.result.close();try{resolve(JSON.parse(JSON.parse(String(r.result)).payload).development.active?.cursor??0);}catch{resolve(-1);}};};};}));
 test('daily schedule → live action → growth/rival → reload mid-week and mid-match → slots and file restore',async({page},info)=>{
- test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await create(page);
+ test.setTimeout(150000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await create(page);
  // An actual defensive decision pauses the clock before the first attacking possession.
  const defense=page.getByRole('group',{name:'수비 선택'});
  await page.addLocatorHandler(defense,async()=>{await defense.getByRole('button',{name:'수비 압박하기',exact:true}).click();});
  await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.locator('.career-hero')).not.toContainText('보유 특성');for(const t of ['컨디션','피로도','잔액'])await expect(page.locator('.today-help')).toContainText(t);await expect(page.locator('.today-help')).not.toContainText('확률');
  await nav(page,'오늘의 일정');await tapDays(page,['패스훈련','속력훈련','공격훈련','휴식하기','드리블훈련']);
  await page.screenshot({path:`reports/${info.project.name}-daily.png`,fullPage:true});
- await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'12×',exact:true}).click();
- await expect(page.getByRole('group',{name:'공격 선택'})).toBeVisible({timeout:20000});
+ await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'4×',exact:true}).click();
+ // Match speeds are 1×, 2× and 4× (12× removed).
+ await expect(page.getByRole('button',{name:'12×',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'2×',exact:true})).toBeVisible();
+ await expect(page.getByRole('group',{name:'공격 선택'})).toBeVisible({timeout:60000});
  await page.getByRole('button',{name:'1×',exact:true}).click();
  const before=await page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL());await page.getByRole('button',{name:'일시정지',exact:true}).click();await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/}).click();await page.locator('.target-options button:not(:disabled)').first().click();await expect(page.locator('.offball')).toBeVisible();await page.getByRole('button',{name:'계속',exact:true}).click();await expect.poll(()=>page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL())).not.toBe(before);
  await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();await tapDays(page,['휴양하기']);await expect(page.locator('.page-heading')).toContainText('WEEK 02');await expect(page.getByRole('heading',{name:'이번주 성장노트'})).toBeVisible();await expect(page.locator('.save-state')).toHaveText('저장 완료');

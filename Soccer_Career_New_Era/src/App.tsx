@@ -620,7 +620,7 @@ export default function App() {
                         {paused ? "계속" : "일시정지"}
                       </button>
                       <div className="speeds">
-                        {[1, 4, 12].map((v) => (
+                        {[1, 2, 4].map((v) => (
                           <button
                             className={speed === v ? "selected" : ""}
                             onClick={() => setSpeed(v)}
