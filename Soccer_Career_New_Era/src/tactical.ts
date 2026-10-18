@@ -7,6 +7,8 @@ export function nearbyOpponents(m:Match,p:Footballer){
  const opponents=m.players.filter(q=>q.team!==p.team&&active(q)).sort((a,b)=>distance(a,p)-distance(b,p));
  return {nearest:opponents[0],distance:opponents[0]?distance(p,opponents[0]):Infinity,count:opponents.filter(q=>distance(p,q)<=6).length};
 }
+/** 0.10 where a pass to `q` is aimed: the end of a timed run in behind (while q is still onside), else q. */
+export const runPoint=(m:Match,q:Footballer)=>q.run&&q.run.until>m.clock?{x:q.run.x,y:q.run.y}:{x:q.x,y:q.y};
 export const goalDistance=(m:Match,p:Footballer)=>Math.hypot((direction(m,p.team)>0?105:0)-p.x,34-p.y);
 export function passTargets(m:Match){const p=m.ball.owner===null?null:m.players[m.ball.owner];return p?m.players.filter(q=>q.team===p.team&&q.id!==p.id&&active(q)):[];}
 export function offside(m:Match,q:Footballer){
@@ -14,9 +16,26 @@ export function offside(m:Match,q:Footballer){
  const d=direction(m,p.team),line=m.players.filter(o=>o.team!==p.team&&active(o)).map(o=>o.x*d).sort((a,b)=>b-a)[1]??105;
  return q.x*d>p.x*d&&q.x*d>line&&q.x*d>52.5*d;
 }
+// ── 0.10 crosses, cut-backs, headers and volleys ─────────────────────────
+const lineDist=(m:Match,team:number,x:number)=>Math.abs((direction(m,team)>0?105:0)-x);
+/** Teammates in the box who can attack a cross (not offside). */
+export function boxMates(m:Match,p:Footballer){return m.players.filter(q=>q.team===p.team&&q.id!==p.id&&active(q)&&q.pos!=='GK'&&lineDist(m,p.team,q.x)<=16.5&&Math.abs(q.y-34)<=16&&!offside(m,q));}
+/** Teammates arriving at the penalty spot / edge of the box for a cut-back. */
+export function cutbackMates(m:Match,p:Footballer){return m.players.filter(q=>q.team===p.team&&q.id!==p.id&&active(q)&&q.pos!=='GK'&&lineDist(m,p.team,q.x)>=6&&lineDist(m,p.team,q.x)<=20&&Math.abs(q.y-34)<=13&&!offside(m,q));}
+const markers=(m:Match,q:Footballer,r:number)=>m.players.filter(o=>o.team!==q.team&&active(o)&&distance(o,q)<=r).length;
+/** Best aerial target: strength, positioning and finishing, minus tight markers. */
+export function crossTarget(m:Match,p:Footballer){return boxMates(m,p).map(q=>({q,s:q.a.strength*.4+q.a.positioning*.3+q.a.finishing*.3-12*markers(m,q,2.5)})).sort((a,b)=>b.s-a.s)[0]?.q;}
+export function cutbackTarget(m:Match,p:Footballer){return cutbackMates(m,p).map(q=>({q,s:q.a.finishing*.5+q.a.shooting*.3-10*markers(m,q,3)-Math.abs(q.y-34)*.5})).sort((a,b)=>b.s-a.s)[0]?.q;}
+/** Cross delivery and finishing tuning (balance.test keeps goals/shots in range). */
+export const CROSS={base:.40,skill:.32,marker:.06,wide:13,range:40,header:{base:.06,skill:.34},volley:{base:.05,skill:.36},reach:18} as const;
 export function attackAllowed(m:Match,a:Action,opts:AttackOptions={}){
  const p=m.ball.owner===null?null:m.players[m.ball.owner];if(!p||!active(p)||m.ended)return false;
- const r=goalDistance(m,p);
+ const r=goalDistance(m,p),aerial=!!m.aerial&&m.aerial.to===p.id&&m.clock<=m.aerial.until;
+ if(a==='header'||a==='volley')return aerial&&r<=CROSS.reach;
+ // A ball dropping from a cross is struck, laid off or controlled for a quick shot — no dribbling or long shots.
+ if(aerial&&!['closeShot','pass','safe','forward','through'].includes(a))return false;
+ if(a==='cross')return Math.abs(p.y-34)>=CROSS.wide&&lineDist(m,p.team,p.x)<=CROSS.range&&(opts.targetId!==undefined?boxMates(m,p).some(q=>q.id===opts.targetId):boxMates(m,p).length>0);
+ if(a==='cutback')return lineDist(m,p.team,p.x)<=13&&Math.abs(p.y-34)>=7&&Math.abs(p.y-34)<=24&&cutbackMates(m,p).length>0;
  if(a==='closeShot')return r<=22;
  if(a==='longShot')return r>=16.5&&r<=55;
  if(a==='curl')return r>=12&&r<=28;
@@ -37,6 +56,10 @@ export function passInsightKeys(d:number):Attr[]{
  return [...Array(4-long).fill('passing'),...Array(long).fill('longPassing'),'anticipation','anticipation'] as Attr[];
 }
 export function attackKeys(a:Action):Attr[]{
+ if(a==='header')return ['strength','finishing'];
+ if(a==='volley')return ['finishing','control'];
+ if(a==='cross')return ['curve','longPassing'];
+ if(a==='cutback')return ['passing','vision'];
  if(a==='longShot')return ['longShot','finishing'];
  if(a==='curl')return ['curve','finishing'];
  if(a==='shoot'||a==='closeShot')return ['shooting','finishing'];
@@ -72,11 +95,25 @@ export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  const proximity=q?clamp(1-near.distance/6,0,1):0;
  const opponent=q?(q.a.marking*.45+q.a.defending*.35+q.a.anticipation*.20)/100:0;
  // Separate crowd penalty (5 points each) from distance/quality pressure (up to 12 points).
- const passing=['pass','safe','forward','through'].includes(a);
+ const passing=['pass','safe','forward','through','cross','cutback'].includes(a);
  // Passes feel pressure less than shots and dribbles (the ball leaves the foot first).
  const penalty=passing?near.count*PASS.crowd+proximity*opponent*PASS.pressure:near.count*.05+proximity*opponent*.12;
  let base=0;
- if(['shoot','closeShot','longShot','curl'].includes(a)){
+ if(a==='header'||a==='volley'){
+   const r=goalDistance(m,p),k=a==='header'?CROSS.header:CROSS.volley;
+   const q=a==='header'?(p.a.strength*.45+p.a.finishing*.35+p.a.positioning*.2)/100:(p.a.finishing*.6+p.a.control*.4)/100;
+   base=(k.base+k.skill*q)*clamp((CROSS.reach-r)/12,.25,1)*clamp(1-Math.abs(34-p.y)/60,.45,1);
+   base*=1-.4*shotBlockAt(m,p.team,p.x,p.y);
+ }
+ else if(a==='cross'){
+   const target=m.players.find(q=>q.id===opts.targetId)??crossTarget(m,p);if(!target)return 0;
+   base=CROSS.base+CROSS.skill*(p.a.curve*.45+p.a.longPassing*.35+p.a.vision*.2)/100-Math.min(.18,markers(m,target,3)*CROSS.marker);
+ }
+ else if(a==='cutback'){
+   const target=m.players.find(q=>q.id===opts.targetId)??cutbackTarget(m,p);if(!target)return 0;
+   base=PASS.base+PASS.skill*p.a.passing/100+PASS.anticipation*p.a.anticipation/100-Math.max(0,distance(p,target)-PASS.shortRange)*PASS.perMetre-Math.min(.2,markers(m,target,3)*.07);
+ }
+ else if(['shoot','closeShot','longShot','curl'].includes(a)){
    base=baseShotChance(m,p,a);
    // A defender farther than the close-pressure radius can still block the shot.
    base*=1-.4*shotBlockAt(m,p.team,p.x,p.y);
@@ -88,14 +125,16 @@ export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
  }else if(a==='hold')base=.55+.35*p.a.strength/100;
  else{
    const target=m.players.find(q=>q.id===opts.targetId);if(!target||target.team!==p.team||target.id===p.id||!active(target))return 0;
-   const d=distance(p,target),longWeight=longPassWeight(d);
+   // A pass to a runner goes into the space at the end of the run (a through ball).
+   const aim=runPoint(m,target),intoSpace=aim.x!==target.x||aim.y!==target.y;
+   const d=distance(p,aim),longWeight=longPassWeight(d);
    const skill=p.a.passing*(1-longWeight)+p.a.longPassing*longWeight;
    // 0.7.1: an unpressured short pass is safe (skill 60 ≈ 89 %, 95 ≈ 97 %); length, a forward or
    // through ball, an intercepting defender in the lane and pressure on the passer lower it.
    base=PASS.base+PASS.skill*skill/100+PASS.anticipation*p.a.anticipation/100-Math.max(0,d-PASS.shortRange)*PASS.perMetre;
-   const ahead=(target.x-p.x)*direction(m,p.team);
-   base-=a==='through'?PASS.through:a==='forward'||(a==='pass'&&ahead>PASS.forwardMetres)?PASS.forward:0;
-   const dx=target.x-p.x,dy=target.y-p.y,l=dx*dx+dy*dy||1;
+   const ahead=(aim.x-p.x)*direction(m,p.team);
+   base-=a==='through'||intoSpace?PASS.through:a==='forward'||(a==='pass'&&ahead>PASS.forwardMetres)?PASS.forward:0;
+   const dx=aim.x-p.x,dy=aim.y-p.y,l=dx*dx+dy*dy||1;
    let risk=0;
    for(const o of m.players){if(o.team===p.team||!active(o))continue;const t=((o.x-p.x)*dx+(o.y-p.y)*dy)/l;if(t>.08&&t<.95)risk=Math.max(risk,clamp(1-Math.hypot(o.x-p.x-t*dx,o.y-p.y-t*dy)/3,0,1)*(o.a.anticipation/100));}
    base-=risk*.18;
@@ -120,6 +159,8 @@ export function matchCommentary(m:Match){
  const u=m.players[m.userId],o=m.ball.owner===null?null:m.players[m.ball.owner];
  if(m.ended)return '경기 종료 휘슬! 선수들이 오늘의 승부를 마무리합니다.';
  if(m.defending&&o)return `골문 ${goalDistance(m,o).toFixed(0)}m 앞, ${o.name}의 앞을 가로막는 ${u.name}. 어떻게 대응할까요?`;
+ if(m.decision&&m.aerial?.to===u.id)return `${u.name}에게 크로스가 날아옵니다! 헤더로 돌려놓을까요, 발리로 때릴까요?`;
+ if(m.decision&&m.setPiece==='corner')return `코너킥 키커는 ${u.name}! 박스 안 동료에게 크로스를 올리세요.`;
  if(m.decision){
    const zone=goalDistance(m,u)<22?'페널티 박스 근처':goalDistance(m,u)>45?'중원':'상대 진영';
    const from=m.lastPass?.to===u.id?m.players[m.lastPass.from].name:null;
