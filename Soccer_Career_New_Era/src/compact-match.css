@@ -57,7 +57,7 @@
 .match-layout.cm-match.cm-sidebar-layout{grid-template-columns:minmax(0,1fr) 192px;gap:0;background:#090e14;align-items:stretch}
 .cm-sidebar-layout>.live-commentary,.cm-sidebar-layout>.cm-bottom{grid-column:1/-1}
 .cm-sidebar-layout .match-field{position:static;padding:6px 0 6px 6px;background:#0c181b;display:flex;align-items:flex-start}
-.match-board .cm-sidebar-layout .interactive-pitch .pitch.vertical{width:100%;max-height:calc(100dvh - 200px);height:auto;object-fit:contain}
+.match-board .cm-sidebar-layout .interactive-pitch .pitch.vertical{width:min(100%,calc((100dvh - 200px)*.65));max-height:none;height:auto;object-fit:contain}
 .cm-sidebar-layout .match-side{background:#090e14;display:flex}
 .cm-sidebar-layout .match-actions{background:#090e14;padding:8px;flex:1;display:flex;flex-direction:column}
 .cm-sidebar-layout .cm-distance{display:flex;flex-direction:column;align-items:flex-start;font-size:10px;gap:3px}.cm-sidebar-layout .cm-distance small{color:#80939d;font-size:9px}
