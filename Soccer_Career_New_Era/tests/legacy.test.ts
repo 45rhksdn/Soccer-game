@@ -28,7 +28,7 @@ async function playToRetirement(c:ReturnType<typeof newCareer>){
   return seasons;
 }
 /** Fast path to retirement for tests that only need a retired career. */
-function retireNow(c:ReturnType<typeof newCareer>){c.player.age=35;c.world.phase='offseason';c.world.contract.years=1;c.world.clubId=c.world.clubs.find(x=>x.league>0)!.id;nextSeason(c);expect(c.world.phase).toBe('retired');return c;}
+function retireNow(c:ReturnType<typeof newCareer>){c.world.records=Array.from({length:3},(_,i)=>({year:2026+i,club:'검증팀',league:'검증리그',rank:1,appearances:10,minutes:900,goals:0,assists:0,rating:6.5}));c.player.age=35;c.world.phase='offseason';c.world.contract.years=1;c.world.clubId=c.world.clubs.find(x=>x.league>0)!.id;nextSeason(c);expect(c.world.phase).toBe('retired');return c;}
 
 it('constants: the increase per retirement and its limit are adjustable numbers',()=>{
   expect(RETIREMENT_POTENTIAL_STEP).toBeGreaterThan(0);expect(RETIREMENT_POTENTIAL_MAX_BONUS).toBeGreaterThanOrEqual(RETIREMENT_POTENTIAL_STEP);

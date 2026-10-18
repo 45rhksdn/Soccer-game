@@ -81,21 +81,21 @@ test('retirement reward: shared by all slots, granted once even after reloads, r
   await create(page,'현역선수');
   // A retired career built with the game's own code, written into slot 2.
   const c=newCareer({name:'은퇴선수',age:16,pos:'ST',secondary:'LW',foot:'오른',height:180,weight:72,style:'테크니션',curve:'꾸준한 성장형'},1,99,{id:'e2e-retired'});
-  c.player.age=35;c.world.phase='offseason';c.world.contract.years=1;c.world.clubId=c.world.clubs.find(x=>x.league>0)!.id;nextSeason(c);
+  c.world.records=Array.from({length:3},(_,i)=>({year:2026+i,club:'검증팀',league:'검증리그',rank:1,appearances:10,minutes:900,goals:0,assists:0,rating:6.5}));c.player.age=35;c.world.phase='offseason';c.world.contract.years=1;c.world.clubId=c.world.clubs.find(x=>x.league>0)!.id;nextSeason(c);
   const save=encode(c);
   await editDb(page,`store.put(arg,'slot2');store.put(arg,'archive3');`,save);
   await page.goto('/');await nav(page,'선수 변경하기');
-  await expect(page.locator('.legacy')).toContainText('은퇴한 선수 0명');
+  await expect(page.locator('.legacy')).toContainText('보존된 은퇴 선수 0명');
   await page.locator('.player-slot').nth(1).getByRole('button',{name:'이 선수로 전환'}).click();
   await expect(page.getByRole('status')).toContainText('은퇴 누적 보상');
-  await nav(page,'선수 변경하기');await expect(page.locator('.legacy')).toContainText('은퇴한 선수 1명 · 새 선수 후보의 잠재력 최대 상한 +1');
+  await nav(page,'선수 변경하기');await expect(page.locator('.legacy')).toContainText('보존된 은퇴 선수 1명 · 새 선수 후보의 잠재력 최대 상한 +1');
   // Switch away and back, reload, and restore the same player from the slot-3 archive: still one reward.
   await page.locator('.player-slot').nth(0).getByRole('button',{name:'이 선수로 전환'}).click();
   await nav(page,'선수 변경하기');await page.locator('.player-slot').nth(1).getByRole('button',{name:'이 선수로 전환'}).click();
   await page.reload();await nav(page,'선수 변경하기');
   page.on('dialog',d=>d.accept());await page.getByRole('button',{name:'교체 전 선수 복원 · 은퇴선수'}).click();
   await expect(page.getByRole('status')).toContainText('교체 전 선수를 복원했습니다');
-  await page.waitForTimeout(1500);await nav(page,'선수 변경하기');await expect(page.locator('.legacy')).toContainText('은퇴한 선수 1명');
+  await page.waitForTimeout(1500);await nav(page,'선수 변경하기');await expect(page.locator('.legacy')).toContainText('보존된 은퇴 선수 1명');
   const legacy=await page.evaluate(()=>new Promise<unknown>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const r=q.result.transaction('saves').objectStore('saves').get('legacy');r.onsuccess=()=>{q.result.close();resolve(r.result);};};})) as {retired:{id:string}[]};
   expect(legacy.retired.map(x=>x.id).join(',')).toBe('e2e-retired');
   expect(errors).toEqual([]);

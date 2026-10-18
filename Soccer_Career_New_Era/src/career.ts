@@ -1,3 +1,4 @@
+import {makeStory,recordAge,type PlayerStory} from './origins';
 import {returnFromLoan} from './world';
 import {ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledMatch,announceOffers,ageRival,news,syncRival,finishWeek,type Development} from './development';
 import {ROLE_KEYS,roleAbility} from './roles';
@@ -83,6 +84,7 @@ export type Career = {
   /** Stable player id (0.5): same across backups/archives of this player, different for every new player. */
   id?: string;
   schoolRef?: SchoolRef;
+  story?: PlayerStory;
   development: Development;
   world: World;
   seed: number;
@@ -167,6 +169,7 @@ export function newCareer(
   if(preset.potential!==undefined)c.player.potential=preset.potential;
   if(preset.learning!==undefined)c.player.learning=preset.learning;
   if(preset.schoolRef){c.schoolRef={...preset.schoolRef};const club=c.world.clubs.find(x=>x.id===c.world.clubId);if(club)club.name=preset.schoolRef.name;c.feed=[`${preset.schoolRef.name} 축구부 입단 · 등번호 10번의 여정이 시작됩니다.`];}
+  c.story=makeStory(c.player);
   ensureDevelopment(c,{traits:preset.traits});return c;
 }
 /** Match-experience growth per full match (game-reading attributes, see aging.ts). */
@@ -391,9 +394,9 @@ export function nextSeason(c:Career){
  // Days are the unit of play: an unfinished week is closed (recorded in the growth notes) instead of blocking the new season.
  if(c.development.active)finishWeek(c);const w=c.world;if(w.phase!=='offseason')throw Error('시즌 종료 후 가능합니다.');
  const need=contractNeeded(c);if(need)throw Error(need);
- c.player.age++;ageRival(c);if(c.player.age>=36){w.year++;retire(c);return;}
+ recordAge(c);c.player.age++;ageRival(c);if(c.player.age>=36){w.year++;retire(c);return;}
  applyAging(c.player.a,c.development.traits,c.player.age);
  advanceWorldYear(w);clearInjuries(w,[c.development.rival.id]);c.development.rival.player.injuryWeeks=0;syncRival(c);c.week=Math.max(c.week,Math.round((w.year-2026)*365.25/7));c.day=c.week*7;w.currentDay=c.day;w.currentSeasonStart=c.week;
  c.player.energy=100;c.player.fatigue=0;c.player.injuryWeeks=0;c.trainingCount=0;c.feed.unshift(`${w.year} 새 시즌 · ${teamName(c)} · ${c.player.age}세`);
 }
-export function retire(c:Career){if(c.match)throw Error('진행 중인 경기를 완료하세요.');c.world.phase='retired';c.world.achievements.unshift(`${c.world.year} ${c.player.name} 은퇴 · 커리어 기록 보존`);}
+export function retire(c:Career){if(c.match)throw Error('진행 중인 경기를 완료하세요.');recordAge(c);c.world.phase='retired';c.world.achievements.unshift(`${c.world.year} ${c.player.name} 은퇴 · 커리어 기록 보존`);}

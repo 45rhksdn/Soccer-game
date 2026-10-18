@@ -1,3 +1,4 @@
+import {OriginPanel} from './OriginPanel';
 import {MatchInteraction} from "./MatchInteraction";
 import {traitNotice} from './traitPresentation';
 import {GrowthNotes,RivalPanel} from './WeeklyPanels';
@@ -477,6 +478,7 @@ export default function App() {
                     <ScoutPanel
                       scout={scout}
                       potentialBonus={potentialBonus(legacy)}
+                      legacy={legacy}
                       school={scoutSchool}
                       setSchool={setScoutSchool}
                       onReroll={(id) => {
@@ -940,6 +942,7 @@ export default function App() {
                       </div>
                     </section>
                   </div>
+                  <OriginPanel c={c} legacy={legacy}/>
                   <EquipmentPanel
                     c={c}
                     onBuy={(id) => update((n) => buyEquipment(n, id))}

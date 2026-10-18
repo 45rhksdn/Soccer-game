@@ -68,7 +68,7 @@ test('scouting: region map → real school → stable candidates → reroll pers
  await page.goto('/');await page.getByRole('button',{name:'새로운 커리어 시작'}).click();
  await expect(page.getByRole('tab',{name:'실제 고교에서 발굴'})).toHaveAttribute('aria-selected','true');
  await openSchool(page,'대구','현풍고');const first=await names(page);
- await expect(page.getByRole('heading',{name:'3. 능력치 비교'})).toBeVisible();await expect(page.locator('.scout-source a').first()).toBeVisible();
+ await page.getByText('후보 능력치 자세히 비교',{exact:true}).click();await page.getByText('학교 정보 출처',{exact:true}).click();await expect(page.getByRole('heading',{name:'3. 능력치 비교'})).toBeVisible();await expect(page.locator('.scout-source a').first()).toBeVisible();
  await page.screenshot({path:`reports/${info.project.name}-scouting.png`,fullPage:true});
  await page.reload();await page.getByRole('button',{name:'새로운 커리어 시작'}).click();await openSchool(page,'대구','현풍고');expect(await names(page)).toEqual(first);
  await page.getByRole('button',{name:'새 후보 목록 생성'}).click();await expect(page.getByText('후보 목록 #2')).toBeVisible();const second=await names(page);expect(second).not.toEqual(first);
