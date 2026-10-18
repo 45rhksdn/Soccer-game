@@ -21,17 +21,17 @@ function Gauge({p,label=true}:{p:number;label?:boolean}){
 }
 export function CompactMatch({m,onChange,toolbar}:{m:Match;onChange:()=>void;toolbar?:ReactNode}){
  const [mode,setMode]=useState<'dribble'|'pass'|'shot'>('dribble'),[run,setRun]=useState(false);
- const [target,setTarget]=useState<number|null>(null),[shot,setShot]=useState<Action|null>(null);
+ const [target,setTarget]=useState<number|null>(null);
  const u=m.players[m.userId],owner=m.ball.owner===null?null:m.players[m.ball.owner];
  const allowed=availableActions(m),activeMode=mode==='dribble'&&!allowed.includes('dribble')?(allowed.includes('header')?'shot':'pass'):mode,near=nearbyOpponents(m,u),gap=m.defending&&owner?distance(u,owner):near.distance;
  const root=useRef<HTMLDivElement>(null);
  useEffect(()=>{root.current?.closest('.match-board')?.scrollIntoView({block:'start'});},[]);
  // A new possession starts on the pad. Consecutive dribbles retain the same pad and run mode.
- useEffect(()=>{if(!m.decision){setMode('dribble');setTarget(null);setShot(null);}},[m.decision]);
- const execute=(a:Action,opts:AttackOptions={})=>{if(!m.decision||!availableActions(m).includes(a))return;act(m,a,opts);setTarget(null);setShot(null);setMode('dribble');onChange();};
- const targets=passTargets(m),selected=targets.find(p=>p.id===target),validTarget=selected&&!offside(m,selected);
+ useEffect(()=>{if(!m.decision){setMode('dribble');setTarget(null);}},[m.decision]);
+ const execute=(a:Action,opts:AttackOptions={})=>{if(!m.decision||!availableActions(m).includes(a))return;act(m,a,opts);setTarget(null);setMode('dribble');onChange();};
+ const targets=passTargets(m).sort((a,b)=>distance(u,a)-distance(u,b)||a.id-b.id),selected=targets.find(p=>p.id===target),validTarget=selected&&!offside(m,selected);
  const pickTarget=(id:number)=>{if(targets.some(p=>p.id===id&&!offside(m,p)))setTarget(id);};
- const switchMode=(next:typeof mode)=>{setMode(next);setTarget(null);setShot(null);};
+ const switchMode=(next:typeof mode)=>{setMode(next);setTarget(null);};
  return <div ref={root} className="match-layout cm-match">
   <div className="match-field"><div className="pitch-wrap interactive-pitch">
    <Pitch match={m} selectable={m.decision&&activeMode==='pass'} onPlayer={pickTarget} selectedTarget={target} premium/>
@@ -56,8 +56,7 @@ export function CompactMatch({m,onChange,toolbar}:{m:Match;onChange:()=>void;too
        <button className="cm-confirm" disabled={!validTarget||!allowed.includes('pass')} onClick={()=>validTarget&&execute('pass',{targetId:selected.id})}>{selected?`${selected.name}에게 패스하기`:'동료를 선택하세요'}</button>
        <div className="cm-special">{(['cross','cutback'] as Action[]).filter(a=>allowed.includes(a)).map(a=><button key={a} onClick={()=>execute(a)}>{ACTIONS[a]}<Gauge p={attackOdds(m,a).p} label={false}/></button>)}</div>
       </>:<>
-       <div className="cm-shots" role="group" aria-label="슛 종류">{SHOTS.filter(a=>!['header','volley'].includes(a)||allowed.includes(a)).map(a=><button key={a} disabled={!allowed.includes(a)} aria-pressed={shot===a} onClick={()=>setShot(a)}><strong>{ACTIONS[a]}</strong>{allowed.includes(a)?<Gauge p={attackOdds(m,a).p}/>:<small>현재 위치에서 선택 불가</small>}</button>)}</div>
-       <button className="cm-confirm" disabled={!shot||!allowed.includes(shot)} onClick={()=>shot&&execute(shot)}>{shot?`${ACTIONS[shot]} 실행`:'슛 종류를 선택하세요'}</button>
+       <div className="cm-shots" role="group" aria-label="슛 종류">{SHOTS.filter(a=>!['header','volley'].includes(a)||allowed.includes(a)).map(a=><button key={a} disabled={!allowed.includes(a)} onClick={()=>execute(a)}><strong>{ACTIONS[a]}</strong>{allowed.includes(a)?<Gauge p={attackOdds(m,a).p}/>:<small>현재 위치에서 선택 불가</small>}</button>)}</div>
       </>}
      </div>
      <nav className="cm-tabs" aria-label="공격 방식">{(['dribble','pass','shot'] as const).map((a,i)=><button key={a} aria-pressed={activeMode===a} onClick={()=>switchMode(a)}>{['드리블','패스','슛'][i]}</button>)}</nav>

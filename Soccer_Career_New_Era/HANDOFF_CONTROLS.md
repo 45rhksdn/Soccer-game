@@ -26,3 +26,9 @@ Branch: codex/compact-match-controls. Claude v0.15 is in progress; no v0.15 bran
 - Screenshot review: compact-mobile-dribble + compact-desktop-pass; no horizontal overflow, pad/gauges/commentary/selected pass path visible. Fixture intentionally overlaps unrelated players to isolate the choice scenario.
 - Final test-only fix opens collapsed match missions before checking them. Runtime code is unchanged since the successful focused browser run.
 - Full historical browser suite is not claimed passing; old interaction tests were adapted, but only the focused 12 were used as the UI acceptance gate. Real iPhone and long careers were not retested.
+
+## 20:01 follow-up
+- Shot-type buttons execute immediately (no second confirmation). Includes header / volley; unavailable actions remain disabled.
+- Pass list sorts by current exact distance ascending, then player ID for deterministic ties. Existing target confirmation stays.
+- Desktop panel width 360→300 px, pad width 196→164 px; tighter padding and smaller controls. Touch direction/shot/tab buttons retain 40 px minimum height.
+- No simulation or save changes. Build + focused browser workflow used for verification.

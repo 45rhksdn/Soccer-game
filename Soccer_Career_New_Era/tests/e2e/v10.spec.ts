@@ -20,7 +20,7 @@ test('a cross reaching me in the box offers 헤더 and 발리, not a dribble',as
   await expect(attack.getByRole('button',{name:/헤더/})).toBeVisible();await expect(attack.getByRole('button',{name:/발리/})).toBeVisible();
   await expect(page.getByRole('group',{name:'드리블 방향'})).toHaveCount(0);
   await expect(page.locator('.live-commentary')).toContainText('크로스가 날아옵니다');
-  await attack.getByRole('button',{name:/헤더/}).click();await page.getByRole('button',{name:/헤더.*실행/}).click();
+  await attack.getByRole('button',{name:/헤더/}).click();
   await expect(page.locator('.live-commentary')).toContainText(/헤더|골|GOAL|선방|코너킥|세컨드 볼|처리/);
 });
 test('wide in the final third with a teammate in the box: 크로스 is offered and delivered',async({page})=>{

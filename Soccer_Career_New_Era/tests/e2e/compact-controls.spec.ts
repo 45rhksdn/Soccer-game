@@ -23,6 +23,7 @@ test('compact pad is ready immediately, warns about route defenders and preserve
  await expect(pad).toBeVisible();
  await expect(pad.getByRole('button',{name:'드리블 ↑',exact:true})).toContainText('!');
  expect(await pad.getByRole('button').count()).toBe(8);
+ expect((await pad.boundingBox())!.width).toBeLessThanOrEqual(165);
  await expect(page.locator('.live-commentary')).toBeVisible();
  await expect(page.getByRole('button',{name:'볼 지키기',exact:true})).toHaveCount(0);
  const before=await saved(page);
@@ -38,6 +39,8 @@ test('pass selects a teammate without executing and confirms the selected recipi
  await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'패스',exact:true}).click();
  const targets=page.getByRole('group',{name:'패스 받을 동료'});
  const btn=targets.getByRole('button').filter({hasText:/마무리선수/});
+ const distances=await targets.locator('button > small').allTextContents();
+ const metres=distances.map(t=>parseFloat(t));expect(metres).toEqual([...metres].sort((a,b)=>a-b));
  const first=targets.locator('button:not(:disabled)').first();await first.click();
  await expect(first).toHaveAttribute('aria-pressed','true');
  expect((await saved(page)).seed).toBe(before.seed);
@@ -46,14 +49,14 @@ test('pass selects a teammate without executing and confirms the selected recipi
  await expect.poll(async()=> (await saved(page)).seed).not.toBe(before.seed);
 });
 
-test('shots expose allowed options and require confirmation',async({page})=>{
+test('shots execute immediately when the shot type is tapped',async({page})=>{
  const c=setup(false,[{dx:-25,dy:20}]);const m=c.match!,u=m.players[m.userId];u.x=direction(m,0)>0?97:8;m.ball.x=u.x;
  await load(page,c);const before=await saved(page);
  await page.getByRole('navigation',{name:'공격 방식'}).getByRole('button',{name:'슛',exact:true}).click();
- await page.getByRole('group',{name:'슛 종류'}).getByRole('button',{name:/근거리 슛/}).click();
  expect((await saved(page)).seed).toBe(before.seed);
  await page.locator('.match-board').screenshot({path:`reports/compact-${test.info().project.name}-shot.png`});
- await page.getByRole('button',{name:'근거리 슛 실행',exact:true}).click();
+ await expect(page.locator('.cm-confirm')).toHaveCount(0);
+ await page.getByRole('group',{name:'슛 종류'}).getByRole('button',{name:/근거리 슛/}).click();
  await expect.poll(async()=> (await saved(page)).seed).not.toBe(before.seed);
 });
 
