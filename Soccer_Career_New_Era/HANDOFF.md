@@ -8,6 +8,7 @@
 - 추가 요청(18:20~): 드리블 성공 보상(제친 수비수 −70%), 거리 ×2.5/×5/치고 달리기 1.3×, 6m 멈춤, 드리블 성공 기록·평점.
   - 코드: tactical `beatenFactor`, `dribbleBase`, `dribbleSpace`, `dribbleMinimum`, `stopsCarry`, `dribbleTargets`, `ODDS.advance`/`ODDS.beaten`. engine `m.dribbleBeat`, `carry` 멈춤, `carryStop`, `DRIBBLE_RATING`. App 기록 표시, MatchInteraction 배지.
   - 초보 보정(18:51 요청): `ODDS.lowSkill`(50 이하 −10%, 70에서 0). `dribble-pace` 빈 공간 테스트를 능력별 기대값으로 갱신했다.
+  - 연봉 현실화(18:55 요청): leagues `AVG_SALARY`·`OLD_INCOME`·새 income, world `contractSalary`·`SALARY`·`FEE_SCALE`·`migrateEconomy`·`money`, storage에서 한 번 변환. 테스트 `tests/salary.test.ts` 4개. `save-v6` 테스트는 예산 변환을 반영하도록 갱신했다.
   - 테스트: `tests/dribble-reward.test.ts` 4개, e2e `v13-finishing`에 보상 배지, `career` 기록 페이지 확인. 거리 기대값이 바뀐 `dribble-pace`·`finishing-carry`·`tactical` 테스트를 새 규칙으로 갱신했다.
 - 추가 테스트: `tests/stories-assists.test.ts` 8개, `tests/e2e/v14.spec.ts`. 새 흐름에 맞춰 갱신: `career.spec`(스카우팅, 선수 변경), Codex `v13.spec`(후보 1명, 비교표 없음), `v07.spec`(희망 포지션 선택). 갱신: `midfielder.test`(슛 후 lastPass 대신 flight.assistFrom 확인).
 - 코드:

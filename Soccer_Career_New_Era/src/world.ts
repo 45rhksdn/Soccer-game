@@ -1,4 +1,4 @@
-import {LEAGUE_DATA,leagueDef,LEAGUES,leagueNames,WORLD_CLUB_COUNT} from './leagues';
+import {LEAGUE_DATA,leagueDef,leagueLevel,LEAGUES,leagueNames,WORLD_CLUB_COUNT,AVG_SALARY,OLD_INCOME} from './leagues';
 export {LEAGUES,leagueNames} from './leagues';
 import {attributes,clamp,random,type Attributes,type Position} from './engine';
 import {roleAbility} from './roles';
@@ -15,7 +15,7 @@ export type Offer={clubId:string,salary:number,years:number,fee:number,role:stri
 export type SeasonRecord={year:number,club:string,league:string,rank:number,appearances:number,minutes:number,goals:number,assists:number,rating:number,champion:string};
 export type ScoutReport={clubId:string,stage:'관찰'|'면담'|'공식 관심',observations:number,lastWeek:number,reason:string,reserved?:number};
 export type Contract={salary:number,years:number,role?:string,loanAllowed?:boolean,trialMatches?:number};
-export type World={targetClubId?:string,priority?:'출전'|'성장'|'연봉'|'우승',scouting?:ScoutReport[],loan?:{parentId:string,parentContract:Contract,returnYear:number},loyalty?:{clubId:string,seasons:number},currentDay?:number,interestedClubIds?:string[],seed:number,year:number,clubId:string,clubs:Club[],round:number,fixtures:Fixture[][],tables:Standing[],phase:'league'|'cup'|'international'|'national'|'offseason'|'retired',knockoutRound:number,opponentId:string|null,nationalCaps:number,nationalGoals:number,offers:Offer[],contract:Contract,wealth:number,records:SeasonRecord[],achievements:string[],news:string[],ledger:{year:number,from:string,to:string,fee:number,player:string}[],currentSeasonStart:number,nextId:number};
+export type World={/** 0.14 money scale: 2 = realistic salaries and budgets (older saves are migrated by migrateEconomy). */economy?:number,targetClubId?:string,priority?:'출전'|'성장'|'연봉'|'우승',scouting?:ScoutReport[],loan?:{parentId:string,parentContract:Contract,returnYear:number},loyalty?:{clubId:string,seasons:number},currentDay?:number,interestedClubIds?:string[],seed:number,year:number,clubId:string,clubs:Club[],round:number,fixtures:Fixture[][],tables:Standing[],phase:'league'|'cup'|'international'|'national'|'offseason'|'retired',knockoutRound:number,opponentId:string|null,nationalCaps:number,nationalGoals:number,offers:Offer[],contract:Contract,wealth:number,records:SeasonRecord[],achievements:string[],news:string[],ledger:{year:number,from:string,to:string,fee:number,player:string}[],currentSeasonStart:number,nextId:number};
 const POS:Position[]=['GK','LB','CB','CB','RB','CM','CM','CM','LW','ST','RW','GK','LB','CB','RB','CM','CM','LW','ST','RW'];
 export const lineupSlots=(coach:Coach):Position[]=>coach.formation==='4-4-2'?['GK','LB','CB','CB','RB','LW','CM','CM','RW','ST','ST']:POS.slice(0,11);
 const NAME_POOLS:Record<string,[string[],string[]]>={
@@ -27,7 +27,7 @@ const NAME_POOLS:Record<string,[string[],string[]]>={
 };
 function npcName(w:{seed:number},league:number){const country=leagueDef(league).country,pool=NAME_POOLS[country]??(league>=2?NAME_POOLS['유럽']:undefined);const a=Math.floor(random(w)*6),b=Math.floor(random(w)*8);return pool?pool[1][b]+' '+pool[0][a]:['김','이','박','정','강','최'][a]+['준서','도윤','태성','민호','현준','재민','우진','지훈'][b];}
 function rookie(w:{seed:number,nextId:number},league:number,pos:Position,age?:number,level?:number):RosterPlayer{const base=level??leagueDef(league).clubs.reduce((n,c)=>n+c[1],0)/6,a=attributes(base);for(const key of Object.keys(a) as (keyof Attributes)[])a[key]=clamp(base+(random(w)-.5)*15,25,92);const id='p'+w.nextId++;return {id,traits:npcTraits(w.seed,id),name:npcName(w,league),pos,age:age??(league===0?16+Math.floor(random(w)*3):19+Math.floor(random(w)*15)),a,potential:clamp(base+8+random(w)*15,45,95),energy:100,form:6.5,goals:0,appearances:0,years:1+Math.floor(random(w)*3)};}
-export function newWorld(seed:number,school:number,startWeek=0):World{const w:World={seed:seed^0x4f1a,year:2026,clubId:'c'+school,clubs:[],round:0,fixtures:[],tables:[],phase:'league',knockoutRound:0,opponentId:null,nationalCaps:0,nationalGoals:0,offers:[],contract:{salary:0,years:0},wealth:0,records:[],achievements:[],news:[],ledger:[],currentSeasonStart:startWeek,nextId:1};for(let l=0;l<LEAGUE_DATA.length;l++)for(let i=0;i<6;i++){const def=leagueDef(l),level=def.clubs[i][1];const club:Club={id:'c'+(l*6+i),name:leagueNames[l][i],league:l,baseLevel:level,budget:def.income*4,reputation:level,development:def.development+(random(w)-.5)*.1,coach:{name:['박정호','이성민','김도현','정태훈','최준혁','서민우'][i],style:(['점유','역습','수비'] as const)[i%3],preference:(['유망주','현재 실력','베테랑'] as const)[i%3],formation:i%2?'4-4-2':'4-3-3'},roster:[]};club.roster=POS.map(pos=>rookie(w,l,pos,undefined,level));w.clubs.push(club);}resetSeason(w);return w;}
+export function newWorld(seed:number,school:number,startWeek=0):World{const w:World={economy:2,seed:seed^0x4f1a,year:2026,clubId:'c'+school,clubs:[],round:0,fixtures:[],tables:[],phase:'league',knockoutRound:0,opponentId:null,nationalCaps:0,nationalGoals:0,offers:[],contract:{salary:0,years:0},wealth:0,records:[],achievements:[],news:[],ledger:[],currentSeasonStart:startWeek,nextId:1};for(let l=0;l<LEAGUE_DATA.length;l++)for(let i=0;i<6;i++){const def=leagueDef(l),level=def.clubs[i][1];const club:Club={id:'c'+(l*6+i),name:leagueNames[l][i],league:l,baseLevel:level,budget:def.income*4,reputation:level,development:def.development+(random(w)-.5)*.1,coach:{name:['박정호','이성민','김도현','정태훈','최준혁','서민우'][i],style:(['점유','역습','수비'] as const)[i%3],preference:(['유망주','현재 실력','베테랑'] as const)[i%3],formation:i%2?'4-4-2':'4-3-3'},roster:[]};club.roster=POS.map(pos=>rookie(w,l,pos,undefined,level));w.clubs.push(club);}resetSeason(w);return w;}
 export const clubOf=(w:World)=>w.clubs.find(c=>c.id===w.clubId)!;
 export const sortedTable=(w:World,league=clubOf(w).league)=>w.tables.filter(t=>w.clubs.find(c=>c.id===t.id)!.league===league).sort((a,b)=>b.points-a.points||(b.gf-b.ga)-(a.gf-a.ga)||b.gf-a.gf||a.id.localeCompare(b.id));
 export function resetSeason(w:World){w.round=0;w.phase='league';w.opponentId=null;w.knockoutRound=0;w.offers=[];w.tables=w.clubs.map(c=>({id:c.id,played:0,won:0,draw:0,lost:0,gf:0,ga:0,points:0}));w.fixtures=Array.from({length:10},()=>[]);for(let l=0;l<LEAGUE_DATA.length;l++){const ids=w.clubs.filter(c=>c.league===l).map(c=>c.id);for(let r=0;r<5;r++){for(let i=0;i<3;i++){const a=ids[i],b=ids[5-i];w.fixtures[r].push({home:r%2?a:b,away:r%2?b:a});w.fixtures[r+5].push({home:r%2?b:a,away:r%2?a:b});}ids.splice(1,0,ids.pop()!);}}}
@@ -46,7 +46,9 @@ export function startPostseason(w:World,ability:number,age:number){const ranked=
 export function startInternational(w:World,ability:number,age:number){if(clubOf(w).league>0&&sortedTable(w).findIndex(t=>t.id===w.clubId)<2){w.phase='international';w.knockoutRound=0;w.opponentId=w.clubs.filter(c=>c.id!==w.clubId&&c.league>0&&leagueDef(c.league).confederation===leagueDef(clubOf(w).league).confederation).sort((a,b)=>teamStrength(b)-teamStrength(a))[0].id;}else startNational(w,ability,age);}
 export function startNational(w:World,ability:number,age:number){if(age>=19&&ability>=66){w.phase='national';w.knockoutRound=0;w.opponentId=null;w.news.unshift('국가대표 발탁 · 국제 초청대회 출전');}else w.phase='offseason';}
 export function advanceCup(w:World,won:boolean,ability:number,age:number){if(won&&w.knockoutRound===0){w.knockoutRound=1;if(w.phase!=='national'){const candidates=w.clubs.filter(c=>c.id!==w.clubId&&c.id!==w.opponentId&&(w.phase==='cup'?c.league===clubOf(w).league:c.league>0&&leagueDef(c.league).confederation===leagueDef(clubOf(w).league).confederation));w.opponentId=candidates[Math.floor(random(w)*candidates.length)].id;}return;}if(won)w.achievements.unshift(`${w.year} ${w.phase==='cup'?'국내 컵':w.phase==='national'?'국제 초청대회':'대륙 클럽 컵'} 우승`);if(w.phase==='cup')startInternational(w,ability,age);else if(w.phase==='international')startNational(w,ability,age);else w.phase='offseason';}
-export function marketValue(ability:number,age:number,form:number,years:number){return Math.round(Math.max(50,(ability-35)**2*2*(age<24?1.35:age>31?.55:1)*(1+(form-6.5)*.12)*(.65+Math.min(3,years)*.12)));}
+/** 0.14 transfer fee in 만원 (×40 the pre-0.14 scale, so fees sit next to realistic salaries). */
+export const FEE_SCALE=40;
+export function marketValue(ability:number,age:number,form:number,years:number){return Math.round(FEE_SCALE*Math.max(50,(ability-35)**2*2*(age<24?1.35:age>31?.55:1)*(1+(form-6.5)*.12)*(.65+Math.min(3,years)*.12)));}
 /** A club's level for one position: mean role ability of its two best players there (the likely starters). */
 export function clubLevel(club:Club,pos:Position){const xs=club.roster.filter(r=>r.pos===pos).map(r=>roleAbility(r.a,pos)).sort((a,b)=>b-a).slice(0,2);if(!xs.length){const all=club.roster.filter(r=>r.pos!=='GK').map(r=>roleAbility(r.a,pos)).sort((a,b)=>b-a).slice(0,2);return all.reduce((n,x)=>n+x,0)/Math.max(1,all.length);}return xs.reduce((n,x)=>n+x,0)/xs.length;}
 /**
@@ -68,7 +70,7 @@ export function generateOffers(w:World,p:{a:Attributes,pos:Position,age:number,e
  const ability=roleAbility(p.a,p.pos),current=clubOf(w),fee=current.league===0||w.contract.years<=0?0:marketValue(ability,p.age,form,w.contract.years);
  w.offers=[];if(p.age<19&&current.league===0)return;
  const pro=w.clubs.filter(c=>c.league>0).map(club=>({club,fit:ability-clubLevel(club,p.pos)}));
- const make=(club:Club):Offer=>{const details=offerDetails(club,p,form);return {clubId:club.id,salary:roleSalary(ability,club.league),years:2,fee:club.id===w.clubId?0:fee,issuedDay:w.currentDay??0,expiresDay:(w.currentDay??0)+14,...details,kind:'transfer',loanAllowed:details.fit<0,negotiated:false,status:'open'};};
+ const make=(club:Club):Offer=>{const details=offerDetails(club,p,form);return {clubId:club.id,salary:contractSalary(club,p.age,details.fit),years:2,fee:club.id===w.clubId?0:fee,issuedDay:w.currentDay??0,expiresDay:(w.currentDay??0)+14,...details,kind:'transfer',loanAllowed:details.fit<0,negotiated:false,status:'open'};};
  for(const {club,fit} of pro){
   const current=club.id===w.clubId,guaranteed=!!w.interestedClubIds?.includes(club.id);
   const inWindow=fit>=(p.age<22?OFFER_FIT.youthMin:OFFER_FIT.min)&&fit<=OFFER_FIT.max;
@@ -131,7 +133,7 @@ export function requestLoan(w:World,p:{a:Attributes,pos:Position,age:number,ener
  const own=clubOf(w),ability=roleAbility(p.a,p.pos);
  if(!w.contract.loanAllowed&&ability>=clubLevel(own,p.pos))throw Error('현재 주전 경쟁이 가능한 선수입니다. 임대 허용 조건을 먼저 협상하세요.');
  const destinations=w.clubs.filter(c=>c.league>0&&c.id!==own.id).map(club=>({club,fit:ability-clubLevel(club,p.pos)})).filter(x=>x.fit>=0&&x.fit<=12).sort((a,b)=>Math.abs(a.fit-3)-Math.abs(b.fit-3)).slice(0,6);
- const offers=destinations.map(({club}):Offer=>({clubId:club.id,salary:Math.min(w.contract.salary,roleSalary(ability,club.league)),years:1,fee:0,kind:'loan',...offerDetails(club,p),reason:'출전 경험을 위한 1시즌 임대',negotiated:false,status:'open',issuedDay:w.currentDay??0,expiresDay:(w.currentDay??0)+14})).filter(o=>w.clubs.find(c=>c.id===o.clubId)!.budget>=o.salary);
+ const offers=destinations.map(({club,fit}):Offer=>({clubId:club.id,salary:Math.min(w.contract.salary,contractSalary(club,p.age,fit)),years:1,fee:0,kind:'loan',...offerDetails(club,p),reason:'출전 경험을 위한 1시즌 임대',negotiated:false,status:'open',issuedDay:w.currentDay??0,expiresDay:(w.currentDay??0)+14})).filter(o=>w.clubs.find(c=>c.id===o.clubId)!.budget>=o.salary);
  if(!offers.length)throw Error('현재 주전 기회를 제공할 임대 구단이 없습니다.');w.offers=offers;w.news.unshift('임대 요청 수락 · 원소속팀과 계약은 보존됩니다.');
 }
 export function returnFromLoan(w:World){if(!w.loan||w.year<w.loan.returnYear)return;const loan=w.loan;w.clubId=loan.parentId;w.contract={...loan.parentContract,years:Math.max(0,loan.parentContract.years-1)};delete w.loan;w.offers=[];w.news.unshift(`${clubOf(w).name} · 임대 종료 후 복귀, 새 시즌 경쟁을 시작합니다.`);}
@@ -142,7 +144,32 @@ if(random(w)<.22){c.coach.preference=(['유망주','현재 실력','베테랑'] 
 // AI clubs buy for a weak position with an explicit balanced transfer ledger.
 for(const buyer of w.clubs.filter(c=>c.league>0)){const weakest=buyer.roster.filter(p=>p.id!=='career-rival').sort((a,b)=>roleAbility(a.a,a.pos)-roleAbility(b.a,b.pos))[0];const seller=w.clubs.filter(c=>c.league===buyer.league&&c.id!==buyer.id)[Math.floor(random(w)*5)];const candidate=seller.roster.filter(p=>p.id!=='career-rival'&&p.pos===weakest.pos&&roleAbility(p.a,p.pos)>roleAbility(weakest.a,weakest.pos)+2).sort((a,b)=>roleAbility(b.a,b.pos)-roleAbility(a.a,a.pos))[0];if(!candidate)continue;const fee=marketValue(roleAbility(candidate.a,candidate.pos),candidate.age,candidate.form,candidate.years);if(buyer.budget<fee+2000+(w.scouting?.find(r=>r.clubId===buyer.id)?.reserved??0))continue;buyer.budget-=fee;seller.budget+=fee;buyer.roster=buyer.roster.filter(p=>p.id!==weakest.id);seller.roster=seller.roster.filter(p=>p.id!==candidate.id);buyer.roster.push(candidate);seller.roster.push(weakest);candidate.years=3;w.ledger.push({year:w.year,from:buyer.id,to:seller.id,fee,player:candidate.name});}w.news=w.news.slice(0,60);w.ledger=w.ledger.slice(-200);resetSeason(w);}
 
-export const roleSalary=(ability:number,league:number)=>Math.round(Math.max(30,ability-35)*leagueDef(league).salary);
+/**
+ * 0.14 annual salary (만원) = league average × club standing × treatment in the squad × youth contract.
+ * - club standing: exp(0.08 × (club level − league average)) — a title contender pays ~1.6×, a bottom club ~0.6×.
+ * - treatment: exp(0.09 × fit) where fit = my ability − the club's level at my position (core player up to 2.5×,
+ *   bench prospect down to 0.35×).
+ * - youth: first professional deals (18–20) at 60–87%; a floor of 2,400만원 (a minimum first-team wage).
+ */
+export const SALARY={club:.08,role:.09,roleMin:.35,roleMax:2.5,youthAge:21,youthMin:.6,floor:2400} as const;
+export function contractSalary(club:Club,age:number,fit:number){
+ const avg=AVG_SALARY[club.league]??0;if(!avg)return 0;
+ const level=club.baseLevel??club.reputation,team=Math.exp(SALARY.club*(level-leagueLevel(club.league)));
+ const role=clamp(Math.exp(SALARY.role*fit),SALARY.roleMin,SALARY.roleMax);
+ const youth=age<SALARY.youthAge?SALARY.youthMin+(1-SALARY.youthMin)*clamp((age-18)/(SALARY.youthAge-18),0,1):1;
+ return Math.round(Math.max(SALARY.floor,avg*team*role*youth)/100)*100;
+}
+/** League-typical salary for an ability (an average club, an average treatment for that ability). */
+export const roleSalary=(ability:number,league:number)=>{const avg=AVG_SALARY[league]??0;if(!avg)return 0;return Math.round(Math.max(SALARY.floor,avg*clamp(Math.exp(SALARY.role*(ability-leagueLevel(league))),SALARY.roleMin,SALARY.roleMax))/100)*100;};
+/** 0.14 older saves: budgets to the new scale, the running contract and open offers re-priced, fees ×FEE_SCALE. */
+export function migrateEconomy(w:World,p:{a:Attributes,pos:Position,age:number}){
+ if(w.economy===2)return;
+ for(const c of w.clubs)if(c.league>0&&OLD_INCOME[c.league])c.budget=Math.round(c.budget*leagueDef(c.league).income/OLD_INCOME[c.league]);
+ const ability=roleAbility(p.a,p.pos),club=clubOf(w);
+ if(w.contract.salary>0&&club.league>0)w.contract.salary=contractSalary(club,p.age,ability-clubLevel(club,p.pos));
+ for(const o of w.offers){const cl=w.clubs.find(c=>c.id===o.clubId);if(!cl)continue;o.salary=contractSalary(cl,p.age,ability-clubLevel(cl,p.pos));o.fee*=FEE_SCALE;}
+ w.economy=2;
+}
 export function expireOffers(w:World){w.offers=w.offers.filter(o=>(o.expiresDay??Infinity)>(w.currentDay??0));}
 
 // ── NPC injuries (0.5) ─────────────────────────────────────────────
@@ -187,4 +214,11 @@ export function expandWorld(w:World){
   if(r<w.round)for(const f of fixtures)tableResult(w,f,lightweight(fresh,w.clubs.find(c=>c.id===f.home)!,w.clubs.find(c=>c.id===f.away)!));
  }
  w.news.unshift('축구 세계 확장 · 기존 선수·계약·경기 기록을 보존했습니다. 이전 유럽 리그는 네덜란드/잉글랜드로 연결됩니다.');
+}
+
+/** 0.14 money in Korean units from 만원: 2억 3,400만원 / 7,500만원 / 0원. */
+export function money(manwon:number){
+ const v=Math.round(manwon);if(v<=0)return '0원';
+ const eok=Math.floor(v/10000),rest=v%10000;
+ return eok?`${eok.toLocaleString()}억${rest?` ${rest.toLocaleString()}만`:''}원`:`${rest.toLocaleString()}만원`;
 }

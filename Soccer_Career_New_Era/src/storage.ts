@@ -1,4 +1,4 @@
-import {expandWorld} from './world';
+import {expandWorld,migrateEconomy} from './world';
 import {WORLD_CLUB_COUNT} from './leagues';
 import {ensureDevelopment} from './development';
 import {isKnownTrait,npcTraits,normalizeTraits,TRAIT_LIMIT} from './traits';
@@ -84,6 +84,8 @@ export function validate(raw: unknown): Career {
   if((c as {version:number}).version===6){migrateV6(c);(c as {version:number}).version=7;}
   if((c as {version:number}).version===7){expandWorld(c.world);(c as {version:number}).version=8;}
   if (c.version !== SAVE_VERSION) throw Error("지원되지 않는 저장 버전입니다.");
+  // 0.14 realistic money: re-price older saves once (budgets, running contract, open offers); keeps save version 8.
+  if(c.world?.clubs&&c.player?.a&&c.world.economy!==2)migrateEconomy(c.world,c.player);
   if (
     !c.player ||
     typeof c.player.name !== "string" ||

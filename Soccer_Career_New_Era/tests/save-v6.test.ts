@@ -1,4 +1,5 @@
 import {it,expect} from 'vitest';
+import {LEAGUE_DATA,OLD_INCOME} from '../src/leagues';
 import {readFileSync} from 'node:fs';
 import {settle,newCareer,nextSeason} from '../src/career';
 import {finishMatch} from '../src/engine';
@@ -20,7 +21,9 @@ it('real v5 saves (0.4, daily week and live match) load as v6 without losing any
     expect(c.player).toMatchObject(before.player);expect(c.development.traits).toMatchObject(before.development.traits);
     expect(c.development.rival.player).toMatchObject(before.development.rival.player);expect(c.development.rival.traits).toMatchObject(before.development.rival.traits);
     expect(c.development.rival.history).toMatchObject(before.development.rival.history);
-    expect(c.history).toMatchObject(before.history);expect(c.world.records).toMatchObject(before.world.records);for(const old of before.world.clubs){const {name,...rest}=old;expect(c.world.clubs.find(x=>x.id===old.id)).toMatchObject(rest);}
+    expect(c.history).toMatchObject(before.history);expect(c.world.records).toMatchObject(before.world.records);for(const old of before.world.clubs){const {name,budget,...rest}=old;const now=c.world.clubs.find(x=>x.id===old.id)!;expect(now).toMatchObject(rest);
+      /* 0.14 money is re-priced once: a pro club's budget scales with its league's new season income */
+      expect(now.budget).toBe(old.league>0?Math.round(budget*LEAGUE_DATA[old.league].income/OLD_INCOME[old.league]):budget);}
     expect(c.development.active).toMatchObject(before.development.active);expect(c.match).toMatchObject(before.match);expect(c.schoolRef).toMatchObject(before.schoolRef);
     expect(c.development.equipment).toBeUndefined();
     // The same old save always maps to the same id (backups and archives of it cannot be rewarded twice).
