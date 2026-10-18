@@ -3,6 +3,7 @@ import {createMatch,attributes,step,act,chooseAction,finishMatch,defend,tackleCh
 import {encode,decode} from '../src/storage';
 import {newCareer,startCareerMatch,settle} from '../src/career';
 import {playToday} from '../src/development';
+import {saturdays} from './saturdays';
 
 const user=(pos:'CB'|'CM'|'ST'='CB')=>({name:'수비수',pos,a:attributes(62),energy:100});
 /** Plays a live (interactive) match: on-ball moments use the AI choice, defensive moments use `choice`. */
@@ -52,7 +53,7 @@ it('rating: defensive wins add a capped bonus, missed tackles a capped penalty; 
 });
 
 it('a pending defensive choice and an active guard survive save/load in a career match',()=>{
-  const c=newCareer({name:'저장수비',age:17,pos:'CB',secondary:'LB',foot:'오른',height:186,weight:80,style:'피지컬',curve:'꾸준한 성장형'},0,77);
+  const c=newCareer({name:'저장수비',age:17,pos:'CB',secondary:'LB',foot:'오른',height:186,weight:80,style:'피지컬',curve:'꾸준한 성장형'},0,77);saturdays(c);
   for(let i=0;i<5;i++)playToday(c,'rest');startCareerMatch(c);const m=c.match!;
   let guard=0;while(!m.defending&&!m.ended&&guard++<20000){if(m.decision)act(m,chooseAction(m,m.players[m.userId]));else step(m,.5);}
   if(m.userOnPitch===false||m.ended)return; // not selected: nothing to defend

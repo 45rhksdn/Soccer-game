@@ -1,8 +1,12 @@
 import {contrastRival} from './origins';
 import {signatureFx,type DeedKey} from './engagement';
 import {ATTRS,LABELS,clamp,random,overall,createMatch,finishMatch,rating,type Attributes,type Attr,type Match} from './engine';
-import {grow,startCareerMatch,type Career,type Player} from './career';
-import {npcInjuryWeek,matchInjury,clubLevel,clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,marketValue,offerDetails,nextOpponent,type Offer} from './world';
+import {grow,startCareerMatch,isBigMatch,type Career,type Player} from './career';
+import {AVG_SALARY} from './leagues';
+import {GROWTH_PACE} from './season';
+/** 0.15 growth per week: GROWTH_PACE in a 35-week season, 1 in an older one. */
+export const growthPace=(c:Career)=>c.world?.calendar?GROWTH_PACE:1;
+import {npcInjuryWeek,matchInjury,clubLevel,clubOf,chooseLineup,generateOffers,expireOffers,roleSalary,marketValue,offerDetails,nextOpponent,matchupFor,type Offer,type Club} from './world';
 import {TRAIT_IDS,TRAIT_TEXT,rollTraits,trainingGrowthMultiplier,trainingFatigueMultiplier,injuryChanceMultiplier,injuryWeeks,insightChance,trainingLuckChance,matchAttributes,traitDef,seedFrom,restRecoveryMultiplier,rivalryDrive,focusBonus,lateBloom,matchFx,hasMatchEffect,trustGainMultiplier,abroadGrowthMultiplier,superSubMultiplier,type TraitId,type TraitInput} from './traits';
 import {ROLE_KEYS,roleAbility} from './roles';
 import {applyAging} from './aging';
@@ -13,7 +17,18 @@ export type Trait=TraitId;
 export {TRAIT_TEXT};
 /** Base chance of a training injury on a day that ends with fatigue ≥ TRAINING_INJURY_FATIGUE. */
 export const TRAINING_INJURY_CHANCE=.02,TRAINING_INJURY_FATIGUE=60;
-export const DAILY={shooting:{label:'공격훈련',keys:['shooting','longShot','finishing','curve']},running:{label:'속력훈련',keys:['speed','acceleration','stamina']},passing:{label:'패스훈련',keys:['passing','longPassing','vision']},dribbling:{label:'드리블훈련',keys:['dribbling','control','acceleration']},defending:{label:'수비훈련',keys:['defending','sliding','marking']},reading:{label:'책 읽기',keys:['anticipation']},rest:{label:'휴식하기',keys:[]},vacation:{label:'휴양하기 · 5만원',keys:[]}} as const;
+/** 0.15 focused-training choices per session (the normal session keeps its own attribute list above). */
+export const FOCUS_KEYS={shooting:['shooting','longShot','finishing','curve','composure'],running:['speed','acceleration','stamina','strength'],passing:['passing','longPassing','vision','decisions'],dribbling:['dribbling','control','acceleration'],defending:['defending','sliding','marking','positioning'],reading:['anticipation','positioning','decisions','composure']} as const satisfies Partial<Record<string,readonly Attr[]>>;
+export const DAILY={shooting:{label:'공격훈련',keys:['shooting','longShot','finishing','curve']},running:{label:'속력훈련',keys:['speed','acceleration','stamina']},passing:{label:'패스훈련',keys:['passing','longPassing','vision']},dribbling:{label:'드리블훈련',keys:['dribbling','control','acceleration']},defending:{label:'수비훈련',keys:['defending','sliding','marking']},reading:{label:'책 읽기',keys:['anticipation']},rest:{label:'휴식하기',keys:[]},vacation:{label:'휴양하기',keys:[]}} as const;
+/** Rounds up to two significant digits (만원, at least 1): 54 → 54, 234 → 240, 15,980 → 16,000. */
+export function ceil2(x:number){if(x<=0)return 0;const unit=10**Math.max(0,Math.floor(Math.log10(x))-1);return Math.ceil(x/unit-1e-9)*unit;}
+/** 0.15 vacation price: about 1 % of the current salary, rounded up (5만원 without a salary, e.g. at school). */
+export const vacationPrice=(c:Career)=>c.world.contract.salary>0&&clubOf(c.world).league>0?ceil2(c.world.contract.salary*.01):5;
+/** 0.15 paid focused training: school 1.4만원, pro the league's average salary ÷ 105 per session; at most 3 per week. */
+export const FOCUS={share:.55,perWeek:3,school:1.4,divisor:105} as const;
+export const focusPrice=(c:Career)=>{const l=clubOf(c.world).league;return l===0?FOCUS.school:Math.round((AVG_SALARY[l]??0)/FOCUS.divisor);};
+/** Today's match weekday (0 = 월): the saved calendar day in a 0.15 season, Saturday in an older one. */
+export const matchDayIndex=(c:Career)=>{const s=c.world.season;return c.world.calendar&&s&&s.played<s.matchDays.length?s.matchDays[s.played]:5;};
 export type Daily=keyof typeof DAILY;
 /** News texts for 럭키 (training) and 깨달음 (match). Exact values live in the growth history, not here. */
 export const LUCKY_NEWS='훈련 중 무언가를 느꼈다!',INSIGHT_NEWS='경기 중에 깨달음을 얻었다!';
@@ -22,7 +37,8 @@ export type News={day:number,text:string,kind:'rating'|'lucky'|'insight'|'intere
 export const HIDDEN_NEWS:News['kind'][]=['lucky','insight','rival'];
 export type WeekNote={week:number,startDay:number,before:Attributes,after:Attributes,rivalBefore:Attributes,rivalAfter:Attributes,entries:string[]};
 /** Per-week trait state (라이벌 의식 multiplier waiting for the first training, 독학파 counters). */
-export type WeekBonus={drive?:number,focus?:Record<string,number>,focusDone?:boolean};
+export type WeekBonus={drive?:number,focus?:Record<string,number>,focusDone?:boolean,
+ /** 0.15 paid focused sessions this week. */ paidFocus?:number};
 export type WeekState={startDay:number,cursor:number,before:Attributes,rivalBefore:Attributes,entries:string[],matchDone:boolean,user?:WeekBonus,rival?:WeekBonus,
  /** 'daily' = played one day at a time from the home screen (오늘의 일정); absent = whole-week plan. */
  mode?:'daily'};
@@ -54,30 +70,44 @@ export function syncRival(c:Career){
 }
 export const isTrainingDay=(p:Player,type:Daily)=>type!=='rest'&&type!=='vacation'&&!p.injuryWeeks&&p.energy>=20;
 export const trainingEnvironment=(c:Career,rival:boolean)=>rival?(c.world.clubs.find(x=>x.id===c.development.rival.clubId)?.development??1):clubOf(c.world).development;
-export function applyDaily(c:Career,p:Player,type:Daily,trait:TraitInput,rival=false,bonus=1){
+export function applyDaily(c:Career,p:Player,type:Daily,trait:TraitInput,rival=false,bonus=1,focus?:Attr){
  const d=c.development,name=rival?p.name:c.player.name,rest=type==='rest'||type==='vacation';
- if(type==='vacation'&&!rival){if(d.wallet<5)throw Error('휴양 비용 5만원이 부족합니다. 휴식을 선택해 주세요.');d.wallet-=5;}
+ if(type==='vacation'&&!rival){const price=vacationPrice(c);if(d.wallet<price)throw Error(`휴양 비용 ${price.toLocaleString()}만원이 부족합니다. 휴식을 선택해 주세요.`);d.wallet-=price;}
  if(rest){p.energy=clamp(p.energy+(type==='vacation'?65:30),0,100);p.fatigue=clamp(p.fatigue-(type==='vacation'?60:25)*restRecoveryMultiplier(trait),0,100);return `${name} · ${DAILY[type].label}`;}
  if(p.injuryWeeks||p.energy<20){p.energy=clamp(p.energy+30,0,100);p.fatigue=Math.max(0,p.fatigue-25);return `${name} · 컨디션 부족으로 휴식 전환`;}
  const lucky=random(c)<trainingLuckChance(trait,p.age),efficiency=clamp(1-p.fatigue*.008,.2,1),environment=rival?(c.world.clubs.find(x=>x.id===d.rival.clubId)?.development??1):clubOf(c.world).development;
  const league=(rival?c.world.clubs.find(x=>x.id===d.rival.clubId):clubOf(c.world))?.league??0;
- const pool=DAILY[type].keys;
- const chosen=(type==='defending'||type==='shooting')?pool.filter(()=>random(c)<.55):pool;
+ const pool=DAILY[type].keys as readonly Attr[];
+ // 0.15 focused session (paid, only when the attribute can still grow): the whole session's growth is shared 55 % to
+ // the chosen attribute and 45 % to the others — never more in total than a normal session.
+ const focusPool=(FOCUS_KEYS as Partial<Record<Daily,readonly Attr[]>>)[type]??pool;
+ const focused=!rival&&focus&&focusPool.includes(focus)&&p.a[focus]<p.potential?focus:undefined;
+ if(focused){const price=focusPrice(c);if(d.wallet<price)throw Error(`집중 훈련 비용 ${price}만원이 부족합니다.`);d.wallet=Math.round((d.wallet-price)*10)/10;}
+ const chosen=focused?pool:(type==='defending'||type==='shooting')?pool.filter(()=>random(c)<.55):pool;
  const keys=chosen.length?chosen:[pool[Math.floor(random(c)*pool.length)]];
- const before=overall(p.a),gained=grow(p,keys,(type==='defending'?.07:type==='shooting'?.06:.24)*environment*efficiency*trainingGrowthMultiplier(trait)*abroadGrowthMultiplier(trait,league)*(lucky?10:1)*bonus);
+ const amount=(type==='defending'?.07:type==='shooting'?.06:.24)*environment*efficiency*trainingGrowthMultiplier(trait)*abroadGrowthMultiplier(trait,league)*(lucky?10:1)*bonus*growthPace(c)*(focused&&(type==='defending'||type==='shooting')?.55:1);
+ const before=overall(p.a),gained=focused?focusGrow(p,keys,focusPool,focused,amount):grow(p,keys,amount);
  const bloom=lateBloom(trait);if(bloom&&p.age<bloom.startAge){const holder=rival?d.rival:d;holder.experienceBank=Math.min(bloom.cap,(holder.experienceBank??0)+gained*bloom.bankRate);}
- p.energy=clamp(p.energy-12,0,100);p.fatigue=clamp(p.fatigue+12*trainingFatigueMultiplier(trait),0,100);p.trust=clamp(p.trust+.2*trustGainMultiplier(trait),0,100);
+ p.energy=clamp(p.energy-12,0,100);p.fatigue=clamp(p.fatigue+12*trainingFatigueMultiplier(trait),0,100);p.trust=clamp(p.trust+.2*growthPace(c)*trustGainMultiplier(trait),0,100);
  let hurt=false;if(p.fatigue>=TRAINING_INJURY_FATIGUE&&random(c)<TRAINING_INJURY_CHANCE*injuryChanceMultiplier(trait)){p.injuryWeeks=injuryWeeks(trait,1);hurt=true;}
  const text=`${name} · ${lucky?'럭키! ×10 · ':''}${DAILY[type].label} · OVR +${(overall(p.a)-before).toFixed(2)}${hurt?` · 훈련 중 부상 (${p.injuryWeeks}주)`:''}`;
  // News keeps 럭키 private (no stat names or amounts); the exact gain stays in the growth history entry.
  if(lucky)news(c,rival?`라이벌 ${name} · ${LUCKY_NEWS}`:LUCKY_NEWS,'lucky');if(hurt)news(c,`${name} · 훈련 중 부상 · ${p.injuryWeeks}주 회복 필요`);return text;
 }
+/** Focused growth: the normal session total, 55 % to the focus attribute and 45 % shared by the others (each capped). */
+export function focusGrow(p:Player,keys:readonly Attr[],focusKeys:readonly Attr[],focus:Attr,amount:number){
+ // the total is what the normal session would have grown (same pool, rate, luck, traits, age, fatigue, environment)
+ const probe={...p,a:{...p.a}},total=grow(probe,keys,amount),others=focusKeys.filter(k=>k!==focus);
+ const add=(k:Attr,x:number)=>{const g=Math.max(0,Math.min(x,p.potential-p.a[k]));p.a[k]+=g;return g;};
+ let gained=add(focus,total*(others.length?FOCUS.share:1));for(const k of others)gained+=add(k,total*(1-FOCUS.share)/others.length);
+ return gained;
+}
 /** One schedule day for the user or the rival, including 라이벌 의식 and 독학파. */
-function trainDay(c:Career,rival:boolean,type:Daily,state:WeekBonus){
+function trainDay(c:Career,rival:boolean,type:Daily,state:WeekBonus,focus?:Attr){
  const d=c.development,p=rival?d.rival.player:c.player,traits=rival?d.rival.traits:d.traits,name=p.name;
  const trains=isTrainingDay(p,type);
  let bonus=1;if(trains&&state.drive&&state.drive>1){bonus=state.drive;state.drive=undefined;news(c,`${name} · 라이벌 의식! 훈련에 더욱 몰입합니다.`,rival?'rival':'career');}
- let text=applyDaily(c,p,type,traits,rival,bonus);if(bonus>1)text+=` · 라이벌 의식 ×${bonus}`;
+ let text=applyDaily(c,p,type,traits,rival,bonus,focus);if(bonus>1)text+=` · 라이벌 의식 ×${bonus}`;
  const f=focusBonus(traits);
  if(trains&&f&&!state.focusDone){const counts=state.focus??={};counts[type]=(counts[type]??0)+1;
   if(counts[type]>=f.times){state.focusDone=true;const before=overall(p.a);grow(p,DAILY[type].keys,.24*trainingEnvironment(c,rival)*trainingGrowthMultiplier(traits)*f.extra);text+=` · 독학파 집중 보너스 OVR +${(overall(p.a)-before).toFixed(2)}`;news(c,`${name} · 독학파! ${DAILY[type].label} 주 ${f.times}회 완료 · 추가 성장`);}}
@@ -98,8 +128,8 @@ function rivalryBonus(c:Career,rival:boolean){
 export function prepareWeek(c:Career,plan:Daily[]){
  ensureDevelopment(c);if(c.development.active?.mode==='daily')throw Error('이번 주는 오늘의 일정으로 진행 중입니다. 커리어 홈에서 하루씩 이어서 진행하세요.');if(c.match||c.development.active)throw Error('진행 중인 주간 일정이 있습니다.');if(c.world.phase==='retired')throw Error('은퇴한 커리어입니다.');
  if(plan.length!==7||plan.some(x=>!DAILY[x]))throw Error('7일 일정을 모두 선택해 주세요.');
- const matchDay=!['offseason','retired'].includes(c.world.phase);
- if(plan.filter((x,i)=>x==='vacation'&&(!matchDay||i!==5)).length*5>c.development.wallet)throw Error('예정된 휴양 비용이 잔액보다 많습니다.');
+ const matchDay=!['offseason','retired'].includes(c.world.phase),md=matchDayIndex(c);
+ if(plan.filter((x,i)=>x==='vacation'&&(!matchDay||i!==md)).length*vacationPrice(c)>c.development.wallet)throw Error('예정된 휴양 비용이 잔액보다 많습니다.');
  c.development.plan=[...plan];c.development.active={startDay:c.day,cursor:0,before:{...c.player.a},rivalBefore:{...c.development.rival.player.a},entries:[],matchDone:false,user:{drive:rivalryBonus(c,false)},rival:{drive:rivalryBonus(c,true)}};
  advanceSchedule(c);
 }
@@ -107,7 +137,7 @@ export function advanceSchedule(c:Career){
  const d=c.development,a=d.active;if(!a)return;
  while(a.cursor<7){
   c.day=a.startDay+a.cursor;c.world.currentDay=c.day;expireOffers(c.world);
-  if(a.cursor===5&&!a.matchDone&&!['offseason','retired'].includes(c.world.phase)){startCareerMatch(c);return;}
+  if(a.cursor===matchDayIndex(c)&&!a.matchDone&&!['offseason','retired'].includes(c.world.phase)){startCareerMatch(c);return;}
   a.entries.push(trainDay(c,false,d.plan[a.cursor],a.user??={}));
   if(!d.rival.retired)trainDay(c,true,d.plan[a.cursor],a.rival??={});
   a.cursor++;
@@ -130,11 +160,13 @@ export function finishWeek(c:Career){
 export function releaseExperience(c:Career,rival:boolean){
  const d=c.development,holder=rival?d.rival:d,p=rival?d.rival.player:c.player,bloom=lateBloom(rival?d.rival.traits:d.traits);
  if(!bloom||p.age<bloom.startAge||!(holder.experienceBank??0))return 0;
- const amount=Math.min(holder.experienceBank!,Math.max(bloom.minWeekly,holder.experienceBank!*bloom.weeklyRate)),keys=ROLE_KEYS[p.pos];
+ const pace=growthPace(c),amount=Math.min(holder.experienceBank!,Math.max(bloom.minWeekly*pace,holder.experienceBank!*bloom.weeklyRate*pace)),keys=ROLE_KEYS[p.pos];
  for(const k of keys){p.a[k]=Math.min(100,p.a[k]+amount/keys.length);p.potential=Math.max(p.potential,p.a[k]);}
  holder.experienceBank=Math.max(0,holder.experienceBank!-amount);return amount;
 }
-export function afterScheduledMatch(c:Career,insight=''){const a=c.development.active;if(a){a.entries.push(`경기 · 평점 ${c.history[0].rating.toFixed(2)}${insight?` · 깨달음 ${insight}`:''}`);a.matchDone=true;a.cursor=6;if(a.mode==='daily'){c.day=a.startDay+a.cursor;c.world.currentDay=c.day;return;}advanceSchedule(c);}else finishWeek(c);}
+export function afterScheduledMatch(c:Career,insight=''){const a=c.development.active;if(a){a.entries.push(`경기 · 평점 ${c.history[0].rating.toFixed(2)}${insight?` · 깨달음 ${insight}`:''}`);a.matchDone=true;a.cursor=Math.min(7,(a.cursor??0)+1);
+  // the match takes its day; a Sunday match closes the week
+  if(a.mode==='daily'){if(a.cursor>=7){c.development.rival.trainedWeek=c.week;finishWeek(c);return;}c.day=a.startDay+a.cursor;c.world.currentDay=c.day;return;}advanceSchedule(c);}else finishWeek(c);}
 
 // ── 오늘의 일정: the same week structure, advanced one day at a time ─────────
 export const WEEKDAYS=['월','화','수','목','금','토','일'] as const;
@@ -142,7 +174,7 @@ export const WEEKDAYS=['월','화','수','목','금','토','일'] as const;
 export const todayIndex=(c:Career)=>c.development.active?.cursor??0;
 const hasMatchesThisWeek=(c:Career)=>!['offseason','retired'].includes(c.world.phase);
 /** Saturday of a week with fixtures, before the match has been played. */
-export function isMatchToday(c:Career){const a=c.development.active;return todayIndex(c)===5&&!a?.matchDone&&hasMatchesThisWeek(c);}
+export function isMatchToday(c:Career){const a=c.development.active;return todayIndex(c)===matchDayIndex(c)&&!a?.matchDone&&hasMatchesThisWeek(c);}
 function beginDailyWeek(c:Career){
  const d=c.development;
  // Weeks are always played day by day; a week started by an older weekly plan simply continues daily.
@@ -152,17 +184,19 @@ function beginDailyWeek(c:Career){
 }
 export type TodayResult={day:number,type:Daily,text:string,lucky:boolean,gain:number,weekDone:boolean};
 /** Plays today with one activity; the day ends and growth/luck/injury rules apply exactly as in the weekly plan. */
-export function playToday(c:Career,type:Daily):TodayResult{
+export function playToday(c:Career,type:Daily,focus?:Attr):TodayResult{
  ensureDevelopment(c);
  if(c.match)throw Error('진행 중인 경기가 있습니다.');
  if(c.world.phase==='retired')throw Error('은퇴한 커리어입니다.');
  if(!DAILY[type])throw Error('알 수 없는 일정입니다.');
- if(type==='vacation'&&c.development.wallet<5)throw Error('휴양 비용 5만원이 부족합니다. 휴식을 선택해 주세요.');
+ if(type==='vacation'&&c.development.wallet<vacationPrice(c))throw Error(`휴양 비용 ${vacationPrice(c).toLocaleString()}만원이 부족합니다. 휴식을 선택해 주세요.`);
+ if(focus){if(!((FOCUS_KEYS as Partial<Record<Daily,readonly Attr[]>>)[type]??[]).includes(focus))throw Error('이 훈련에서 집중할 수 없는 능력치입니다.');if(c.player.a[focus]>=c.player.potential)throw Error('선택한 능력치가 잠재력 한계에 도달해 세부훈련을 할 수 없습니다. 비용은 차감되지 않습니다.');if((c.development.active?.user?.paidFocus??0)>=FOCUS.perWeek)throw Error(`집중 훈련은 주 ${FOCUS.perWeek}회까지 가능합니다.`);if(c.development.wallet<focusPrice(c))throw Error(`집중 훈련 비용 ${focusPrice(c)}만원이 부족합니다.`);}
  if(isMatchToday(c))throw Error('오늘은 경기가 있는 날입니다.');
  const d=c.development,a=beginDailyWeek(c),day=a.cursor;
  c.day=a.startDay+day;c.world.currentDay=c.day;expireOffers(c.world);
  d.plan[day]=type;
- const before=overall(c.player.a),text=trainDay(c,false,type,a.user??={});
+ const before=overall(c.player.a),wallet=d.wallet,user=a.user??={},text=trainDay(c,false,type,user,focus);
+ if(focus&&d.wallet<wallet)user.paidFocus=(user.paidFocus??0)+1;
  if(!d.rival.retired)trainDay(c,true,type,a.rival??={});
  a.entries.push(text);a.cursor++;
  const gain=overall(c.player.a)-before;let weekDone=false;
@@ -179,13 +213,13 @@ export function startTodayMatch(c:Career){
  startCareerMatch(c);
 }
 export function configureTrait(c:Career,m:Match){
- const d=c.development;m.insight={chance:insightChance(d.traits),gains:{},events:[],base:{...c.player.a}};
+ const d=c.development;m.insight={chance:insightChance(d.traits)*growthPace(c),gains:{},events:[],base:{...c.player.a}};
  // Engine-side trait effects (플레이메이커 · 분위기 메이커 · 집념) for every player in this match.
  m.rosterIds?.forEach((id,i)=>{if(id==='hero')return;const rp=id===d.rival.id?{traits:d.rival.traits}:c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===id);const fx=matchFx(rp?.traits);if(fx)m.players[i].fx=fx;});
  // 0.9 시그니처: the user's earned signature bonuses ride on the same per-player effects.
  const sig=signatureFx(c),traitFx=matchFx(d.traits),userFx=sig?{...traitFx,signature:sig}:traitFx;if(userFx){if(m.userOnPitch!==false)m.players[m.userId].fx=userFx;if(m.benchEntry)m.benchEntry.fx=userFx;}
- const big=c.world.phase!=='league'; // cups, continental and national-team matches
- const rivalSlot=m.rosterIds?.indexOf(d.rival.id)??-1;if(rivalSlot>=0){m.rivalInsight={playerId:rivalSlot,chance:insightChance(d.rival.traits),gains:{},events:[],base:{...d.rival.player.a}};if(hasMatchEffect(d.rival.traits,big))m.players[rivalSlot].a=matchAttributes(d.rival.traits,m.players[rivalSlot].a,()=>random(c),{bigMatch:big}).a;}
+ const big=c.world.calendar?isBigMatch(c):c.world.phase!=='league'; // cups, continental, national-team and school knockout matches
+ const rivalSlot=m.rosterIds?.indexOf(d.rival.id)??-1;if(rivalSlot>=0){m.rivalInsight={playerId:rivalSlot,chance:insightChance(d.rival.traits)*growthPace(c),gains:{},events:[],base:{...d.rival.player.a}};if(hasMatchEffect(d.rival.traits,big))m.players[rivalSlot].a=matchAttributes(d.rival.traits,m.players[rivalSlot].a,()=>random(c),{bigMatch:big}).a;}
  // NPC traits use a per-player hashed RNG so they never shift the career's own random stream.
  m.rosterIds?.forEach((id,i)=>{if(i===rivalSlot||id==='hero'||(i===m.userId&&m.userOnPitch!==false))return;const rp=c.world.clubs.flatMap(x=>x.roster).find(x=>x.id===id);if(!rp||!hasMatchEffect(rp.traits,big))return;const rng={seed:seedFrom((c.seed^c.week)>>>0,'match:'+id)};m.players[i].a=matchAttributes(rp.traits,m.players[i].a,()=>random(rng),{bigMatch:big}).a;});
  const sub=superSubMultiplier(d.traits),effect=hasMatchEffect(d.traits,big);
@@ -214,11 +248,13 @@ function applyRivalInsights(c:Career,gains:Partial<Record<Attr,number>>|undefine
 export function playRival(c:Career,main:Match){
  const r=c.development.rival;if(r.retired||r.lastPlayedWeek===c.week)return undefined;
  if(!c.development.active&&r.trainedWeek!==c.week){const state:WeekBonus={drive:rivalryBonus(c,true)};for(let i=0;i<7;i++)trainDay(c,true,c.development.plan[i],state);r.trainedWeek=c.week;syncRival(c);}
- const actual=main.rosterIds?.indexOf(r.id)??-1;const prior=main.replacedPlayers?.find(x=>x.rosterId===r.id)?.player;if(actual<0&&!prior&&(r.clubId===c.world.clubId||nextOpponent(c.world).club?.id===r.clubId)){r.lastPlayedWeek=c.week;return;}let rp,score:[number,number]|undefined;
+ const actual=main.rosterIds?.indexOf(r.id)??-1;const prior=main.replacedPlayers?.find(x=>x.rosterId===r.id)?.player;if(actual<0&&!prior&&(r.clubId===c.world.clubId||nextOpponent(c.world).club?.id===r.clubId)){r.lastPlayedWeek=c.week;return;}let rp,score:[number,number]|undefined,friendly=false;
  if(actual>=0||prior){rp=prior??main.players[actual];applyRivalInsights(c,main.rivalInsight?.gains);}
- else if(c.world.phase==='league'){
-  const fixture=c.world.fixtures[c.world.round]?.find(f=>f.home===r.clubId||f.away===r.clubId);if(!fixture)return;
-  const other=c.world.clubs.find(x=>x.id===(fixture.home===r.clubId?fixture.away:fixture.home))!;
+ else if(c.world.calendar||c.world.phase==='league'){
+  let other:Club;
+  if(c.world.calendar){const mu=matchupFor(c.world,r.clubId,{exclude:[c.world.clubId]});if(!mu?.club||mu.national)return;other=mu.club;friendly=mu.friendly;}
+  else{const fixture=c.world.fixtures[c.world.round]?.find(f=>f.home===r.clubId||f.away===r.clubId);if(!fixture)return;
+  other=c.world.clubs.find(x=>x.id===(fixture.home===r.clubId?fixture.away:fixture.home))!;}
   const rm=createMatch((c.seed^c.week*9239)>>>0,{name:r.player.name,pos:r.player.pos,a:r.player.a,energy:r.player.energy},overall(other.roster[0].a));
   const ownClub=c.world.clubs.find(x=>x.id===r.clubId)!;
   const teams=[chooseLineup(ownClub),chooseLineup(other)];
@@ -228,15 +264,15 @@ export function playRival(c:Career,main:Match){
    if((t?other:ownClub).coach.formation==='4-4-2'){const anchors=[[5,34],[25,10],[21,26],[21,42],[25,58],[46,9],[40,25],[40,43],[46,59],[67,25],[67,43]];slot.homeX=anchors[i][0];slot.homeY=anchors[i][1];slot.x=t?105-slot.homeX:slot.homeX;slot.y=slot.homeY;}}
   rm.userOnPitch=rivalIndex>=0;if(rivalIndex>=0)rm.userId=rivalIndex;
   rm.decision=rm.userOnPitch&&rm.ball.owner===rm.userId;
-  rm.insight={chance:insightChance(r.traits),gains:{},events:[],base:{...r.player.a}};
+  rm.insight={chance:insightChance(r.traits)*growthPace(c),gains:{},events:[],base:{...r.player.a}};
   if(rm.userOnPitch&&hasMatchEffect(r.traits))rm.players[rm.userId].a=matchAttributes(r.traits,rm.players[rm.userId].a,()=>random(c)).a;
   finishMatch(rm);rp=rm.userOnPitch?rm.players[rm.userId]:undefined;score=rm.score;r.lastPlayedWeek=c.week;
   applyRivalInsights(c,rm.insight.gains);
  }
- if(rp){const v=rating(rp);r.history.unshift({week:c.week,rating:v,goals:rp.stats.goals,club:r.clubId});r.history=r.history.slice(0,200);r.lastPlayedWeek=c.week;r.player.energy=Math.min(100,rp.energy+30);grow(r.player,['passing','shooting','positioning'],.18);
+ if(rp){const v=rating(rp);r.history.unshift({week:c.week,rating:v,goals:rp.stats.goals,club:r.clubId});r.history=r.history.slice(0,200);r.lastPlayedWeek=c.week;r.player.energy=Math.min(100,rp.energy+30);grow(r.player,['passing','shooting','positioning'],.18*growthPace(c));
   // Same match-injury rule as the user and NPCs; an injured rival is left out of lineups until recovered.
   if(rp.stats.minutes>0&&!r.player.injuryWeeks){const weeks=matchInjury(c.seed^c.week,r.id,rp.energy,r.traits);if(weeks){r.player.injuryWeeks=weeks;news(c,`라이벌 ${r.player.name} · 경기 중 부상 · ${weeks}주 회복 필요`,'rival');}}if(v>=7.5)news(c,`라이벌 ${r.player.name} · 평점 ${v.toFixed(2)}의 활약!`,'rating');}
- syncRival(c);return score?{clubId:r.clubId,score}:undefined;
+ syncRival(c);return score&&!friendly?{clubId:r.clubId,score}:undefined;
 }
 /** Clubs show interest only when their level at the player's position is within this many points of the player's own (0.6). */
 export const INTEREST_FIT=8;
@@ -267,8 +303,11 @@ export function scoutInterest(c:Career){
  }
  w.interestedClubIds=[...c.development.interestIds];
 }
-export function announceOffers(c:Career){const d=c.development;c.world.currentDay=c.day;c.world.interestedClubIds=[...d.interestIds];generateOffers(c.world,{...c.player,age:c.player.age+1},scoutingForm(c));for(const o of c.world.offers)news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 14일 유효한 계약 제안 도착`,'offer');
- if(d.rival.player.age>=18){const rw=structuredClone(c.world);rw.clubId=d.rival.clubId;rw.contract={salary:0,years:0};rw.interestedClubIds=d.rival.interests;generateOffers(rw,{...d.rival.player,age:d.rival.player.age+1},d.rival.history[0]?.rating??6.5);d.rival.offers=rw.offers;for(const o of rw.offers.filter(o=>d.rival.interests.includes(o.clubId)))news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 라이벌 ${d.rival.player.name}에게 정식 제안`,'rival');}
+export function announceOffers(c:Career,ageShift=1){const d=c.development,w=c.world;w.currentDay=c.day;w.interestedClubIds=[...d.interestIds];
+ // 0.15 the national-tournament scout evaluation raises how clubs rate the player (fit, salary, role) — never the real ability.
+ const bonus=w.scoutBonus&&w.scoutBonus.year>=w.year-1?w.scoutBonus.value:0;
+ generateOffers(w,{...c.player,age:c.player.age+ageShift},scoutingForm(c),bonus);for(const o of w.offers)news(c,`${w.clubs.find(x=>x.id===o.clubId)!.name} · 14일 유효한 계약 제안 도착${o.pitch?` (${o.pitch})`:''}`,'offer');
+ if(ageShift&&d.rival.player.age>=18){const rw=structuredClone(c.world);rw.clubId=d.rival.clubId;rw.contract={salary:0,years:0};rw.interestedClubIds=d.rival.interests;generateOffers(rw,{...d.rival.player,age:d.rival.player.age+1},d.rival.history[0]?.rating??6.5);d.rival.offers=rw.offers;for(const o of rw.offers.filter(o=>d.rival.interests.includes(o.clubId)))news(c,`${c.world.clubs.find(x=>x.id===o.clubId)!.name} · 라이벌 ${d.rival.player.name}에게 정식 제안`,'rival');}
 }
 export function renewSearch(c:Career){if(c.world.phase!=='offseason'||c.match)throw Error('시즌 종료 후 구직할 수 있습니다.');expireOffers(c.world);if(c.world.offers.length)throw Error('아직 유효한 제안이 있습니다.');announceOffers(c);}
 export function ageRival(c:Career){const r=c.development.rival;r.player.age=c.player.age;r.player.energy=100;r.player.fatigue=0;r.retired=c.player.age>=36;if(!r.retired)applyAging(r.player.a,r.traits,r.player.age);

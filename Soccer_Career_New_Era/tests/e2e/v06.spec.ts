@@ -9,7 +9,7 @@ test('live match: an opponent near me with the ball asks for a defensive choice;
   await page.goto('/');await page.getByRole('button',{name:'새로운 커리어 시작'}).click();await page.getByRole('tab',{name:'직접 만들기'}).click();
   await page.getByLabel('선수 이름').fill('수비테스트');await page.getByLabel('입학 나이').selectOption('17');await page.getByLabel('주 포지션',{exact:true}).selectOption('CB');
   await page.getByRole('button',{name:'입단하고 커리어 시작'}).click();
-  await nav(page,'오늘의 일정');for(let i=0;i<5;i++)await page.getByRole('button',{name:'오늘 휴식하기'}).click();
+  await nav(page,'오늘의 일정');/* 0.15: the match weekday comes from the season calendar */for(let i=0;i<7&&!(await page.getByRole('button',{name:'경기 진행'}).count());i++)await page.getByRole('button',{name:'오늘 휴식하기'}).click();
   await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'4×',exact:true}).click();
   const defense=page.getByRole('group',{name:'수비 선택'});
   // On-ball moments are answered with a safe pass until the first defensive moment.

@@ -47,4 +47,4 @@ it('long career: scouted player with traits, rival growth and transfers, save/lo
   expect(c.world.clubs.every(x=>x.roster.length===20)).toBe(true);
   expect(c.schoolRef?.name).toBe('매탄고');
   console.log(`    ${weeks} weeks, ${seasons} seasons, injured during ${injuredWeeks} weeks, rival clubs ${rivalClubs.size}, final league ${clubOf(c.world).league}`);
-},120000);
+},400000); // 0.15: 35-week seasons

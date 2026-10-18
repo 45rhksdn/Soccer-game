@@ -3,6 +3,8 @@ import {newCareer,startCareerMatch,trustChange} from '../src/career';
 import {attributes,createMatch,finishMatch,random,step} from '../src/engine';
 import {applyDaily,configureTrait} from '../src/development';
 import {TRAIT_DEFS,matchAttributes,hasMatchEffect,luckChance,insightChance,trainingLuckChance,injuryChanceMultiplier,injuryWeeks,trainingFatigueMultiplier,abroadGrowthMultiplier,trustGainMultiplier,superSubMultiplier,matchFx} from '../src/traits';
+import {GROWTH_PACE} from '../src/season';
+import {isBigMatch} from '../src/career';
 
 const profile={name:'추가특성',age:16,pos:'CM' as const,secondary:'ST' as const,foot:'오른',height:178,weight:70,style:'플레이메이커',curve:'꾸준한 성장형'};
 const career=(seed=51)=>newCareer(profile,0,seed);
@@ -32,8 +34,11 @@ it('big matches only: 빅매치 체질 +3 everywhere, 큰 경기 울렁증 compo
   // Through configureTrait in a cup match vs a league match.
   const cup=career(),league=career();cup.player.a=league.player.a=attributes(60);cup.development.traits=league.development.traits=['빅매치 체질'];
   startCareerMatch(league);expect(league.match!.players[league.match!.userId].a.passing).toBe(60);
-  cup.world.phase='cup';cup.world.opponentId=cup.world.clubs.find(x=>x.league===0&&x.id!==cup.world.clubId)!.id;startCareerMatch(cup);
+  delete cup.world.calendar; /* a pre-0.15 season still running */cup.world.phase='cup';cup.world.opponentId=cup.world.clubs.find(x=>x.league===0&&x.id!==cup.world.clubId)!.id;startCareerMatch(cup);
   expect(cup.match!.players[cup.match!.userId].a.passing).toBe(63);expect(cup.player.a.passing).toBe(60);
+  // 0.15 calendar: the domestic cup quarter-final (week 15) is a big match for a pro club
+  const pro=career();pro.world.clubId='c6';pro.world.contract={salary:9000,years:2};pro.player.a=attributes(60);pro.player.trust=90;pro.player.status='핵심 주전';pro.development.traits=['빅매치 체질'];pro.world.season!.played=14;
+  expect(isBigMatch(pro)).toBe(true);startCareerMatch(pro);expect(pro.match!.competition).toContain('컵');expect(pro.match!.players[pro.match!.userId].a.passing).toBe(63);
 });
 
 it('기복이 심함: 30 % of matches ×0.93 with its own notice; never labelled 실전파',()=>{
@@ -67,7 +72,7 @@ it('abroad: 향수병 ×0.85 and 해외 체질 ×1.15 only when the club is in l
 it('coach trust: 성실함 ×1.2 and 감독과 불화 ×0.8 on gains only',()=>{
   expect(trustGainMultiplier(['성실함'])).toBe(1.2);expect(trustGainMultiplier(['감독과 불화'])).toBe(.8);
   const t=(traits:string[])=>{const c=career();c.player.trust=50;applyDaily(c,c.player,'passing',traits);return c.player.trust-50;};
-  expect(t(['성실함'])).toBeCloseTo(.24,8);expect(t(['감독과 불화'])).toBeCloseTo(.16,8);expect(t([])).toBeCloseTo(.2,8);
+  /* 0.15: per-week growth (and training trust) is paced to the 35-week season */expect(t(['성실함'])).toBeCloseTo(.24*GROWTH_PACE,8);expect(t(['감독과 불화'])).toBeCloseTo(.16*GROWTH_PACE,8);expect(t([])).toBeCloseTo(.2*GROWTH_PACE,8);
   // After a match only gains are scaled; a poor match lowers trust equally for everyone.
   expect(trustChange(['성실함'],2)).toBeCloseTo(2.4,8);expect(trustChange(['감독과 불화'],2)).toBeCloseTo(1.6,8);
   expect(trustChange(['성실함'],-2)).toBe(-2);expect(trustChange(['감독과 불화'],-2)).toBe(-2);

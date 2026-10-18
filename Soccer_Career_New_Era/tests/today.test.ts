@@ -3,9 +3,10 @@ import {newCareer,settle,nextSeason} from '../src/career';
 import {finishMatch,random} from '../src/engine';
 import {prepareWeek,playToday,startTodayMatch,isMatchToday,todayIndex,type Daily} from '../src/development';
 import {encode,decode} from '../src/storage';
+import {saturdays} from './saturdays';
 
 const profile={name:'오늘선수',age:16,pos:'ST' as const,secondary:'LW' as const,foot:'오른',height:180,weight:72,style:'테크니션',curve:'꾸준한 성장형'};
-const career=(seed=21)=>newCareer(profile,0,seed);
+const career=(seed=21)=>saturdays(newCareer(profile,0,seed));
 const plan:Daily[]=['shooting','running','passing','rest','dribbling','rest','vacation'];
 
 /** Plays one week day by day: Mon–Fri training, Saturday match, Sunday activity. */
@@ -65,7 +66,7 @@ it('offseason: daily training with no match; next season starts even mid-week an
   const c=career(9);c.world.phase='offseason';
   for(let i=0;i<4;i++){expect(isMatchToday(c)).toBe(false);playToday(c,'passing');}
   const week=c.week,notes=c.development.notes.length;
-  nextSeason(c);
+  nextSeason(c);saturdays(c);
   expect(c.development.active).toBeUndefined();expect(c.development.notes.length).toBe(notes+1);expect(c.development.notes[0].entries).toHaveLength(4);
   expect(c.week).toBeGreaterThan(week);expect(c.world.phase).toBe('league');expect(c.player.age).toBe(17);
   playToday(c,'rest');expect(todayIndex(c)).toBe(1);

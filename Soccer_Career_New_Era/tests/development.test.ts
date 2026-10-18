@@ -5,8 +5,9 @@ import {applyDaily,prepareWeek,ageRival,configureTrait,syncRival,announceOffers,
 import {generateOffers,expireOffers,acceptOffer,advanceWorldYear,clubLevel} from '../src/world';
 import {roleAbility} from '../src/roles';
 import {encode,decode,validate} from '../src/storage';
+import {saturdays} from './saturdays';
 const profile={name:'주간선수',age:16,pos:'CM' as const,secondary:'ST' as const,foot:'오른',height:178,weight:70,style:'플레이메이커',curve:'꾸준한 성장형'};
-function career(seed=12){return newCareer(profile,0,seed);}
+function career(seed=12){return saturdays(newCareer(profile,0,seed));}
 function seedFor(lo:number,hi:number){for(let i=0;i<100000;i++){const r={seed:i},v=random(r);if(v>=lo&&v<hi)return i;}throw Error('seed');}
 it('rival identity, school, age and position persist through world aging and transfers',()=>{
  const c=career(),r=c.development.rival;expect(r.school).not.toBe(c.school);expect(r.player.age).toBe(c.player.age);expect(r.player.pos).toBe(c.player.pos);const name=r.player.name,id=r.id;
@@ -35,4 +36,4 @@ it('interested clubs guarantee offers, expiry is day 14 and offseason weeks keep
  const ability=roleAbility(c.player.a,c.player.pos),near=c.world.clubs.filter(x=>x.league>0).sort((a,b)=>Math.abs(clubLevel(a,c.player.pos)-ability)-Math.abs(clubLevel(b,c.player.pos)-ability))[0].id;
  c.development.interestIds=[near,'c23'];announceOffers(c);expect(c.world.offers.some(o=>o.clubId===near)).toBe(true);expect(c.world.offers.some(o=>o.clubId==='c23')).toBe(true);const issue=c.world.offers[0].issuedDay!;c.world.currentDay=issue+13;expireOffers(c.world);expect(c.world.offers.length).toBeGreaterThan(0);c.world.currentDay=issue+14;expireOffers(c.world);expect(c.world.offers).toHaveLength(0);expect(()=>acceptOffer(c.world,near,c.player.name)).toThrow('유효');c.day=14;renewSearch(c);expect(c.world.offers.find(o=>o.clubId===near)!.expiresDay).toBe(28);prepareWeek(c,Array(7).fill('rest'));expect(c.day).toBe(21);prepareWeek(c,Array(7).fill('rest'));expect(c.day).toBe(28);expect(c.world.offers).toHaveLength(0);
 });
-it('v3 migration adds rival and traits without changing existing player or active match',()=>{const c=career();startCareerMatch(c);const old=structuredClone(c) as any;delete old.development;old.version=3;const n=validate(old);expect(n.version).toBe(8);expect(n.player).toEqual(c.player);expect(n.match).toEqual(c.match);expect(n.history).toEqual(c.history);expect(n.development.rival.school).not.toBe(n.school);expect(decode(encode(n))).toEqual(n);});
+it('v3 migration adds rival and traits without changing existing player or active match',()=>{const c=career();startCareerMatch(c);const old=structuredClone(c) as any;delete old.development;old.version=3;const n=validate(old);expect(n.version).toBe(9);expect(n.player).toEqual(c.player);expect(n.match).toEqual(c.match);expect(n.history).toEqual(c.history);expect(n.development.rival.school).not.toBe(n.school);expect(decode(encode(n))).toEqual(n);});

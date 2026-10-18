@@ -8,14 +8,14 @@ import {TraitList} from './TraitBadges';
 import {ScoutPanel} from './ScoutPanel';
 import {PlayerSlots} from './PlayerSlots';
 import {TodayPanel} from './TodayPanel';
-import {playToday,startTodayMatch,LUCKY_NEWS,INSIGHT_NEWS,type TodayResult} from './development';
+import {playToday,startTodayMatch,matchDayIndex,WEEKDAYS,LUCKY_NEWS,INSIGHT_NEWS,type TodayResult} from './development';
 import {GrowthPopup,type PopupInfo} from './GrowthPopup';
 import {EquipmentPanel} from './EquipmentPanel';
 import {buyEquipment,equip,unequip,equipmentBonus} from './equipment';
 import {careerFromCandidate,newScoutState,nextList,type ScoutState} from './scouting';
 import {potentialBonus,type Legacy} from './legacy';
 import {WorldPanel} from './WorldPanels';
-import {teamName,competitionName,selection} from './career';
+import {teamName,competitionName,selection,statusOf,STATUS} from './career';
 import {clubOf} from './world';
 import {roleAbility} from './roles';
 import {userPerformance,defend,tackleChance,DEFENSE_ACTIONS,type DefenseAction} from './engine';
@@ -421,7 +421,7 @@ export default function App() {
         </div>
         <div className="version">
           <span className="dot" /> 오프라인 플레이 지원
-          <small>0.13 · 선수 발굴 · 커리어 계승</small>
+          <small>0.15 · 35주 시즌 · 고교 전국대회</small>
         </div>
       </aside>
       <div className="workspace">
@@ -766,7 +766,7 @@ export default function App() {
                   <TodayPanel
                     c={c}
                     last={today}
-                    onTrain={(t) => update((n) => { const r = playToday(n, t); setToday(r); if (r.lucky) setPopup({ kind: "lucky", text: LUCKY_NEWS }); })}
+                    onTrain={(t, focus) => update((n) => { const r = playToday(n, t, focus); setToday(r); if (r.lucky) setPopup({ kind: "lucky", text: LUCKY_NEWS }); })}
                     onMatch={() => { setToday(null); update(startTodayMatch); }}
                   />
                   <div className="metrics">
@@ -793,7 +793,7 @@ export default function App() {
                         value: p!.trust.toFixed(0),
                         unit: "/ 100",
                         icon: Shield,
-                        sub: "훈련과 경기 평가 반영",
+                        sub: c.world.calendar ? `${statusOf(p!)}${p!.lastTrust !== undefined ? ` · 지난 경기 ${p!.lastTrust > 0 ? "+" : ""}${p!.lastTrust}` : ""}` : "훈련과 경기 평가 반영",
                       },
                       {
                         label: "통산 출전",
@@ -823,7 +823,7 @@ export default function App() {
                         <span className="pill">{competitionName(c)}</span>
                       </div>
                       <p className="muted">
-                        {dateOf((c.development.active?.startDay??c.day) + 5)} · {selection(c).role}
+                        {dateOf((c.development.active?.startDay??c.day) + matchDayIndex(c))} ({WEEKDAYS[matchDayIndex(c)]}) · {selection(c).role}
                       </p>
                       <div className="fixture">
                         <div>
@@ -839,7 +839,7 @@ export default function App() {
                         </div>
                       </div>
                       <button className="primary full" onClick={()=>go(c.world.phase==='offseason'?'season':c.world.phase==='retired'?'career':'training')}>{c.world.phase==='offseason'?'시즌 결산 · 다음 시즌':c.world.phase==='retired'?'은퇴 기록 보기':'오늘의 일정으로 이동'}</button>
-                      <small className="center muted">경기는 매주 토요일입니다. 오늘의 일정에서 하루씩 진행하세요.</small>
+                      <small className="center muted">{c.world.calendar ? "매주 한 경기 · 경기 요일은 시즌 일정에 따라 달라집니다." : "경기는 매주 토요일입니다."} 오늘의 일정에서 하루씩 진행하세요.</small>
                     </section>
                     <GrowthNotes c={c}/>
                   </div>
@@ -863,11 +863,11 @@ export default function App() {
               ) : null}
               {tab === "training" && c && !m && (
                 <>
-                  <Heading eyebrow="DAILY ROUTINE" title="오늘의 일정" text="하루에 한 가지를 고르면 하루가 지나고 바로 반영됩니다. 토요일은 경기일입니다." />
+                  <Heading eyebrow="DAILY ROUTINE" title="오늘의 일정" text="하루에 한 가지를 고르면 하루가 지나고 바로 반영됩니다. 경기일은 시즌 일정에 표시됩니다. 훈련 타일의 '세부훈련'을 펼치면 유료 세부훈련(주 3회)을 할 수 있습니다." />
                   <TodayPanel
                     c={c}
                     last={today}
-                    onTrain={(t) => update((n) => { const r = playToday(n, t); setToday(r); if (r.lucky) setPopup({ kind: "lucky", text: LUCKY_NEWS }); })}
+                    onTrain={(t, focus) => update((n) => { const r = playToday(n, t, focus); setToday(r); if (r.lucky) setPopup({ kind: "lucky", text: LUCKY_NEWS }); })}
                     onMatch={() => { setToday(null); update(startTodayMatch); }}
                   />
                   <GrowthNotes c={c} />
@@ -928,6 +928,18 @@ export default function App() {
                         <p>
                           감독 신뢰 <strong>{p!.trust.toFixed(1)} / 100</strong>
                         </p>
+                        {c.world.calendar && <p>
+                          팀 내 위치 <strong>{statusOf(p!)}</strong>
+                        </p>}
+                        {p!.lastTrust !== undefined && <p>
+                          지난 경기 신뢰 변화 <strong>{p!.lastTrust > 0 ? "+" : ""}{p!.lastTrust}</strong>
+                        </p>}
+                        {c.world.calendar && (statusOf(p!) === "로테이션" || statusOf(p!) === "후보") && <p>
+                          주전 복귀 기준 <strong>신뢰 {STATUS.regain} 이상 (현재 {p!.trust.toFixed(0)})</strong>
+                        </p>}
+                        {(c.world.contract.trialMatches ?? 0) > 0 && <p>
+                          선발 보장 <strong>{c.world.contract.trialMatches}경기 남음</strong>
+                        </p>}
                         <p>
                           주간 훈련 <strong>{c.trainingCount} / 3</strong>
                         </p>
@@ -1176,7 +1188,7 @@ export default function App() {
               SOCCER CAREER <b>NEW ERA</b>
             </span>
             <span>한 명의 선수. 무한한 가능성.</span>
-            <small>CAREER BETA · 0.14</small>
+            <small>CAREER BETA · 0.15</small>
           </footer>
         </main>
       </div>

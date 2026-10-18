@@ -3,9 +3,10 @@ import {newCareer,startCareerMatch,settle} from '../src/career';
 import {attributes,createMatch,finishMatch,insightAttempt,random,ATTRS} from '../src/engine';
 import {applyDaily,playToday,LUCKY_NEWS,INSIGHT_NEWS,applyInsights} from '../src/development';
 import {insightChance,trainingLuckChance,trainingLuckBase,INSIGHT_CHANCE,luckMultiplier} from '../src/traits';
+import {saturdays} from './saturdays';
 
 const profile={name:'확률선수',age:16,pos:'CM' as const,secondary:'ST' as const,foot:'오른',height:178,weight:70,style:'플레이메이커',curve:'꾸준한 성장형'};
-const career=(seed=31)=>newCareer(profile,0,seed);
+const career=(seed=31)=>saturdays(newCareer(profile,0,seed));
 function seedFor(lo:number,hi:number){for(let i=0;i<200000;i++){const v=random({seed:i});if(v>=lo&&v<hi)return i;}throw Error('seed');}
 
 it('insight: 0.5 % per action, 행운아 0.75 %, 불운 ×0.75 — independent of age',()=>{
