@@ -53,7 +53,7 @@ function SchoolCandidates({school,list,candidates,best,onReroll,onPick,scoutExpe
         {candidates.map(c=><article className="candidate" key={c.id} aria-label={`후보 ${c.name}`}>
           <div className="candidate-top"><span className="tag">{c.pos} / {c.secondary}</span><span className="tag fictional" title="게임이 만든 가상 선수">가상</span><strong className="candidate-ovr">{candidateOverall(c).toFixed(1)}<small>OVR</small></strong></div>
           <h4>{c.name}</h4>
-          {(()=>{const t=candidateStory(c,school);return <><div className="candidate-story"><p className="story-headline">{t.headline}</p><p>{t.chapters[0]}</p></div>
+          {(()=>{const t=candidateStory(c,school);return <><div className="candidate-story"><p className="story-headline">{t.headline}</p>{' '}<p>{t.chapters[0]}</p></div>
             <details className="story-more"><summary>사연 더 읽기</summary><div className="story-rest">{t.chapters.slice(1).map((x,i)=><p key={i}>{x}</p>)}<blockquote>{t.quote}<cite>{school.name} 축구부 코치</cite></blockquote></div></details></>;})()}
           <p className="muted">{c.age}세 · {c.height}cm / {c.weight}kg · {c.foot}발<br/>{c.style} · 강점 {strengths(c.a)}</p>
           <p className="candidate-outlook">{growthOutlook(c,c.id,0,scoutExperience).label}</p><details className="candidate-detail"><summary>코치의 관찰과 특성 설명</summary><p>{growthOutlook(c,c.id,0,scoutExperience).note}</p><TraitList traits={c.traits} detail empty="특성 없이도 훈련과 경기 경험으로 성장할 수 있습니다."/></details>

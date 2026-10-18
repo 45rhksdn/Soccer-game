@@ -11,7 +11,7 @@ export function OriginPanel({c,legacy}:{c:Career,legacy:Legacy|null}){
  return <details className="card origin-detail"><summary>선수 이야기 · {outlook.label}</summary>{(()=>{
    // 0.14 the back-story written at signing; saves from before 0.14 get one told from today's player.
    const t=c.story?.chapters?{headline:c.story.headline??'',chapters:c.story.chapters,quote:c.story.quote??''}:playerStory({...c.player,traits:c.development.traits},c.schoolRef?storySchool(c.schoolRef):{name:SCHOOLS[c.school]?.name??'고등학교',region:SCHOOLS[c.school]?.area},c.id??c.player.name);
-   return <div className="player-story">{t.headline&&<p className="story-headline">{t.headline}</p>}{t.chapters.map((x,i)=><p key={i}>{x}</p>)}{t.quote&&<blockquote>{t.quote}<cite>{c.schoolRef?.name??SCHOOLS[c.school]?.name} 축구부 코치</cite></blockquote>}<p className="muted">{c.story?.intro??playerIntroduction(c.player)}</p></div>;
+   return <div className="player-story">{t.headline&&<p className="story-headline">{t.headline}</p>}{t.chapters.map((x,i)=><p key={i}>{' '}{x}</p>)}{t.quote&&<blockquote>{t.quote}<cite>{c.schoolRef?.name??SCHOOLS[c.school]?.name} 축구부 코치</cite></blockquote>}<p className="muted">{c.story?.intro??playerIntroduction(c.player)}</p></div>;
   })()}<p className="muted">{outlook.note}</p><p>{rivalIntroduction(c)}</p>{mentor&&<p className="mentor-note">선배 {mentor.name}: “한 번의 결과보다, 네가 쌓아 가는 시간을 믿어.”</p>}{previous.length>0&&<p className="muted">같은 나이 · 같은 포지션의 시즌 말 기록: {previous.map(x=>`${x.name} OVR ${x.overall.toFixed(1)}`).join(' / ')} · 나의 현재 OVR {roleAbility(c.player.a,c.player.pos).toFixed(1)}</p>}</details>;
 }
 export function LegacyArchive({legacy}:{legacy?:Legacy|null}){
