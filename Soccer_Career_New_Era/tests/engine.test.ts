@@ -50,7 +50,8 @@ describe("deterministic engine", () => {
     const t = m.clock;
     step(m);
     expect(m.clock).toBe(t);
-    act(m, availableActions(m)[0]);
+    // A successful dribble hands the decision straight back (0.7), so resume with any other legal action.
+    act(m, availableActions(m).find((a) => a !== "dribble")!);
     expect(m.decision).toBe(false);
     step(m);
     expect(m.clock).toBeGreaterThan(t);

@@ -1,7 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 import {newCareer} from '../../src/career';
 import {createMatch,attributes} from '../../src/engine';
-import {encode} from '../../src/storage';
+import {encode,decode} from '../../src/storage';
 
 // v0.8: vertical match screen, on-pitch dribble direction, word probabilities, game-style popup.
 const fixture=(defending=false)=>{const c=newCareer({name:'세로선수',age:17,pos:'CM',secondary:'ST',foot:'오른',height:180,weight:70,style:'플레이메이커',curve:'꾸준한 성장형'},0,177,{traits:[]});
@@ -19,7 +19,8 @@ test('vertical pitch: the whole pitch fits the screen, probabilities are words',
   const box=(await canvas.boundingBox())!,vh=page.viewportSize()!.height;
   expect(box.height>box.width).toBe(true);expect(box.height<=vh).toBe(true);
   expect(box.y>=0&&box.y+box.height<=vh).toBe(true); // fully on screen when the match opens
-  await expect(page.locator('.match-actions')).toContainText(/(매우 낮은|낮은|중간|높은|매우 높은) 확률/);
+  // 0.11: shots show a band; pass / dribble show a provisional bar until a teammate / direction is chosen.
+  await expect(page.locator('.match-actions')).toContainText(/(매우 낮은|낮은|중간|높은|매우 높은) 확률|동료를 고르면 확정|방향을 고르면 확정/);
   await noPercent(page,'.match-actions');
   await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/}).click();await noPercent(page,'.match-actions');
   await page.screenshot({path:`reports/${info.project.name}-v08-vertical.png`});
@@ -35,8 +36,12 @@ test('dribble: tapping the pitch picks the direction',async({page})=>{
   const canvas=page.locator('canvas.pitch.vertical'),box=(await canvas.boundingBox())!;
   await canvas.click({position:{x:box.width/2,y:8}}); // toward the goal we attack (top)
   await expect(page.locator('.pitch-hint')).toHaveCount(0);
-  // The dribble was played: the commentary moved on (new attack choice after a successful dribble, or a turnover).
-  await expect(page.locator('.live-commentary p')).not.toHaveText(before);
+  // The dribble was played: the saved match shows the player carried the ball on (a successful dribble hands the
+  // choice back, often with the same commentary line) or the ball was lost.
+  const saved=async()=>decode(await page.evaluate(()=>new Promise<string>(r=>{const q=indexedDB.open('soccer-career-new-era',1);q.onsuccess=()=>{const g=q.result.transaction('saves').objectStore('saves').get('slot1');g.onsuccess=()=>{q.result.close();r(g.result);};};}))).match!;
+  const start=fixture().match!,u0=start.players[start.userId];let moved=false;
+  for(let i=0;i<50&&!moved;i++){const m=await saved(),u=m.players[m.userId];moved=Math.hypot(u.x-u0.x,u.y-u0.y)>=2.5||m.ball.owner!==m.userId;if(!moved)await page.waitForTimeout(100);}
+  expect(moved).toBe(true);void before;
   expect(errors).toEqual([]);
 });
 
@@ -65,6 +70,6 @@ test('choosing 드리블 turns its tile into a direction pad; 예측 수비 show
 
 test('dribble and pass tiles also show a gauge bar',async({page})=>{
   await load(page,fixture());const attack=page.getByRole('group',{name:'공격 선택'});
-  for(const name of [/드리블/,/^패스/]){const tile=attack.getByRole('button',{name});await expect(tile.locator('.chance-bar .fill')).toHaveCount(1);await expect(tile).toContainText(/확률/);await expect(tile).not.toContainText(/득점 ·|앞으로 ·|추천 동료|방향 선택|동료 선택/);}
+  for(const name of [/드리블/,/^패스/]){const tile=attack.getByRole('button',{name});await expect(tile.locator('.chance-bar .fill')).toHaveCount(1);await expect(tile).toContainText(/고르면 확정/);await expect(tile).not.toContainText(/득점 ·|앞으로 ·|추천 동료|방향 선택|동료 선택/);}
 });
 

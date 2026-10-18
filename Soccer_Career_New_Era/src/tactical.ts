@@ -3,8 +3,11 @@ import {clamp,direction,type Match,type Footballer,type Action,type Attr,type De
 export type AttackOptions={targetId?:number;vector?:{x:number;y:number}};
 export const distance=(a:{x:number;y:number},b:{x:number;y:number})=>Math.hypot(a.x-b.x,a.y-b.y);
 const active=(p:Footballer)=>!p.red&&!p.injured;
+/** Nearest opponent field players (keepers are judged separately) and how many stand within 6 m. */
+/** 0.11 '상대와의 거리' text: one decimal within 6 m, '6m 이상' beyond, '주변 상대 없음' without one (the value itself is never clipped). */
+export const opponentDistanceLabel=(d:number)=>!Number.isFinite(d)?'주변 상대 없음':d<=6?`${d.toFixed(1)}m`:'6m 이상';
 export function nearbyOpponents(m:Match,p:Footballer){
- const opponents=m.players.filter(q=>q.team!==p.team&&active(q)).sort((a,b)=>distance(a,p)-distance(b,p));
+ const opponents=m.players.filter(q=>q.team!==p.team&&active(q)&&q.pos!=='GK').sort((a,b)=>distance(a,p)-distance(b,p));
  return {nearest:opponents[0],distance:opponents[0]?distance(p,opponents[0]):Infinity,count:opponents.filter(q=>distance(p,q)<=6).length};
 }
 /** 0.10 where a pass to `q` is aimed: the end of a timed run in behind (while q is still onside), else q. */
@@ -89,72 +92,157 @@ export function shotBlockAt(m:Match,team:number,x:number,y:number){
 }
 /** Pass success tuning (0.7.1). Exact engine probabilities; the UI shows the same numbers. */
 export const PASS={base:.74,skill:.22,anticipation:.03,shortRange:12,perMetre:.006,forward:.03,forwardMetres:8,through:.12,crowd:.04,pressure:.08} as const;
-export function attackChance(m:Match,a:Action,opts:AttackOptions={}){
- if(!attackAllowed(m,a,opts))return 0;
- const p=m.players[m.ball.owner!],near=nearbyOpponents(m,p),q=near.nearest;
- const proximity=q?clamp(1-near.distance/6,0,1):0;
- const opponent=q?(q.a.marking*.45+q.a.defending*.35+q.a.anticipation*.20)/100:0;
- // Separate crowd penalty (5 points each) from distance/quality pressure (up to 12 points).
+// ── 0.11 matchup odds ────────────────────────────────────────────────────
+/**
+ * One model for the screen, the actual roll and the AI (attackOdds / defenseOdds are pure: no RNG).
+ * - Interference: each opponent hinders an action by proximity × direction relative to where the action goes
+ *   (front > side > behind, smooth in distance and angle). The main hinderer counts fully, the next ones less (cover).
+ * - Ability: the gap between my action skill and that opponent's matching skill goes through a logistic `edge`
+ *   (−1…1), so a small advantage changes the odds a little and a large one a lot; dribble and tackle use the same edge.
+ * - Dribble / pass / cross: additive penalties in probability points (base − Σ). Shots, headers, volleys:
+ *   multiplicative (base × (1 − pressure) × keeper), so pressure from weak defenders never makes a long shot likely.
+ * - Each opponent is counted once per action (passes take the larger of his pressure on the passer and his lane threat).
+ */
+export const ODDS={
+ edgeScale:25,
+ reachFront:8,reachSide:6,dirFloor:.2,dirPow:1.3,cover:[1,.7,.45,.3],gkReach:3,closeBlend:2.5,
+ dribble:{free:.48,freeSkill:.48,block:.62,edgeShare:.75},
+ passer:{block:.2,edgeShare:.6},
+ lane:{reach:2.5,reachRead:1.5,base:.13,skill:.24},
+ shot:{press:.7,edgeShare:.6,gkBase:.33,gkPerMetre:.015,gkMax:.62,gk:.24,pressMax:.75},
+ hold:{block:.3,edgeShare:.6},
+ tackle:{base:.40,skill:.12,edge:.26},slide:{base:.20,skill:.12,edge:.22},press:{base:.55,skill:.10,edge:.18},
+} as const;
+const smooth01=(x:number)=>{const t=clamp(x,0,1);return t*t*(3-2*t);};
+/** Ability edge in −1…1 for a gap of `delta` rating points (logistic; ±25 → ±0.46, ±50 → ±0.76). */
+export const edge=(delta:number)=>2/(1+Math.exp(-delta/ODDS.edgeScale))-1;
+export type Interference={o:Footballer,i:number,where:'front'|'side'|'behind',dist:number};
+/** How strongly each opponent hinders an action by `p` heading along (ux, uy), strongest first. */
+export function interferers(m:Match,p:Footballer,ux:number,uy:number):Interference[]{
+ const len=Math.hypot(ux,uy)||1;ux/=len;uy/=len;const out:Interference[]=[];
+ for(const o of m.players){
+  if(o.team===p.team||!active(o))continue;
+  const dx=o.x-p.x,dy=o.y-p.y,d=Math.hypot(dx,dy)||.01;
+  if(o.pos==='GK'&&d>ODDS.gkReach)continue; // a keeper only counts when he comes to challenge
+  const cos=(dx*ux+dy*uy)/d,reach=ODDS.reachSide+(ODDS.reachFront-ODDS.reachSide)*Math.max(0,cos);
+  const prox=smooth01(1-d/reach);if(prox<=0)continue;
+  // Right next to the player the direction is ill-defined: blend towards the side weight so passing by is smooth.
+  const raw=ODDS.dirFloor+(1-ODDS.dirFloor)*Math.pow((1+cos)/2,ODDS.dirPow),sideW=ODDS.dirFloor+(1-ODDS.dirFloor)*Math.pow(.5,ODDS.dirPow);
+  const dir=sideW+(raw-sideW)*smooth01(d/ODDS.closeBlend);
+  out.push({o,i:prox*dir,where:cos>.5?'front':cos>-.5?'side':'behind',dist:d});
+ }
+ return out.sort((a,b)=>b.i-a.i);
+}
+/** Σ cover[k] × value_k over the strongest contributions (each opponent once). */
+const covered=(values:number[])=>values.sort((a,b)=>b-a).slice(0,ODDS.cover.length).reduce((n,v,k)=>n+v*ODDS.cover[k],0);
+export const dribbleSkill=(p:Footballer)=>p.a.dribbling*.6+p.a.speed*.15+p.a.acceleration*.1+p.a.anticipation*.15;
+export const dribbleStop=(o:Footballer)=>o.a.marking*.4+o.a.defending*.35+o.a.strength*.15+o.a.speed*.1;
+export const pressSkill=(o:Footballer)=>o.a.marking*.5+o.a.anticipation*.3+o.a.defending*.2;
+export const laneRead=(o:Footballer)=>o.a.anticipation*.4+o.a.positioning*.35+o.a.defending*.25;
+export const ballCarry=(o:Footballer)=>o.a.control*.45+o.a.dribbling*.4+o.a.strength*.15;
+export const keeperQuality=(g:Footballer)=>(g.a.positioning*.4+g.a.anticipation*.35+g.a.composure*.25)/100;
+const opponentKeeper=(m:Match,p:Footballer)=>m.players.find(q=>q.team!==p.team&&q.pos==='GK'&&active(q));
+/** Lane threat of one opponent on a pass from p to aim (0 when he is not between them). */
+function laneThreat(o:Footballer,p:Footballer,aim:{x:number,y:number},skill:number){
+ const dx=aim.x-p.x,dy=aim.y-p.y,l=dx*dx+dy*dy||1,t=((o.x-p.x)*dx+(o.y-p.y)*dy)/l;
+ if(t<=.05||t>=.97)return 0;
+ const h=Math.hypot(o.x-p.x-t*dx,o.y-p.y-t*dy),reach=ODDS.lane.reach+ODDS.lane.reachRead*o.a.anticipation/100;
+ return smooth01(1-h/reach)*(ODDS.lane.base+ODDS.lane.skill*(1+edge(laneRead(o)-skill))/2);
+}
+export type Odds={p:number,why:string[]};
+const why=(list:[number,string][])=>list.filter(x=>x[0]>0).sort((a,b)=>b[0]-a[0]).slice(0,2).map(x=>x[1]);
+/** Words for where the main hinderer stands (or the open space). */
+function placeWhy(list:Interference[]):[number,string][]{
+ const top=list[0];if(!top)return [[.3,'주변 공간 여유']];
+ if(top.where==='front'&&top.i>.3)return [[top.i,'정면 수비 견제']];
+ if(top.where==='side'&&top.i>.2)return [[top.i*.9,'측면 견제']];
+ if(top.where==='behind')return [[.25,'뒤쪽 압박 약함']];
+ return top.i<.15?[[.2,'압박 약함']]:[];
+}
+export function attackOdds(m:Match,a:Action,opts:AttackOptions={}):Odds{
+ if(!attackAllowed(m,a,opts))return {p:0,why:[]};
+ const p=m.players[m.ball.owner!],d=direction(m,p.team),goal={x:d>0?105:0,y:34};
  const passing=['pass','safe','forward','through','cross','cutback'].includes(a);
- // Passes feel pressure less than shots and dribbles (the ball leaves the foot first).
- const penalty=passing?near.count*PASS.crowd+proximity*opponent*PASS.pressure:near.count*.05+proximity*opponent*.12;
- let base=0;
+ const reasons:[number,string][]=[];
+ let base=0,pen=0,mult=1;
+ const shotLike=(r:number,b:number)=>{
+   // Shots: distance/angle/skill base, lane block, then pressure and the keeper as multipliers.
+   const list=interferers(m,p,goal.x-p.x,goal.y-p.y),skill=p.a.composure*.5+p.a.finishing*.3+p.a.strength*.2;
+   const press=Math.min(ODDS.shot.pressMax,covered(list.map(x=>x.i*ODDS.shot.press*(1-ODDS.shot.edgeShare*edge(skill-pressSkill(x.o))))));
+   const block=shotBlockAt(m,p.team,p.x,p.y),g=opponentKeeper(m,p),gq=g?keeperQuality(g):.5;
+   // The keeper: an average one stops gkBase of what would score from 11 m, more from farther (he sees it coming), up to gkMax.
+   const save=Math.min(ODDS.shot.gkMax,ODDS.shot.gkBase+ODDS.shot.gkPerMetre*Math.max(0,r-11));
+   mult=(1-press)*(1-.4*block)*(1-save+ODDS.shot.gk*(.5-gq));
+   reasons.push([r>25?.6:0,'먼 거리'],[r<10?.5:0,'골문 가까움'],[clamp(1-Math.abs(34-p.y)/60,.45,1)<.62?.45:0,'각도 좁음'],[block>.35?block:0,'슈팅 경로 차단'],[press>.12?press+.1:0,'주변 압박'],[gq>.7?.3:gq<.35?.3:0,gq>.7?'골키퍼 강함':'골키퍼 약함']);
+   return b;
+ };
  if(a==='header'||a==='volley'){
    const r=goalDistance(m,p),k=a==='header'?CROSS.header:CROSS.volley;
    const q=a==='header'?(p.a.strength*.45+p.a.finishing*.35+p.a.positioning*.2)/100:(p.a.finishing*.6+p.a.control*.4)/100;
-   base=(k.base+k.skill*q)*clamp((CROSS.reach-r)/12,.25,1)*clamp(1-Math.abs(34-p.y)/60,.45,1);
-   base*=1-.4*shotBlockAt(m,p.team,p.x,p.y);
+   base=shotLike(r,(k.base+k.skill*q)*clamp((CROSS.reach-r)/12,.25,1)*clamp(1-Math.abs(34-p.y)/60,.45,1));
  }
- else if(a==='cross'){
-   const target=m.players.find(q=>q.id===opts.targetId)??crossTarget(m,p);if(!target)return 0;
-   base=CROSS.base+CROSS.skill*(p.a.curve*.45+p.a.longPassing*.35+p.a.vision*.2)/100-Math.min(.18,markers(m,target,3)*CROSS.marker);
+ else if(['shoot','closeShot','longShot','curl'].includes(a))base=shotLike(goalDistance(m,p),baseShotChance(m,p,a));
+ else if(a==='dribble'||a==='hold'){
+   const v=opts.vector??{x:d,y:0},list=interferers(m,p,v.x,v.y);
+   if(a==='dribble'){
+     const skill=dribbleSkill(p);base=ODDS.dribble.free+ODDS.dribble.freeSkill*skill/100;
+     const parts=list.map(x=>({x,e:edge(skill-dribbleStop(x.o))}));
+     pen=covered(parts.map(({x,e})=>x.i*ODDS.dribble.block*(1-ODDS.dribble.edgeShare*e)));
+     const top=parts[0];if(top&&top.x.i>.15)reasons.push([Math.abs(top.e)>.15?.7:0,top.e>0?'돌파 능력 우세':'돌파 능력 열세']);
+   }else{
+     base=.55+.35*p.a.strength/100;
+     pen=covered(list.map(x=>x.i*ODDS.hold.block*(1-ODDS.hold.edgeShare*edge(p.a.strength-x.o.a.strength))));
+   }
+   reasons.push(...placeWhy(list));
  }
- else if(a==='cutback'){
-   const target=m.players.find(q=>q.id===opts.targetId)??cutbackTarget(m,p);if(!target)return 0;
-   base=PASS.base+PASS.skill*p.a.passing/100+PASS.anticipation*p.a.anticipation/100-Math.max(0,distance(p,target)-PASS.shortRange)*PASS.perMetre-Math.min(.2,markers(m,target,3)*.07);
- }
- else if(['shoot','closeShot','longShot','curl'].includes(a)){
-   base=baseShotChance(m,p,a);
-   // A defender farther than the close-pressure radius can still block the shot.
-   base*=1-.4*shotBlockAt(m,p.team,p.x,p.y);
- }
- else if(a==='dribble'){
-   base=.35+.49*Math.pow(p.a.dribbling/100,1.4)+.07*p.a.speed/100+.07*p.a.anticipation/100;
-   const v=opts.vector??{x:direction(m,p.team),y:0},len=Math.hypot(v.x,v.y)||1,dx=v.x/len*4,dy=v.y/len*4;
-   if(m.players.some(o=>{if(o.team===p.team||!active(o))return false;const t=clamp(((o.x-p.x)*dx+(o.y-p.y)*dy)/16,0,1);return Math.hypot(o.x-p.x-dx*t,o.y-p.y-dy*t)<=1;}))base-=.20;
- }else if(a==='hold')base=.55+.35*p.a.strength/100;
  else{
-   const target=m.players.find(q=>q.id===opts.targetId);if(!target||target.team!==p.team||target.id===p.id||!active(target))return 0;
-   // A pass to a runner goes into the space at the end of the run (a through ball).
-   const aim=runPoint(m,target),intoSpace=aim.x!==target.x||aim.y!==target.y;
-   const d=distance(p,aim),longWeight=longPassWeight(d);
-   const skill=p.a.passing*(1-longWeight)+p.a.longPassing*longWeight;
-   // 0.7.1: an unpressured short pass is safe (skill 60 ≈ 89 %, 95 ≈ 97 %); length, a forward or
-   // through ball, an intercepting defender in the lane and pressure on the passer lower it.
-   base=PASS.base+PASS.skill*skill/100+PASS.anticipation*p.a.anticipation/100-Math.max(0,d-PASS.shortRange)*PASS.perMetre;
-   const ahead=(aim.x-p.x)*direction(m,p.team);
-   base-=a==='through'||intoSpace?PASS.through:a==='forward'||(a==='pass'&&ahead>PASS.forwardMetres)?PASS.forward:0;
-   const dx=aim.x-p.x,dy=aim.y-p.y,l=dx*dx+dy*dy||1;
-   let risk=0;
-   for(const o of m.players){if(o.team===p.team||!active(o))continue;const t=((o.x-p.x)*dx+(o.y-p.y)*dy)/l;if(t>.08&&t<.95)risk=Math.max(risk,clamp(1-Math.hypot(o.x-p.x-t*dx,o.y-p.y-t*dy)/3,0,1)*(o.a.anticipation/100));}
-   base-=risk*.18;
+   const target=m.players.find(q=>q.id===opts.targetId)??(a==='cross'?crossTarget(m,p):a==='cutback'?cutbackTarget(m,p):undefined);
+   if(!target||target.team!==p.team||target.id===p.id||!active(target))return {p:0,why:[]};
+   const aim=a==='cross'||a==='cutback'?target:runPoint(m,target),intoSpace=aim.x!==target.x||aim.y!==target.y;
+   const dist=distance(p,aim),longWeight=longPassWeight(dist),skill=p.a.passing*(1-longWeight)+p.a.longPassing*longWeight;
+   if(a==='cross'){
+     base=CROSS.base+CROSS.skill*(p.a.curve*.45+p.a.longPassing*.35+p.a.vision*.2)/100-Math.min(.18,markers(m,target,3)*CROSS.marker);
+     reasons.push([markers(m,target,3)?.5:.3,markers(m,target,3)?'타깃 견제':'노마크 타깃']);
+   }else{
+     // 0.7.1 pass base: an unpressured short pass is safe; length, a forward or through ball lower it.
+     base=PASS.base+PASS.skill*skill/100+PASS.anticipation*p.a.anticipation/100-Math.max(0,dist-PASS.shortRange)*PASS.perMetre;
+     const ahead=(aim.x-p.x)*d;
+     if(a!=='cutback')base-=a==='through'||intoSpace?PASS.through:a==='forward'||(a==='pass'&&ahead>PASS.forwardMetres)?PASS.forward:0;
+     else base-=Math.min(.2,markers(m,target,3)*.07);
+     reasons.push([dist>30?.55:0,'먼 거리'],[intoSpace?.4:0,'뒷공간 패스'],[dist<=PASS.shortRange?.25:0,'짧은 거리']);
+   }
+   // Each opponent once: the larger of his pressure on the passer and his threat to the lane.
+   const near=interferers(m,p,aim.x-p.x,aim.y-p.y),threats:number[]=[];let laneMax=0,pressMax=0;
+   for(const o of m.players){
+     if(o.team===p.team||!active(o)||o.pos==='GK')continue;
+     const lane=a==='cross'?0:laneThreat(o,p,aim,skill),hit=near.find(x=>x.o===o),press=hit?hit.i*ODDS.passer.block*(1-ODDS.passer.edgeShare*edge(skill-pressSkill(o))):0;
+     laneMax=Math.max(laneMax,lane);pressMax=Math.max(pressMax,press);threats.push(Math.max(lane,press));
+   }
+   pen=covered(threats);
+   reasons.push([laneMax>.08?laneMax*3:0,'패스 길 차단'],[pressMax>.05?pressMax*3:0,'패스 전 압박']);
  }
  const boost=m.beatenBoost?.to===p.id&&m.clock<=m.beatenBoost.until?m.beatenBoost.amount:0;
  const playmaker=m.assistBoost?.to===p.id?m.assistBoost.mult:1;
  // 0.9 시그니처 (user only): a small multiplier on the action's base chance.
  const sig=p.fx?.signature?.[passing?'pass':a as SignatureAction]??0;
- return clamp(base*(1+sig)*(.8+p.energy/500)*playmaker-penalty+boost,0,.99);
+ return {p:clamp(base*mult*(1+sig)*(.8+p.energy/500)*playmaker-pen+boost,0,.99),why:why(reasons)};
 }
-export function defenseChance(m:Match,a:DefenseAction,predicted=false):number{
+export function attackChance(m:Match,a:Action,opts:AttackOptions={}){return attackOdds(m,a,opts).p;}
+/** Tackle duel shared by the user's 스탠딩 태클 and the AI's challenges (same edge as a dribble). */
+export const tackleEdge=(def:Footballer,att:Footballer)=>edge(def.a.defending*.75+def.a.strength*.25-ballCarry(att));
+export function defenseOdds(m:Match,a:DefenseAction,predicted=false):Odds{
  const u=m.players[m.userId],o=m.ball.owner===null?null:m.players[m.ball.owner];
- if(!o||o.team===u.team||!active(u)||distance(u,o)>6)return 0;
- if(a==='predict')return (defenseChance(m,'tackle',true)+defenseChance(m,'slide',true)+defenseChance(m,'press',true))/3;
- const gap=distance(u,o),skill=a==='slide'?u.a.sliding:a==='press'?u.a.marking:u.a.defending;
- const opponent=(o.a.control*.45+o.a.dribbling*.4+o.a.strength*.15)/100;
- const base=a==='slide'?.15+.32*skill/100+.10*u.a.strength/100:a==='press'?.49+.28*skill/100+.10*u.a.strength/100-gap*.018:.38+.32*skill/100+.10*u.a.strength/100-gap*.035;
+ if(!o||o.team===u.team||!active(u)||distance(u,o)>6)return {p:0,why:[]};
+ if(a==='predict'){const p=(defenseOdds(m,'tackle',true).p+defenseOdds(m,'slide',true).p+defenseOdds(m,'press',true).p)/3;return {p,why:['세 수비 중 무작위','예측력 보너스']};}
+ const gap=distance(u,o),k=a==='slide'?ODDS.slide:a==='press'?ODDS.press:ODDS.tackle;
+ const skill=a==='slide'?u.a.sliding:a==='press'?u.a.marking:u.a.defending;
+ const e=a==='slide'?edge(u.a.sliding*.75+u.a.strength*.25-ballCarry(o)):a==='press'?edge(u.a.marking*.6+u.a.anticipation*.25+u.a.speed*.15-ballCarry(o)):tackleEdge(u,o);
+ const base=k.base+k.skill*skill/100+.10*u.a.strength/100-(a==='press'?gap*.018:a==='tackle'?gap*.035:0)+k.edge*e;
  const sig=u.fx?.signature?.[a as SignatureAction]??0;
- return clamp(base*(1+sig)*(.8+u.energy/500)-opponent*.12+(predicted?u.a.anticipation/100*.10:0),.02,.95);
+ const reasons:[number,string][]=[[Math.abs(e)>.15?.7:0,e>0?'수비 능력 우세':'수비 능력 열세'],[a!=='slide'&&gap>3.5?.5:0,'거리 멂'],[a!=='slide'&&gap<2?.4:0,'바짝 붙음']];
+ return {p:clamp(base*(1+sig)*(.8+u.energy/500)+(predicted?u.a.anticipation/100*.10:0),.02,.95),why:why(reasons)};
 }
+export function defenseChance(m:Match,a:DefenseAction,predicted=false):number{return defenseOdds(m,a,predicted).p;}
 export function matchCommentary(m:Match){
  const u=m.players[m.userId],o=m.ball.owner===null?null:m.players[m.ball.owner];
  if(m.ended)return '경기 종료 휘슬! 선수들이 오늘의 승부를 마무리합니다.';

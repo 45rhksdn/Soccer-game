@@ -1168,7 +1168,7 @@ export default function App() {
               SOCCER CAREER <b>NEW ERA</b>
             </span>
             <span>한 명의 선수. 무한한 가능성.</span>
-            <small>CAREER BETA · 0.10</small>
+            <small>CAREER BETA · 0.11</small>
           </footer>
         </main>
       </div>

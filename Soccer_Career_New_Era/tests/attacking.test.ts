@@ -55,11 +55,12 @@ it('a forward running in behind is passed to at the end of his run (a through ba
 
 it('the box is occupied in the final third and the back line drops with the ball',()=>{
   const m=createMatch(99,{name:'u',pos:'ST',a:attributes(60),energy:100});const d=direction(m,0),goal=d>0?105:0;
-  const cm=m.players.find(p=>p.team===0&&p.pos==='CM')!;cm.x=goal-d*30;cm.y=40;m.ball={x:cm.x,y:cm.y,owner:cm.id,flight:null};m.nextAI=99;m.cooldown=99;
+  const cm=m.players.find(p=>p.team===0&&p.pos==='CM')!;cm.x=goal-d*30;cm.y=40;m.ball={x:cm.x,y:cm.y,owner:cm.id,flight:null};m.nextAI=99;m.cooldown=99;m.decision=false;
   for(let i=0;i<12;i++){step(m,.5,true);m.ball.owner=cm.id;cm.x=goal-d*30;cm.y=40;m.nextAI=99;m.cooldown=99;}
   const st=m.players.find(p=>p.team===0&&p.pos==='ST')!,cbs=m.players.filter(p=>p.team===1&&p.pos==='CB');
   const depth=(x:number)=>Math.abs(goal-x);
-  expect(Math.max(...cbs.map(p=>depth(p.x)))).toBeLessThan(18);   // the line has dropped to the box edge
+  // The back line (not the one centre-back stepping out to press the ball) has dropped to the box edge.
+  expect(Math.max(...cbs.filter(p=>p.mode!=='press').map(p=>depth(p.x)))).toBeLessThan(18);
   expect(depth(st.x)).toBeLessThan(20);                             // the striker plays on that line
 });
 

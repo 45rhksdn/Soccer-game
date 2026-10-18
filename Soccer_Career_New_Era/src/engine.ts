@@ -1,4 +1,4 @@
-import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, runPoint, crossTarget, cutbackTarget, boxMates, type AttackOptions } from "./tactical";
+import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, runPoint, crossTarget, cutbackTarget, boxMates, tackleEdge, ODDS, type AttackOptions } from "./tactical";
 /** Weight of an open shooting lane when attackers pick their receiving spot near goal. */
 export const SHOT_LANE_WEIGHT = 3;
 /** Pure seeded football simulation. No DOM, timers, or external services. Pitch 105 x 68m. */
@@ -392,7 +392,7 @@ export const ON_LINE_RANGE = 62;
 /** Pass-target bonus for returning a give-and-go to the user. */
 export const ONE_TWO_BONUS = 8;
 /** AI preferences for the 0.10 actions (balance.test keeps the totals in range). */
-export const AI = { midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35 } as const;
+export const AI = { hopelessShot: .07, midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35 } as const;
 /** Missed shots that go out for a corner; saves parried for a corner; saves that drop loose in the box. */
 export const SET_PIECE = { cornerFromMiss: .3, cornerFromSave: .18, rebound: .14 } as const;
 /** Share of the new step taken each tick (the rest keeps the previous step), before acceleration. */
@@ -615,7 +615,7 @@ export function chooseAction(m: Match, p: Footballer): Action {
   for (const a of acts) {
     let utility = actionChance(m, a);
     if (a === "shoot")
-      utility = actionChance(m,a) * 7.5 + (distance < 22 ? .65 : distance < 35 ? AI.midRangeShot : -.32) - (actionChance(m,a)<.04?1:0);
+      utility = actionChance(m,a) * 7.5 + (distance < 22 ? .65 : distance < 35 ? AI.midRangeShot : -.32) - (actionChance(m,a)<AI.hopelessShot?1:0);
     if (a === "forward") utility += 0.12;
     if (a === "through") utility += p.a.vision / 550;
     if (a === "safe") utility -= 0.05;
@@ -1076,8 +1076,8 @@ export function step(m: Match, dt = 0.5, auto = false) {
           m.cooldown = 3;
           owner.x = clamp(owner.x, 4, 101);
         } else if (
-          random(m) <
-          0.4 + (near.a.defending - owner.a.control) / 180
+          // 0.11 the AI's challenge uses the same tackle duel as the user's 스탠딩 태클.
+          random(m) < clamp(ODDS.tackle.base + ODDS.tackle.edge * tackleEdge(near, owner), .1, .85)
         ) {
           near.stats.tackles++;
           owner.stats.losses++;
