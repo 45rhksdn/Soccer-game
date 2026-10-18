@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {newCareer} from '../src/career';
 import {attributes} from '../src/engine';
-import {generateOffers,clubLevel,offerDetails,OFFER_FIT,type World} from '../src/world';
+import {generateOffers,clubLevel,offerDetails,OFFER_FIT,MAX_OFFERS,type World} from '../src/world';
 import {scoutInterest,INTEREST_FIT} from '../src/development';
 import {roleAbility,ROLE_KEYS} from '../src/roles';
 
@@ -42,4 +42,16 @@ it('club interest comes only from clubs near the player\'s level',()=>{
     scoutInterest(c);
     for(const id of c.development.interestIds){const club=c.world.clubs.find(x=>x.id===id)!;expect(Math.abs(clubLevel(club,'ST')-roleAbility(c.player.a,'ST'))).toBeLessThanOrEqual(INTEREST_FIT);}
   }
+});
+
+it('0.9.1: at most 6 clubs bid, spread over several leagues; the renewal is always kept',()=>{
+  let full=0;
+  for(const pos of ['ST','CB','CM'] as const)for(const level of [50,58,64,70,76,82,88])for(const seed of [1,2,3]){
+    const c=make(pos,seed);c.world.interestedClubIds=[];generateOffers(c.world,player(pos,level,20),6.8);
+    expect(c.world.offers.length).toBeLessThanOrEqual(MAX_OFFERS);
+    if(c.world.offers.length===MAX_OFFERS){full++;expect(new Set(offered(c.world).map(x=>x.league)).size).toBeGreaterThanOrEqual(3);}
+  }
+  expect(full).toBeGreaterThan(0);
+  const c=make('CM',1);c.world.clubId=c.world.clubs.find(x=>x.league===1)!.id;c.world.contract={salary:300,years:1};
+  generateOffers(c.world,player('CM',70,24),6.8);expect(c.world.offers.some(o=>o.clubId===c.world.clubId)).toBe(true);
 });

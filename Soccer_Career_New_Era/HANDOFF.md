@@ -1,3 +1,15 @@
+# 0.9.1 (2026-10-18, Claude, `claude/v0.9.1-on-transfers` ← Codex `codex/v0.9-world-transfers` 958d9ba)
+Codex v0.9(11개 리그·이적 데스크) 위에 사용자 요청 5가지를 반영했다. Codex 브랜치는 직접 수정하지 않았고, PR은 Codex 브랜치로 보낸다.
+1. 졸업이나 계약 만료 시 '다음 시즌 시작'을 누르면 안내와 함께 이적 시장으로 이동한다(`career.contractNeeded` → `WorldPanel.onNeedContract`).
+2. 이적 화면의 '에이전트와 커리어 계획'(우선순위·꿈의 구단·성장 경로 추천)을 제거했다. 엔진의 `targetClubId`와 `priority` 로직은 남겨 두었다. 대신 저장을 불러올 때 두 값을 지워(`storage.validate`) 보이지 않는 설정이 제안에 영향을 주지 않게 했다.
+3. 제안은 최대 6개다(`world.MAX_OFFERS`, `pickOffers`). 재계약·목표·공식 관심 구단을 먼저 넣고, 남은 자리는 리그를 번갈아 채운다.
+4. 홈 인사말을 없앴고, '지난주 주요 뉴스'는 압축해 중요한 2개만 보여 준다(`engagement.headlines`).
+   - 깨달음, 럭키, 사소한 라이벌 소식(`HIDDEN_NEWS`: lucky, insight, rival)은 피드에 나오지 않는다.
+   - 라이벌 소식은 이적과 평점 7.5 이상 경기만 남는다. 0.9.0의 주간 맞대결 뉴스와 OVR 역전 뉴스는 없앴다.
+5. 오늘의 일정 화면을 압축했다(훈련 6종은 작은 타일로, 휴식·휴양은 2칸).
+
+---
+
 # 배포 완료 — v0.9 통합 (2026-10-18)
 
 게임: https://soccer-new-era-v05.spicy-vine-2764.chatgpt.site (주소를 유지해 브라우저 저장을 이어 사용). Site 소스 `a68268a`, 앱 코드 GitHub `f483940`, PR #9. Claude와 다음 협업은 `codex/v0.9-world-transfers` 최신 HEAD를 기준으로 한다. main 및 Claude 원본 브랜치는 직접 덮어쓰지 않았다.

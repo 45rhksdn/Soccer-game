@@ -7,7 +7,7 @@
  */
 import {seedFrom} from './traits';
 import {overall,userPerformance,type Match,type MatchMission,type Position,type SignatureAction,type Stat} from './engine';
-import {news} from './development';
+import {news,HIDDEN_NEWS,type News} from './development';
 import {clubOf} from './world';
 import {leagueLevel} from './leagues';
 import type {Career} from './career';
@@ -141,16 +141,15 @@ export function seasonCompare(c:Career):{me:SeasonLine,rival:SeasonLine}{
  return {me:{apps:mine.length,goals:mine.reduce((a,h)=>a+h.stats.goals,0),avg:avg(mine.map(h=>h.rating)),ovr:overall(c.player.a)},
   rival:{apps:theirs.length,goals:theirs.reduce((a,h)=>a+h.goals,0),avg:avg(theirs.map(h=>h.rating)),ovr:overall(r.player.a)}};
 }
-/** After a match: who played better this week, and an OVR overtake in either direction. */
-export function rivalNews(c:Career){
- const r=c.development.rival,d=c.development;if(r.retired)return;
- const mine=c.history[0],theirs=r.history[0];
- if(mine?.id===c.week&&mine.rating>0&&theirs?.week===c.week&&theirs.rating>0){
-  if(theirs.rating>mine.rating)news(c,`라이벌 ${r.player.name} · 이번 주 평점 ${theirs.rating.toFixed(1)}${theirs.goals?` · ${theirs.goals}골`:''} — 당신(${mine.rating.toFixed(1)})보다 앞섰습니다.`);
-  else if(mine.rating>theirs.rating)news(c,`이번 주는 당신의 승리! 평점 ${mine.rating.toFixed(1)}로 라이벌 ${r.player.name}(${theirs.rating.toFixed(1)})을 앞섰습니다.`);
- }
- const ahead=overall(c.player.a)>overall(r.player.a);
- if(d.rivalAhead!==undefined&&ahead!==d.rivalAhead)news(c,ahead?`능력치 역전! OVR에서 라이벌 ${r.player.name}을 앞질렀습니다.`:`라이벌 ${r.player.name}이 OVR에서 당신을 앞질렀습니다. 다시 따라잡을 차례입니다.`);
- d.rivalAhead=ahead;
+// ── 홈 '지난주 주요 뉴스' ─────────────────────────────────────────────
+/**
+ * 0.9.1: the two most important lines of the last 7 days. 깨달음 / 럭키 and minor rival notes are never
+ * shown (HIDDEN_NEWS); rival news is limited to transfers and high-rated matches.
+ */
+export function headlines(c:Career,count=2){
+ const weight=(n:News)=>n.kind==='offer'||n.text.includes('입단')?5:n.text.startsWith('시그니처')?4:n.kind==='rating'&&!n.text.startsWith('라이벌')?3:n.text.startsWith('감독 미션 달성')?2:n.kind==='rating'?2:1;
+ return c.development.news.map((n,i)=>({n,i}))
+  .filter(({n})=>n.day>=c.day-7&&!HIDDEN_NEWS.includes(n.kind)&&!n.text.startsWith('보유 특성'))
+  .sort((a,b)=>weight(b.n)-weight(a.n)||a.i-b.i).slice(0,count).map(x=>x.n);
 }
 
