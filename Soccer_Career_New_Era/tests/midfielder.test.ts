@@ -17,7 +17,8 @@ it('a clear shooting opportunity is evaluated on the next tick after reception',
  const m=createMatch(7,user);m.decision=false;m.cooldown=0;for(const p of m.players)if(p.team===1&&p.pos!=='GK'){p.x=30;p.y=5;}
  m.ball.owner=null;m.ball.flight={from:5,to:9,kind:'pass',startX:80,startY:34,x:94,y:34,progress:0,duration:.5,success:true,xg:0};
  step(m,.5,false);expect(m.ball.owner).toBe(9);expect(m.nextAI).toBe(.5);
- step(m,.5,false);expect(m.ball.flight?.kind).toBe('shot');expect(m.lastPass?.from).toBe(5);
+ // 0.14 the shot takes the pass with it (assist credited from the flight; a rebound earns none).
+ step(m,.5,false);expect(m.ball.flight?.kind).toBe('shot');expect(m.ball.flight?.assistFrom).toBe(5);expect(m.lastPass).toBeNull();
 });
 
 it('a defender in the shooting lane matters beyond close-pressure distance',()=>{

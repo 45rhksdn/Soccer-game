@@ -1,0 +1,33 @@
+{
+  "model": "12 seeds × 17 ages × 12 weeks; training/recovery only, not full matches",
+  "result": [
+    {
+      "traits": "없음",
+      "meanPassingAt32": 81.47457821841381
+    },
+    {
+      "traits": "천재",
+      "meanPassingAt32": 83.08896287073586
+    },
+    {
+      "traits": "행운아",
+      "meanPassingAt32": 82.3314017286469
+    },
+    {
+      "traits": "유리몸",
+      "meanPassingAt32": 81.34121958540335
+    },
+    {
+      "traits": "강철몸",
+      "meanPassingAt32": 81.47457821841381
+    },
+    {
+      "traits": "불운",
+      "meanPassingAt32": 80.70649307805597
+    },
+    {
+      "traits": "게으름",
+      "meanPassingAt32": 80.49874182680703
+    }
+  ]
+}

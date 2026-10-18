@@ -24,11 +24,11 @@ it('NPC weekly injuries follow trait multipliers and recover week by week',()=>{
   const count=(traits:string[])=>{for(const p of all())p.traits=[...traits];let hurt=0,total=0;for(let week=0;week<300;week++){for(const p of all())delete p.injuryWeeks;npcInjuryWeek(w,week);for(const p of all()){total++;if(p.injuryWeeks)hurt++;}}return hurt/total;};
   const plain=count([]),glass=count(['유리몸']),tough=count(['회복력']);
   expect(plain).toBeGreaterThan(NPC_WEEKLY_INJURY*.8);expect(plain).toBeLessThan(NPC_WEEKLY_INJURY*1.2);
-  expect(glass/plain).toBeGreaterThan(1.3);expect(tough/plain).toBeLessThan(.65);
-  // recovery: 3 weeks → 0 after three weekly ticks; 회복력 shortens and 잔부상 lengthens the injury (via injuryWeeks)
+  expect(glass/plain).toBeGreaterThan(1.15);expect(glass/plain).toBeLessThan(1.35);expect(tough/plain).toBeGreaterThan(.7);expect(tough/plain).toBeLessThan(.9);
+  // recovery: 3 weeks → 0 after three weekly ticks; 회복력 shortens and 잔부상 changes risk without lengthening the injury (via injuryWeeks)
   const p=all()[3];p.traits=[];p.injuryWeeks=3;for(let i=0;i<3;i++)npcInjuryWeek(w,1000+i,all().filter(x=>x!==p).map(x=>x.id));expect(p.injuryWeeks).toBeUndefined();
   expect(matchInjury(1,'x',80,[])).toBe(0);
-  let longer=0;for(let s=0;s<4000;s++){const a=matchInjury(s,'k',10,['잔부상']);if(a){expect(a).toBe(3);longer++;}const b=matchInjury(s,'k',10,['회복력']);if(b)expect(b).toBe(1);}
+  let longer=0;for(let s=0;s<4000;s++){const a=matchInjury(s,'k',10,['잔부상']);if(a){expect(a).toBe(2);longer++;}const b=matchInjury(s,'k',10,['회복력']);if(b)expect(b).toBe(1);}
   expect(longer).toBeGreaterThan(0);
   expect(npcRecovery({traits:['강철 체력']} as RosterPlayer)).toBeGreaterThan(npcRecovery({traits:[]} as RosterPlayer));
   expect(npcRecovery({traits:['유리몸']} as RosterPlayer)).toBeLessThan(8);

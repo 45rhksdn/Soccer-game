@@ -6,6 +6,7 @@ import {roleAbility} from './roles';
 import {rollTraits,seedFrom} from './traits';
 import {newCareer,type Career} from './career';
 import {schoolById,type School} from './schools';
+import {playerStory} from './stories';
 
 export const CANDIDATES_PER_LIST=6;
 export const FIELD_POSITIONS:Position[]=['ST','CM','CB','LW','RW','LB','RB'];
@@ -84,6 +85,9 @@ export function careerFromCandidate(c:Candidate,scoutSeed:number,school:School=s
     {name:c.name,age:c.age,pos:c.pos,secondary:c.secondary,foot:c.foot,height:c.height,weight:c.weight,style:c.style,curve:c.curve},
     worldSlotFor(school.id),
     seedFrom(scoutSeed,'career:'+c.id),
-    {a:c.a,potential:c.potential,learning:c.learning,traits:c.traits,schoolRef:{id:school.id,name:school.name,region:school.region},id},
+    {a:c.a,potential:c.potential,learning:c.learning,traits:c.traits,schoolRef:{id:school.id,name:school.name,region:school.region},id,storyId:c.id},
   );
 }
+
+/** 0.14 the candidate's back-story at this school (the same text the signed career keeps). */
+export const candidateStory=(c:Candidate,school:School|undefined=schoolById(c.schoolId))=>playerStory(c,school?{name:school.name,region:school.region,affiliation:school.affiliation}:null,c.id);

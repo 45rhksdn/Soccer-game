@@ -68,6 +68,10 @@ export function validate(raw: unknown): Career {
   if (!raw || typeof raw !== "object")
     throw Error("저장 파일 형식이 올바르지 않습니다.");
   const c = structuredClone(raw) as Career;
+  if(c.story!==undefined){const s=c.story;
+    if(!s||typeof s.intro!=='string'||!Number.isFinite(s.startAge)||!Number.isFinite(s.startOverall)||!Array.isArray(s.ageRecords)||s.ageRecords.some(r=>!r||!Number.isFinite(r.age)||!Number.isFinite(r.overall))
+      ||(s.headline!==undefined&&typeof s.headline!=='string')||(s.quote!==undefined&&typeof s.quote!=='string')||(s.chapters!==undefined&&(!Array.isArray(s.chapters)||s.chapters.some(x=>typeof x!=='string'))))throw Error('선수 이야기 데이터가 손상되었습니다.');
+  }
   if ((c as { version: number }).version === 1) {
     (c as {version:number}).version = 2;
     c.growth ??= [{ week: c.week, overall: 45 }];

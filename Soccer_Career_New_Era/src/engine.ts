@@ -154,6 +154,8 @@ export type Ball = {
     interceptor?: number;
     /** 0.9: the shot the player chose (counts 중거리 슛 / 감아차기 goals). */
     shotType?: Action;
+    /** 0.14 the teammate whose pass this shooter received (possession never lost since): credited if it goes in. */
+    assistFrom?: number;
     /** 0.10 a lofted cross: the receiver meets it in the air (header / volley). */
     aerial?: boolean;
   };
@@ -683,14 +685,19 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
     m.shots[p.team]++;
     const xg = chance;
     m.xg[p.team] += xg;
-    // Credit the creator at the shot, independent of the finisher's outcome.
-    if (m.lastPass?.to === p.id && m.clock - m.lastPass.time < 90) {
+    // 0.14 assist rule: the last teammate who passed to the shooter, as long as the team has not lost the ball
+    // since (any number of dribbles or holds in between, no time limit). Credited at the shot (key pass / xA) and,
+    // if it goes in, as the assist. The pass is used up by the shot: a rebound or second ball earns no assist.
+    let assistFrom: number | undefined;
+    if (m.lastPass?.to === p.id) {
       const creator = m.players[m.lastPass.from];
       if (creator.team === p.team && creator.id !== p.id) {
+        assistFrom = creator.id;
         creator.stats.keyPasses = (creator.stats.keyPasses ?? 0) + 1;
         creator.stats.expectedAssists = (creator.stats.expectedAssists ?? 0) + xg;
       }
     }
+    m.lastPass = null;
     const targetChance = Math.max(
       xg,
       clamp(0.35 + p.a.shooting / 220 - pressure(m, p) * 0.06, 0.2, 0.8),
@@ -711,6 +718,7 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
       onTarget,
       xg,
       shotType: action,
+      assistFrom,
     };
     m.ball.owner = null;
     event(m, action === "header" ? `${p.name}, 헤더! 골문을 노립니다!` : action === "volley" ? `${p.name}, 발리 슛! 골문을 노립니다!` : `${p.name}, ${ACTIONS[action]}! 골문을 노립니다!`);
@@ -1046,7 +1054,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
           from.stats.goals++;
           if (f.shotType === "curl") from.stats.curlGoals = (from.stats.curlGoals ?? 0) + 1;
           else if (f.shotType === "longShot") from.stats.longShotGoals = (from.stats.longShotGoals ?? 0) + 1;
-          const assister = m.lastPass?.to === from.id && m.clock - m.lastPass.time < 90 ? m.players[m.lastPass.from] : null;
+          const assister = f.assistFrom === undefined ? null : m.players[f.assistFrom];
           if (assister) assister.stats.assists++;
           (m.goals??=[]).push({id:(m.goals?.length??0)+1,time:m.clock,scorer:from.name,assister:assister?.name??null,team:from.team});
           // 분위기 메이커: the conceding team's momentum ends; a scorer/assister with the effect starts it.

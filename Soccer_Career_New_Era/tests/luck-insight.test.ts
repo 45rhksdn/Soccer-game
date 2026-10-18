@@ -8,25 +8,25 @@ const profile={name:'확률선수',age:16,pos:'CM' as const,secondary:'ST' as co
 const career=(seed=31)=>newCareer(profile,0,seed);
 function seedFor(lo:number,hi:number){for(let i=0;i<200000;i++){const v=random({seed:i});if(v>=lo&&v<hi)return i;}throw Error('seed');}
 
-it('insight: 0.5 % per action, 행운아 1.5 %, 불운 ⅓ — independent of age',()=>{
+it('insight: 0.5 % per action, 행운아 0.75 %, 불운 ×0.75 — independent of age',()=>{
   expect(INSIGHT_CHANCE).toBe(.005);
-  expect(insightChance([])).toBe(.005);expect(insightChance(['행운아'])).toBeCloseTo(.015,12);expect(insightChance(['불운'])).toBeCloseTo(.005/3,12);
-  expect(insightChance(['행운아','천재'])).toBeCloseTo(.015,12);
+  expect(insightChance([])).toBe(.005);expect(insightChance(['행운아'])).toBeCloseTo(.0075,12);expect(insightChance(['불운'])).toBeCloseTo(.005*.75,12);
+  expect(insightChance(['행운아','천재'])).toBeCloseTo(.0075,12);
 });
 
-it('training lucky by age: ≤20 4.5 %, 21–24 3.5 %, 25–32 2.5 %, 33+ 0.5 %; 행운아 ×3, 불운 ×⅓',()=>{
+it('training lucky by age: ≤20 4.5 %, 21–24 3.5 %, 25–32 2.5 %, 33+ 0.5 %; 행운아 ×1.5, 불운 ×0.75',()=>{
   const table:[number,number][]=[[16,.045],[20,.045],[21,.035],[24,.035],[25,.025],[32,.025],[33,.005],[35,.005]];
   for(const [age,chance] of table){
     expect(trainingLuckBase(age)).toBe(chance);
     expect(trainingLuckChance([],age)).toBeCloseTo(chance,12);
-    expect(trainingLuckChance(['행운아'],age)).toBeCloseTo(chance*3,12);
-    expect(trainingLuckChance(['불운'],age)).toBeCloseTo(chance/3,12);
+    expect(trainingLuckChance(['행운아'],age)).toBeCloseTo(chance*1.5,12);
+    expect(trainingLuckChance(['불운'],age)).toBeCloseTo(chance*.75,12);
   }
   expect(luckMultiplier(['노력파'])).toBe(1);
 });
 
-it('measured rates: training lucky follows the age table, insight per attempt follows 0.5 / 1.5 %',()=>{
-  for(const [age,traits,expected] of [[17,[],.045],[22,[],.035],[29,['행운아'],.075],[34,[],.005]] as [number,string[],number][]){
+it('measured rates: training lucky follows the age table, insight per attempt follows 0.5 / 0.75 %',()=>{
+  for(const [age,traits,expected] of [[17,[],.045],[22,[],.035],[29,['행운아'],.0375],[34,[],.005]] as [number,string[],number][]){
     const c=career(age);c.player.age=age;c.player.potential=99;let hits=0;const n=6000;
     for(let i=0;i<n;i++){c.player.energy=100;c.player.fatigue=0;c.player.a=attributes(40);applyDaily(c,c.player,'passing',traits);if(c.development.news[0]?.kind==='lucky'){hits++;c.development.news.shift();}}
     const rate=hits/n;expect(rate).toBeGreaterThan(expected*.75-.002);expect(rate).toBeLessThan(expected*1.25+.002);
