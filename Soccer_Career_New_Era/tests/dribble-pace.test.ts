@@ -19,13 +19,18 @@ const fwd=(d:number)=>({x:d,y:0});
 const speed=(v:number)=>({speed:v,acceleration:v});
 const dribble=(m:Match,d:number,run=false)=>actionChance(m,'dribble',run?{vector:fwd(d),run}:{vector:fwd(d)});
 
-it('an open path is near-certain: only the touch can fail (95–99%, never 100%)',()=>{
+// 0.14 beginners lose up to 10% (dribbleSkill 50 → 70 fades it out).
+const lowCut=(u:{a:Attributes})=>{const k=u.a.dribbling*.6+u.a.speed*.15+u.a.acceleration*.1+u.a.anticipation*.15,L=ODDS.lowSkill;return 1-L.cut*Math.min(1,Math.max(0,(L.none-k)/(L.none-L.full)));};
+it('an open path is near-certain for a skilled dribbler (95–99%, never 100%); a beginner about 10% lower',()=>{
   for(const r of [40,50,60,75,90,99]){
     const s=scene({x:50,y:34,a:r},[]);const p=dribble(s.m,s.d);
-    expect(p).toBeGreaterThanOrEqual(.95);expect(p).toBeLessThan(1);expect(p).toBeCloseTo(Math.min(.99,touchChance(s.u)),12);
+    expect(p).toBeLessThan(1);expect(p).toBeCloseTo(Math.min(.99,touchChance(s.u)*lowCut(s.u)),12);
+    expect(p).toBeGreaterThanOrEqual(r>=70?.95:.85);
   }
+  const beginner=scene({x:50,y:34,a:45},[]);expect(dribble(beginner.m,beginner.d)).toBeCloseTo(touchChance(beginner.u)*.9,12);
+  expect(attackOdds(beginner.m,'dribble',{vector:fwd(beginner.d)}).why).toContain('진행 방향 공간 열림');
   // A defender beside the path but well clear of it hardly matters; one standing 10 m ahead is beyond the reach.
-  const far=scene({x:50,y:34},[{x:61,y:34}]);expect(dribble(far.m,far.d)).toBeCloseTo(touchChance(far.u),12);
+  const far=scene({x:50,y:34},[{x:61,y:34}]);expect(dribble(far.m,far.d)).toBeCloseTo(touchChance(far.u)*lowCut(far.u),12);
   // Fatigue and a poor first touch still cost a little.
   const tired=scene({x:50,y:34,a:40},[]);const fresh=dribble(tired.m,tired.d);tired.u.energy=30;
   expect(dribble(tired.m,tired.d)).toBeLessThan(fresh);
@@ -33,7 +38,7 @@ it('an open path is near-certain: only the touch can fail (95–99%, never 100%)
 });
 
 it('a defender walking into the path lowers the chance smoothly and monotonically',()=>{
-  let last=1;
+  let last=dribble(scene({x:50,y:34},[{x:62.25,y:34.5}]).m,direction(createMatch(777,{name:'나',pos:'ST',a:attributes(60),energy:100}),0));
   for(let gap=12;gap>=2.5;gap-=.25){
     const s=scene({x:50,y:34},[{x:50+gap,y:34.5}]);const p=dribble(s.m,s.d);
     expect(p).toBeLessThanOrEqual(last+1e-12);expect(last-p).toBeLessThan(.06);last=p;

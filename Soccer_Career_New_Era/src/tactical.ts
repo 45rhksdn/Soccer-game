@@ -109,6 +109,8 @@ export const ODDS={
  reachFront:8,reachSide:6,dirFloor:.2,dirPow:1.3,cover:[1,.7,.45,.3],gkReach:3,closeBlend:3,
  // 0.12 a dribble fails in two ways: a loose touch (no opponent needed) or a defender winning the ball.
  dribble:{touch:.93,touchSkill:.065,touchTired:.05,block:.8,edgeShare:.75},
+ // 0.14 beginners: a low absolute dribbling skill (dribbleSkill ≤ 50) loses 10% of the success chance, fading out by 70.
+ lowSkill:{full:50,none:70,cut:.1},
  // 0.12 치고 달리기: a longer, looser touch; its duel is a sprint (pace), the path reaches farther.
  run:{touch:.84,touchSkill:.1,touchTired:.08,block:.72,paceShare:.85,skillShare:.2,reach:1.45,energy:3},
  // 0.12 pace race per hinderer: how much a pace gap shrinks (faster) or grows (slower) his interference,
@@ -264,7 +266,9 @@ export function attackOdds(m:Match,a:Action,opts:AttackOptions={}):Odds{
      const parts=list.map(x=>{const r=paced(x,myPace,run),e=run?edge(myPace-paceOf(x.o))*paceWeight(x.cos,x.dist,true)*ODDS.run.paceShare+edge(skill-dribbleStop(x.o))*ODDS.run.skillShare:edge(skill-dribbleStop(x.o));
        return {x,pe:r.e,e,v:r.i*(run?ODDS.run.block:ODDS.dribble.block)*(1-(run?1:ODDS.dribble.edgeShare)*clamp(e,-1,1))};});
      const steal=clamp(covered(parts.map(x=>x.v)),0,1);
-     base=touch*(1-steal);energyless=true;
+     const L=ODDS.lowSkill,low=clamp((L.none-skill)/(L.none-L.full),0,1);
+     base=touch*(1-steal)*(1-L.cut*low);energyless=true;
+     if(low>.5)reasons.push([.3,'드리블 기술 미숙']);
      const top=parts[0];
      if(top&&top.x.i>.12){
        if(!run)reasons.push([Math.abs(top.e)>.15?.7:0,top.e>0?'돌파 능력 우세':'돌파 능력 열세']);
