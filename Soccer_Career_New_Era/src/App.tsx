@@ -421,7 +421,7 @@ export default function App() {
         </div>
         <div className="version">
           <span className="dot" /> 오프라인 플레이 지원
-          <small>0.6 · 수비 선택 · 맞춤 이적 제안</small>
+          <small>0.13 · 선수 발굴 · 커리어 계승</small>
         </div>
       </aside>
       <div className="workspace">

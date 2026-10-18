@@ -41,7 +41,7 @@ it('user, rival and NPCs age with the same model',()=>{
   expect(c.player.age).toBe(33);expect(c.player.a).toEqual(expected);expect(r.player.a).toEqual(expected);
   for(const k of ATTRS)expect(npc.a[k]).toBeCloseTo(expected[k],10);
   // Growth types still differ: a 조기 노화 NPC declines earlier.
-  const w=newCareer(profile,0,92).world,p=w.clubs[19].roster[4];p.traits=['조기 노화'];p.age=29;p.a=attributes(80);p.potential=80;advanceWorldYear(w);
+  const w=newCareer(profile,0,92).world,p=w.clubs[19].roster[4];p.traits=['조기 노화'];p.age=31;p.a=attributes(80);p.potential=80;advanceWorldYear(w);
   expect(p.a.speed).toBeCloseTo(80-agingLoss(['조기 노화'],32,'speed'),10);
   void ageRival;
 });
