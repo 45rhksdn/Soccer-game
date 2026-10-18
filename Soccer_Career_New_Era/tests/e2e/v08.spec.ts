@@ -19,7 +19,8 @@ test('vertical pitch: the whole pitch fits the screen, probabilities are words',
   const box=(await canvas.boundingBox())!,vh=page.viewportSize()!.height;
   expect(box.height>box.width).toBe(true);expect(box.height<=vh).toBe(true);
   expect(box.y>=0&&box.y+box.height<=vh).toBe(true); // fully on screen when the match opens
-  await expect(page.locator('.match-actions')).toContainText(/(매우 낮은|낮은|중간|높은|매우 높은) 확률/);
+  // 0.11: shots show a band; pass / dribble show a provisional bar until a teammate / direction is chosen.
+  await expect(page.locator('.match-actions')).toContainText(/(매우 낮은|낮은|중간|높은|매우 높은) 확률|동료를 고르면 확정|방향을 고르면 확정/);
   await noPercent(page,'.match-actions');
   await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/}).click();await noPercent(page,'.match-actions');
   await page.screenshot({path:`reports/${info.project.name}-v08-vertical.png`});
@@ -65,6 +66,6 @@ test('choosing 드리블 turns its tile into a direction pad; 예측 수비 show
 
 test('dribble and pass tiles also show a gauge bar',async({page})=>{
   await load(page,fixture());const attack=page.getByRole('group',{name:'공격 선택'});
-  for(const name of [/드리블/,/^패스/]){const tile=attack.getByRole('button',{name});await expect(tile.locator('.chance-bar .fill')).toHaveCount(1);await expect(tile).toContainText(/확률/);await expect(tile).not.toContainText(/득점 ·|앞으로 ·|추천 동료|방향 선택|동료 선택/);}
+  for(const name of [/드리블/,/^패스/]){const tile=attack.getByRole('button',{name});await expect(tile.locator('.chance-bar .fill')).toHaveCount(1);await expect(tile).toContainText(/고르면 확정/);await expect(tile).not.toContainText(/득점 ·|앞으로 ·|추천 동료|방향 선택|동료 선택/);}
 });
 

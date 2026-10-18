@@ -105,8 +105,8 @@ export const PASS={base:.74,skill:.22,anticipation:.03,shortRange:12,perMetre:.0
  */
 export const ODDS={
  edgeScale:25,
- reachFront:8,reachSide:5,dirFloor:.2,dirPow:1.3,cover:[1,.7,.45,.3],gkReach:3,closeBlend:2.5,
- dribble:{free:.58,freeSkill:.22,block:.62,edgeShare:.75},
+ reachFront:8,reachSide:6,dirFloor:.2,dirPow:1.3,cover:[1,.7,.45,.3],gkReach:3,closeBlend:2.5,
+ dribble:{free:.48,freeSkill:.48,block:.62,edgeShare:.75},
  passer:{block:.2,edgeShare:.6},
  lane:{reach:2.5,reachRead:1.5,base:.13,skill:.24},
  shot:{press:.7,edgeShare:.6,gkBase:.33,gkPerMetre:.015,gkMax:.62,gk:.24,pressMax:.75},
