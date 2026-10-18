@@ -10,7 +10,7 @@ import {settle} from '../src/career';
 
 // A scouted, trait-carrying player plays every week through school, graduation and
 // several professional seasons, with a save/load round trip each season.
-it('long career: scouted player with traits, rival growth and transfers, save/load every season',()=>{
+it('long career: scouted player with traits, rival growth and transfers, save/load every season',async()=>{
   const cand=generateCandidates(4242,'gyeonggi-maetan',0).find(c=>c.age===17)??generateCandidates(4242,'gyeonggi-maetan',1)[0];
   let c=careerFromCandidate(cand,4242);
   c.development.traits=['유리몸','노력파'];c.development.rival.traits=['천재'];
@@ -29,7 +29,7 @@ it('long career: scouted player with traits, rival growth and transfers, save/lo
       c=decode(encode(c));
       continue;
     }
-    prepareWeek(c,[...plan]);weeks++;
+    prepareWeek(c,[...plan]);weeks++;if(weeks%5===0)await new Promise(r=>setTimeout(r,0));
     if(c.player.injuryWeeks)injuredWeeks++;
     if(c.match){finishMatch(c.match);settle(c);}
     expect(c.development.active).toBeUndefined();

@@ -13,6 +13,8 @@ import {SCHOOLS_KR} from '../src/schools';
 
 const profile={name:'시즌',age:17,pos:'CM' as const,secondary:'ST' as const,foot:'오른',height:178,weight:70,style:'플레이메이커',curve:'꾸준한 성장형'};
 /** Plays one career week day by day (rest on non-match days, the match simulated to the end). */
+/** Yield to the test runner (vitest's worker RPC times out on long synchronous loops). */
+const tick=()=>new Promise(r=>setTimeout(r,0));
 function playWeek(c:Career,day:'rest'|'passing'='rest'){
  for(let guard=0;guard<9;guard++){
   if(c.world.phase==='offseason'&&!c.development.active)return;
@@ -65,7 +67,7 @@ it('knockouts: byes, a single-entrant region, results decide who goes through',(
  const one=makeBracket('one',['x'],0);expect(one.champion).toBe('x');expect(one.rounds).toHaveLength(0);
 });
 
-it('a full school season: weekly school matches, regional knockouts, a 32-school national with every regional champion, scout bonus on contracts only',()=>{
+it('a full school season: weekly school matches, regional knockouts, a 32-school national with every regional champion, scout bonus on contracts only',async()=>{
  const c=newCareer(profile,0,2026,{schoolRef:{id:SCHOOLS_KR[0].id,name:SCHOOLS_KR[0].name,region:SCHOOLS_KR[0].region}});
  const ss=c.world.season!.school!;const mine=ss.entrants.find(e=>e.clubId===c.world.clubId)!;expect(mine.name).toBe(SCHOOLS_KR[0].name);
  const before={...c.player.a};let weeks=0;
@@ -73,7 +75,7 @@ it('a full school season: weekly school matches, regional knockouts, a 32-school
   // a fast deterministic week: the user's match is simulated by the engine, everything else by resolveWeek
   const mu=currentMatchup(c)!;expect(mu).toBeDefined();
   if(weeks<25)expect(['school'].includes(mu.kind)).toBe(true);
-  playWeek(c);weeks++;
+  playWeek(c);weeks++;await tick();
  }
  expect(weeks).toBe(35);expect(c.world.season!.played).toBe(35);expect(c.world.season!.log).toHaveLength(35);
  const s=c.world.season!.school!;
@@ -152,7 +154,7 @@ it('trust recovers from 로테이션 back to 주전 through good matches (63 thr
  expect(statusOf(c.player)).toBe('주전');expect(c.player.trust).toBeGreaterThanOrEqual(63);expect(matches).toBe(2);
 });
 
-it('guaranteed starts use up only available club matches; a mid-season move keeps the season record of both clubs',()=>{
+it('guaranteed starts use up only available club matches; a mid-season move keeps the season record of both clubs',async()=>{
  const c=pro(21);playWeek(c);playWeek(c);
  expect(transferWindow(c.world)).toBe(true);expect(WINDOW_WEEKS).toEqual([0,1,2,16,17]);
  // a formal offer in the window: guaranteed start at another K-League club
@@ -165,7 +167,7 @@ it('guaranteed starts use up only available club matches; a mid-season move keep
  playWeek(c);expect(c.world.contract.trialMatches).toBe(3);c.player.injuryWeeks=0;
  c.player.energy=100;c.player.trust=30;c.player.status='후보';expect(selection(c).index).toBeGreaterThanOrEqual(0);
  playWeek(c);expect(c.world.contract.trialMatches).toBe(2);expect(c.history[0].club).toBe(target.id);
- let guard=0;while(c.world.phase!=='offseason'&&guard++<40)playWeek(c);
+ let guard=0;while(c.world.phase!=='offseason'&&guard++<40){playWeek(c);await tick();}
  const recs=c.world.records.filter(r=>r.year===c.world.year);expect(recs.map(r=>r.club)).toEqual([c.world.clubs.find(x=>x.id===oldClub)!.name,target.name]);
  expect(recs[0].appearances+recs[1].appearances).toBeGreaterThan(0);
  expect(c.world.tables.filter(t=>c.world.clubs.find(x=>x.id===t.id)!.league===1).every(t=>t.played===28)).toBe(true);
@@ -204,7 +206,7 @@ it('vacation costs about 1 % of the salary, rounded up to two digits (5만원 wi
  const p=pro();p.world.contract.salary=54000;expect(vacationPrice(p)).toBe(540);p.world.contract.salary=23400;expect(vacationPrice(p)).toBe(240);
 });
 
-it('a v8 save with a live match: 72 → 94 clubs, ids/players/contract/match kept, the old season finishes on the old rules, the next one has the calendar',()=>{
+it('a v8 save with a live match: 72 → 94 clubs, ids/players/contract/match kept, the old season finishes on the old rules, the next one has the calendar',async()=>{
  const text=readFileSync(new URL('./fixtures/v8-live-match.json',import.meta.url),'utf8'),raw=JSON.parse(JSON.parse(text).payload);
  expect(raw.version).toBe(8);expect(raw.world.clubs).toHaveLength(72);
  const c=decode(text);
@@ -215,7 +217,7 @@ it('a v8 save with a live match: 72 → 94 clubs, ids/players/contract/match kep
  expect(c.world.contract).toEqual(raw.world.contract);expect(c.player.trust).toBe(raw.player.trust);expect(c.development.wallet).toBe(raw.development.wallet);
  expect(c.match).toEqual(raw.match);expect(c.history).toEqual(raw.history);
  finishMatch(c.match!);settle(c);expect(c.world.round).toBe(raw.world.round+1);
- let guard=0;while(c.world.phase!=='offseason'&&guard++<30)playWeek(c);
+ let guard=0;while(c.world.phase!=='offseason'&&guard++<30){playWeek(c);await tick();}
  expect(c.world.phase).toBe('offseason');expect(c.world.calendar).toBeUndefined();
  c.world.contract.years=Math.max(1,c.world.contract.years);nextSeason(c);
  expect(c.world.calendar).toBe(35);expect(c.world.season!.played).toBe(0);expect(c.world.fixtures).toHaveLength(28);
