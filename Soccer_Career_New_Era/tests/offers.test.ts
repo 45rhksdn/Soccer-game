@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {newCareer} from '../src/career';
 import {attributes} from '../src/engine';
-import {generateOffers,clubLevel,OFFER_FIT,type World} from '../src/world';
+import {generateOffers,clubLevel,OFFER_FIT,MAX_OFFERS,type World} from '../src/world';
 import {scoutInterest,INTEREST_FIT} from '../src/development';
 import {roleAbility,ROLE_KEYS} from '../src/roles';
 
@@ -42,4 +42,21 @@ it('club interest comes only from clubs near the player\'s level',()=>{
     scoutInterest(c);
     for(const id of c.development.interestIds){const club=c.world.clubs.find(x=>x.id===id)!;expect(Math.abs(clubLevel(club,'ST')-roleAbility(c.player.a,'ST'))).toBeLessThanOrEqual(INTEREST_FIT);}
   }
+});
+
+it('0.9.1: at most 6 clubs bid, spread over as many leagues as the fit window allows',()=>{
+  for(const pos of ['ST','CB','CM'] as const)for(const level of [50,58,64,70,76,82,88])for(const seed of [1,2,3]){
+    const c=make(pos,seed);c.world.interestedClubIds=[];generateOffers(c.world,player(pos,level,20),6.8);
+    expect(c.world.offers.length).toBeLessThanOrEqual(MAX_OFFERS);
+    // Compare with the uncapped market: every league that had a bidder still has one (when places allow).
+    const leagues=new Set(offered(c.world).map(x=>x.league));
+    const all=c.world.clubs.filter(x=>x.league>0&&x.id!==c.world.clubId).filter(x=>{const f=roleAbility(player(pos,level,20).a,pos)-clubLevel(x,pos);return f>=OFFER_FIT.youthMin&&f<=OFFER_FIT.max;});
+    const possible=new Set(all.map(x=>x.league));
+    if(c.world.offers.length===MAX_OFFERS)expect(leagues.size).toBe(Math.min(possible.size,MAX_OFFERS));
+  }
+  // Clubs that showed interest always keep their place.
+  const c=make('ST',2);const p=player('ST',70,20);generateOffers(c.world,p,6.8);const ids=c.world.offers.filter(o=>o.clubId!==c.world.clubId).map(o=>o.clubId);
+  const extra=c.world.clubs.find(x=>x.league>0&&!ids.includes(x.id)&&x.id!==c.world.clubId)!;
+  c.world.interestedClubIds=[extra.id];generateOffers(c.world,p,6.8);
+  if(c.world.offers.some(o=>o.clubId===extra.id)||ids.length<MAX_OFFERS)expect(c.world.offers.length).toBeLessThanOrEqual(MAX_OFFERS);
 });

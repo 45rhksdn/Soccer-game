@@ -1,6 +1,8 @@
 import {MatchInteraction} from "./MatchInteraction";
 import {traitNotice} from './traitPresentation';
 import {GrowthNotes,RivalPanel} from './WeeklyPanels';
+import {MissionResult,SignaturePanel,RivalCompare} from './EngagementPanels';
+import {headlines} from './engagement';
 import {TraitList} from './TraitBadges';
 import {ScoutPanel} from './ScoutPanel';
 import {PlayerSlots} from './PlayerSlots';
@@ -647,6 +649,7 @@ export default function App() {
                           {userPerformance(m).stats.assists}
                         </p>
                         <p>패스 {userPerformance(m).stats.completed}/{userPerformance(m).stats.passes} · 전진 패스 {userPerformance(m).stats.progressivePasses ?? 0} · 키패스 {userPerformance(m).stats.keyPasses ?? 0} · 기대 도움 {(userPerformance(m).stats.expectedAssists ?? 0).toFixed(2)}</p>
+                        <MissionResult m={m}/>
                         {(m.traitNotes??(m.traitBoost?['실전파 발동! 오늘은 몸놀림이 남다릅니다.']:[])).map((t)=><p key={t} className="note">{traitNotice(t)}</p>)}
                         <small className="muted">키패스는 동료의 슈팅으로 연결한 패스입니다. 동료가 놓쳐도 평점에 반영됩니다.</small>
                       </div>
@@ -658,8 +661,9 @@ export default function App() {
                         className="primary"
                         onClick={() => {
                           // The season ends inside settle (last league/cup/national match): go straight to the season summary.
-                          let seasonEnded = false;
-                          update((n) => { const was = n.world.phase; settle(n); seasonEnded = was !== "offseason" && n.world.phase === "offseason"; });
+                          let seasonEnded = false, earned: string[] = [];
+                          update((n) => { const was = n.world.phase; earned = settle(n).signatures.map((s) => `「${s.id}」\n${s.effect}`); seasonEnded = was !== "offseason" && n.world.phase === "offseason"; });
+                          if (earned.length) setPopup({ kind: "signature", text: earned.join("\n\n") });
                           setTab(seasonEnded ? "season" : "home");
                           if (seasonEnded) inform("시즌이 끝났습니다. 시즌 결산을 확인하세요.");
                           setPaused(false);
@@ -728,8 +732,6 @@ export default function App() {
                       <div className="eyebrow">
                         SEASON {c.world.year} / WEEK {String(c.week + 1).padStart(2, "0")}
                       </div>
-                      <h1>좋은 하루예요, {p!.name} 선수.</h1>
-                      <p>오늘의 작은 노력이, 내일의 경기를 바꿉니다.</p>
                     </div>
                     <span className="date">
                       <CalendarDays size={17} />
@@ -742,7 +744,7 @@ export default function App() {
                         {competitionName(c)}
                       </span>
                       <h2>지난주 주요 뉴스</h2>
-                      <div className="headline-news">{c.development.news.filter(n=>n.day>=c.day-7&&!n.text.startsWith('보유 특성')).slice(0,4).map((n,i)=><p key={i}>{traitNotice(n.text)}</p>)}{!c.development.news.some(n=>n.day>=c.day-7)&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
+                      <div className="headline-news">{headlines(c).map((n,i)=><p key={i}>{traitNotice(n.text)}</p>)}{!headlines(c).length&&<p>새로운 한 주의 활약을 기다리고 있습니다.</p>}</div>
                     </div>
                     <div className="hero-number">
                       10
@@ -831,6 +833,10 @@ export default function App() {
                       <small className="center muted">경기는 매주 토요일입니다. 오늘의 일정에서 하루씩 진행하세요.</small>
                     </section>
                     <GrowthNotes c={c}/>
+                  </div>
+                  <div className="home-grid eg-grid">
+                    <SignaturePanel c={c}/>
+                    <RivalCompare c={c}/>
                   </div>
                   <section className="card feed">
                     <div className="section-title">
@@ -1028,7 +1034,7 @@ export default function App() {
                   </div>
                 </>
               )}
-              {c&&["team","season","market","career"].includes(tab)&&<WorldPanel c={c} tab={tab} update={update}/>}
+              {c&&["team","season","market","career"].includes(tab)&&<WorldPanel c={c} tab={tab} update={update} onNeedContract={(message)=>{inform(message);setTab("market");}}/>}
               {tab === "players" && (
                 <PlayerSlots
                   slots={slots}
@@ -1157,7 +1163,7 @@ export default function App() {
               SOCCER CAREER <b>NEW ERA</b>
             </span>
             <span>한 명의 선수. 무한한 가능성.</span>
-            <small>CAREER BETA · 0.6</small>
+            <small>CAREER BETA · 0.9.1</small>
           </footer>
         </main>
       </div>

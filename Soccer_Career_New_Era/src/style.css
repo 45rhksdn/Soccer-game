@@ -2161,3 +2161,73 @@ td strong {
 .growth-popup{max-height:calc(100vh - 62px);max-height:calc(100dvh - 62px)}
 @media(max-width:600px){.growth-popup{width:calc(100% - 40px)}.growth-popup h3{font-size:26px}}
 .growth-popup.lucky h3,.growth-popup.insight h3,.growth-popup.goal h3{color:#111}
+
+/* ── 0.9: 감독 미션 · 시그니처 도전 · 라이벌 비교 (same white / black language as the action tiles) ── */
+.eg-bar{display:block;height:8px;border-radius:999px;background:#ecedea;overflow:hidden;width:100%}
+.eg-bar>span{display:block;height:100%;border-radius:999px;background:#111;transition:width .3s}
+.eg-bar.muted>span{background:#a9ada6}
+.mission-strip{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px 10px;padding:10px 14px;background:#fff;border-bottom:1px solid #e2e4df;color:#111}
+.mission-strip .mission-tag{font-size:11px;font-weight:800;letter-spacing:.04em;background:#111;color:#fff;border-radius:999px;padding:3px 9px}
+.mission-strip strong{font-size:14px;font-weight:800}
+.mission-strip .mission-status{font-size:13px;font-weight:800;justify-self:end}
+.mission-strip .eg-bar{grid-column:1/-1;height:6px}
+.mission-strip.done .mission-status{color:#111}.mission-strip.done .mission-tag{background:#111}
+.mission-strip.done strong::after{content:" ✓"}
+.mission-strip.failed .mission-status{color:#8a8f88}
+.mission-result{font-weight:700}.mission-result.done{color:#111}
+.eg-grid{margin-top:20px}
+.eg-card{display:flex;flex-direction:column;gap:12px}
+.eg-row{display:flex;flex-direction:column;gap:5px}
+.eg-row small{font-size:12px;color:#6b7069}
+.eg-row.owned b{color:#111}
+.eg-row.owned{padding:8px 10px;border-radius:10px;background:#f4f5f2}
+.eg-head{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.eg-head span{color:#4b5049;font-weight:700;white-space:nowrap}
+.eg-head em{font-style:normal;color:#9a9e97;font-weight:400;margin:0 2px}
+.eg-head span.me{color:#111}.eg-head span.them{color:#6b7069}
+.next-step{padding-bottom:10px;border-bottom:1px solid #eceee9}
+.eg-foot{margin:0;font-size:12px}
+.rival-compare .rc-row{display:flex;flex-direction:column;gap:4px}
+.rival-compare .rc-row .eg-bar{height:6px}
+.rc-legend{display:flex;gap:16px;font-size:12px;color:#4b5049}
+.rc-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.rc-legend i.me{background:#111}.rc-legend i.them{background:#a9ada6}
+.eg-more summary{cursor:pointer;font-size:13px;font-weight:700;color:#4b5049;padding:4px 0}
+.eg-more[open]{display:flex;flex-direction:column;gap:12px}
+
+/* 0.9.1: compact '지난주 주요 뉴스' (two headlines, no greeting) */
+.career-hero{min-height:0;padding:16px 22px}
+.career-hero h2{font-size:18px;margin:8px 0 6px;letter-spacing:-.3px}
+.career-hero .headline-news p{max-width:none;font-size:13px;line-height:1.5;color:#e3ecdc;margin:0 0 3px}
+.career-hero .headline-news p:last-child{margin-bottom:0}
+.hero-number{font-size:64px;letter-spacing:-4px;margin-right:6px;text-shadow:none}
+.hero-number span{margin-top:6px;font-size:9px;letter-spacing:1px}
+.hero-pattern{width:260px;height:260px;top:-80px;right:-60px}
+@media(max-width:900px){.career-hero{min-height:0;padding:14px 16px}.career-hero h2{font-size:17px}.career-hero p{max-width:none}
+ .hero-number{position:static;font-size:46px;letter-spacing:-3px;opacity:.5;margin:0}.hero-number span{display:none}}
+
+/* 0.9.1: compact daily schedule — smaller day strip and stats, small training tiles (3 per row) */
+.today{gap:12px}
+.week-strip{gap:4px;align-items:stretch}
+.week-strip li,.week-strip li.today{padding:4px 2px;gap:0;justify-content:center;min-height:0;border-width:1px}
+.week-strip li.today{box-shadow:inset 0 0 0 1px var(--green)}
+.week-strip li span{font-size:12px}
+.week-strip li small{font-size:9.5px;min-height:0;line-height:1.2}
+.week-strip li small:empty{display:none}
+.today-help{gap:6px}
+.today-help span{padding:5px 10px;flex-direction:row;align-items:baseline;justify-content:space-between;gap:6px}
+.today-help small{font-size:11px}.today-help b{font-size:14px}
+.today-grid,.today-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.today-tile{padding:8px 6px;gap:3px;border-radius:10px}
+.today-tile.training{grid-column:span 1}
+.today-tile.recovery{grid-column:span 3;flex-direction:row;justify-content:center;gap:8px;padding:9px 10px;text-align:left}
+.today-tile.recovery>span,.today-tile.recovery strong{font-size:13px}
+.today-tile.training strong{font-size:12px;line-height:1.2}
+.today-tile.training small{font-size:9.5px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.today-tile.recovery small{font-size:10.5px}
+@media(max-width:1000px){.today-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.today-tile.training{grid-column:span 2}}
+@media(max-width:600px){.today-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.today-tile.training{grid-column:span 2}.today-tile.recovery{grid-column:span 3}}
+.week-strip li.today{margin:0}
+.today-tile.recovery strong{white-space:nowrap}
+.today-tile.recovery{flex-wrap:wrap;row-gap:2px;text-align:center}
+@media(max-width:600px){.today-tile.recovery small{flex-basis:100%}}

@@ -45,8 +45,8 @@ export function TodayPanel({c,last,onTrain,onMatch}:{c:Career,last:TodayResult|n
         <span><small>잔액</small><b>{d.wallet.toLocaleString()}만원</b></span>
       </div>
       <div className="today-grid">
-        {(Object.keys(DAILY) as Daily[]).map(t=><button key={t} type="button" className={`today-tile ${t}`} disabled={t==='vacation'&&d.wallet<5} onClick={()=>onTrain(t)} aria-label={`오늘 ${DAILY[t].label.replace(' · 5만원','')}`}>
-          <DailyIcon type={t}/><strong>{DAILY[t].label.replace(' · 5만원','')}</strong><small>{effect(t)}</small>
+        {(Object.keys(DAILY) as Daily[]).map(t=><button key={t} type="button" className={`today-tile ${t}${t==='rest'||t==='vacation'?' recovery':' training'}`} disabled={t==='vacation'&&d.wallet<5} onClick={()=>onTrain(t)} aria-label={`오늘 ${DAILY[t].label.replace(' · 5만원','')}`}>
+          <DailyIcon type={t} size={t==='rest'||t==='vacation'?20:16}/><strong>{DAILY[t].label.replace(' · 5만원','')}</strong><small>{effect(t)}</small>
         </button>)}
       </div>
     </>}

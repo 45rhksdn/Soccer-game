@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {Pitch,screenToEngineVector} from './Pitch';
 import {ACTIONS,DEFENSE_ACTIONS,PLAYER_DEFENSE_ACTIONS,availableActions,actionChance,act,defend,type Match,type Action} from './engine';
+import {MissionStrip} from './EngagementPanels';
 import {defenseChance,nearbyOpponents,distance,passTargets,matchCommentary,offside,chanceLabel,chanceLevel,type AttackOptions} from './tactical';
 
 /**
@@ -49,6 +50,7 @@ export function MatchInteraction({m,onChange,toolbar}:{m:Match;onChange:()=>void
    </div>
   </div>
   <div className="match-side">
+   <MissionStrip m={m}/>
    <div className="live-commentary" aria-live="polite"><b>현장 중계</b><p>{matchCommentary(m)}</p></div>
    {!m.ended&&<section className="match-actions">
     {(m.decision||m.defending)&&<div className="distance-strip"><strong>{m.defending?'볼 소유 상대':'가장 가까운 수비수'} {gap<=6?`${gap.toFixed(1)}m`:'6m 초과'}</strong>{m.decision&&<span>6m 이내 수비수 {near.count}명</span>}<small>가까운 수비수가 많고 강할수록 성공 가능성이 낮아집니다.</small></div>}
