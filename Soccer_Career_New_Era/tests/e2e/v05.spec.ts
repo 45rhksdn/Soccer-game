@@ -23,7 +23,7 @@ test('럭키 opens a popup; it is not shown as news and the growth note keeps th
   await create(page);
   // Pick an RNG state whose next draw is a 럭키 for a 16-year-old (4.5 %), then put it into the saved career.
   let seed=0;for(;;seed++)if(random({seed})<.04)break;
-  await editDb(page,`${fnv}const r=store.get('slot1');r.onsuccess=()=>{const env=JSON.parse(r.result);const c=JSON.parse(env.payload);c.seed=arg;c.development.traits=[];const payload=JSON.stringify(c);store.put(JSON.stringify({format:'SCNE',checksum:fnv(payload),payload}),'slot1');};`,seed);
+  await editDb(page,`${fnv}const r=store.get('slot1');r.onsuccess=()=>{const env=JSON.parse(r.result);const c=JSON.parse(env.payload);c.seed=arg;c.development.traits=[];if(c.world.season)c.world.season.matchDays.fill(5);const payload=JSON.stringify(c);store.put(JSON.stringify({format:'SCNE',checksum:fnv(payload),payload}),'slot1');};`,seed);
   await page.goto('/');await nav(page,'오늘의 일정');
   await page.getByRole('button',{name:'오늘 패스훈련'}).click();
   const popup=page.getByRole('dialog');await expect(popup).toBeVisible();await expect(popup).toContainText('놀라운 성장!');await expect(popup).toContainText('훈련 중 무언가를 느꼈다!');

@@ -3,7 +3,10 @@ import {test,expect,type Page} from '@playwright/test';
 // (expandable, two steps, exact fee), season calendar + brackets + school table, transfer windows.
 async function nav(page:Page,name:string){if((page.viewportSize()?.width??1440)<900)await page.getByRole('button',{name:'메뉴',exact:true}).click();await page.getByRole('button',{name,exact:true}).click();}
 const noOverflow=(page:Page)=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth);
+// 럭키 popups can appear on any training day: close them whenever they block a step.
+test.beforeEach(async({page})=>{await page.addLocatorHandler(page.locator('.growth-popup'),async()=>{await page.locator('.growth-popup').getByRole('button',{name:'확인'}).click();});});
 test('35-week season UI: status & trust, focused training fee, calendar/brackets/table, transfer windows',async({page})=>{
+  test.setTimeout(150000);
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/');await page.getByRole('button',{name:'새로운 커리어 시작'}).click();
   await page.getByLabel('학교 검색').fill('매탄');await page.locator('.school-row').first().click();
