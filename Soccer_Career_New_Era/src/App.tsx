@@ -80,7 +80,7 @@ export default function App() {
     [slots, setSlots] = useState<Awaited<ReturnType<typeof storage.slots>>>([]),
     [ready, setReady] = useState(false),
     [paused, setPaused] = useState(false),
-    [speed, setSpeed] = useState(4),
+    [speed, setSpeed] = useState(1),
     [tick, setTick] = useState(0),
     [menu, setMenu] = useState(false),
     [createMode, setCreateMode] = useState<"scout" | "manual">("scout"),
@@ -621,7 +621,7 @@ export default function App() {
                         {paused ? "계속" : "일시정지"}
                       </button>
                       <div className="speeds">
-                        {[1, 2, 4].map((v) => (
+                        {[1, 2].map((v) => (
                           <button
                             className={speed === v ? "selected" : ""}
                             onClick={() => setSpeed(v)}

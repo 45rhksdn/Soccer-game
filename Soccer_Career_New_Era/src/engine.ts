@@ -399,7 +399,9 @@ export const ON_LINE_RANGE = 62;
 export const ONE_TWO_BONUS = 8;
 /** AI preferences for the 0.10 actions (balance.test keeps the totals in range). */
 /** 0.13 carry: time slices of a dribble (each 3 game seconds), at most 8 (0.14 longer carries); probe = stop-check step (m). */
-export const CARRY = { dt: .5, maxSlices: 128, probe: .5 } as const;
+export const CARRY = { dt: .5, maxSlices: 128, probe: .5, speed: 3 } as const;
+/** 0.15.2 ball-carrier speed while dribbling, metres per carry slice (× CARRY.speed, user request: 3× faster). */
+export const carryPace=(p:Footballer,run=false)=>(2.6 + p.a.speed / 32) * (0.55 + p.energy / 222) * 0.68 * (run ? RUN_SPEED : 1) * CARRY.speed;
 export const AI = { hopelessShot: .07, midRangeShot: .05, aerial: .9, crossWeight: .9, crossWide: .35, crossPerTarget: .05, cutbackWeight: .8, cutback: .35, dribbleOpen: .02, lossMetres: 25, shotWeight: 7.5 } as const;
 /** Missed shots that go out for a corner; saves parried for a corner; saves that drop loose in the box. */
 export const SET_PIECE = { cornerFromMiss: .3, cornerFromSave: .18, rebound: .14 } as const;
@@ -999,7 +1001,7 @@ function moveTeams(m: Match, dt: number, owner: Footballer | null, attack: Footb
  */
 function carry(m: Match, p: Footballer, from: { x: number; y: number }, to: { x: number; y: number }, min: number, run: boolean): boolean {
   const gap = Math.hypot(to.x - from.x, to.y - from.y), ux = (to.x - from.x) / (gap || 1), uy = (to.y - from.y) / (gap || 1);
-  const pace = (2.6 + p.a.speed / 32) * (0.55 + p.energy / 222) * 0.68 * (run ? RUN_SPEED : 1) * CARRY.dt;
+  const pace = carryPace(p, run) * CARRY.dt;
   const limit = m.clock < 2700 ? 2700 : m.endAt;
   const slices = Math.max(0, Math.min(CARRY.maxSlices, Math.ceil(gap / pace), Math.floor((limit - m.clock - 1e-9) / (CARRY.dt * 6))));
   let done = 0;
@@ -1276,8 +1278,12 @@ export function rating(p: Footballer) {
   const creation = Math.min(1.2, (s.keyPasses ?? 0) * (midfielder ? .22 : .12) + (s.expectedAssists ?? 0) * (midfielder ? .5 : .3));
   // Failed passes already reduce accuracy; do not charge the full turnover penalty twice.
   const turnovers = Math.min(1.5, Math.max(0, s.losses - failedPasses) * .035 + failedPasses * .008);
-  return clamp(
-    6 + s.goals * (p.pos === "ST" ? .45 : .65) + s.assists * .45 +
+  // 0.15.2 a substitute (under 60 minutes) is rated on the time he had: the contribution is scaled up to ×2,
+  // and a clean sheet counts from 30 minutes (prorated), so a good cameo can win coach trust back.
+  const short = s.minutes > 0 && s.minutes < 60, scale = short ? Math.min(2, 60 / Math.max(30, s.minutes)) : 1;
+  const cleanSheet = (p.pos==='GK'||['CB','LB','RB'].includes(p.pos)) && s.goalsConceded===0 ? (s.minutes>=60 ? .45 : s.minutes>=30 ? .45*s.minutes/60 : 0) : 0;
+  return clamp(6 + scale * (
+    s.goals * (p.pos === "ST" ? .45 : .65) + s.assists * .45 +
     accuracy + distribution + progression + creation +
     defensiveRating(p) +
     Math.min(1.3, s.saves * .13) +
@@ -1286,8 +1292,8 @@ export function rating(p: Footballer) {
     Math.min(.45, (s.grit ?? 0) * .15) +
     // 0.6 defensive choices (user only; zero for every simulated player).
     Math.min(DEFENSIVE_WIN_CAP, (s.defensiveWins ?? 0) * DEFENSIVE_WIN_RATING) - Math.min(FAILED_TACKLE_CAP, (s.failedTackles ?? 0) * FAILED_TACKLE_RATING) +
-    ((p.pos==='GK'||['CB','LB','RB'].includes(p.pos)) && s.minutes>=60 && s.goalsConceded===0 ? .45 : 0) -
-    (['GK','CB','LB','RB'].includes(p.pos) ? (s.goalsConceded??0)*.06 : 0) - turnovers - p.yellow * .15 - (p.red ? .7 : 0),
+    cleanSheet -
+    (['GK','CB','LB','RB'].includes(p.pos) ? (s.goalsConceded??0)*.06 : 0) - turnovers - p.yellow * .15 - (p.red ? .7 : 0)),
     3, 10,
   );
 }

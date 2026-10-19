@@ -394,8 +394,8 @@ export function selection(c:Career):Selection{
   // 0.15 the coach picks by trust: 핵심 주전 / 주전 start, 로테이션 comes on at 60′, 후보 at 75′ (or is left out).
   // A guaranteed-start contract starts the first available club matches (fit: not injured, energy 50+).
   const status=statusOf(p),guaranteed=trial&&!p.injuryWeeks&&p.energy>=50;
-  // position competition still counts: a 주전 needs to be within 4 of the best rival at his position (핵심 주전 8)
-  const start=!p.injuryWeeks&&(guaranteed||(status==='핵심 주전'&&(index>=0||yourScore>=rivalScore-8))||(status==='주전'&&(index>=0||yourScore>=rivalScore-4)));
+  // position competition still counts, but trust is a real preference: a 주전 starts within 8 of the best rival at his position (핵심 주전 12)
+  const start=!p.injuryWeeks&&(guaranteed||(status==='핵심 주전'&&(index>=0||yourScore>=rivalScore-12))||(status==='주전'&&(index>=0||yourScore>=rivalScore-8)));
   if(start&&index<0){lineup[targetIndex]={...hero,slotPos:lineup[targetIndex].slotPos};index=targetIndex;}
   if(!start&&index>=0){const slot=lineup[index].slotPos,repl=club.roster.filter(r=>!r.injuryWeeks&&!lineup.some(x=>x.id===r.id)).sort((a,b)=>selectionScore(b.a,b.pos,slot,b.age,b.energy,b.form,club.coach)-selectionScore(a.a,a.pos,slot,a.age,a.energy,a.form,club.coach))[0];if(repl){lineup[index]={...repl,slotPos:slot};index=-1;}}
   // goalkeepers are not brought on as substitutes (a keeper change mid-match is an injury case only)

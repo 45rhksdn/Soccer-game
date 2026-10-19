@@ -1,7 +1,7 @@
 import {Crosshair,Target,CornerUpRight,CornerDownLeft,Wind,ArrowUpRight,Goal} from 'lucide-react';
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {Pitch,screenToEngineVector,type PitchMotion} from './Pitch';
-import {RUN_SPEED,ACTIONS,DEFENSE_ACTIONS,PLAYER_DEFENSE_ACTIONS,availableActions,act,defend,type Match,type Action} from './engine';
+import {carryPace,ACTIONS,DEFENSE_ACTIONS,PLAYER_DEFENSE_ACTIONS,availableActions,act,defend,type Match,type Action} from './engine';
 import {MissionStrip} from './EngagementPanels';
 import {attackOdds,defenseOdds,nearbyOpponents,distance,passTargets,matchCommentary,offside,chanceLabel,opponentDistanceLabel,dribbleAdvance,type AttackOptions} from './tactical';
 import './compact-match.css';
@@ -39,7 +39,7 @@ export function CompactMatch({m,onChange,toolbar,onAnimating}:{m:Match;onChange:
   act(m,a,opts);setTarget(null);
   const metres=distance(start,u);
   if(a==='dribble'&&metres>.1){
-   const metresPerSecond=(2.6+u.a.speed/32)*(.55+energy/222)*.68*(opts.run?RUN_SPEED:1);
+   const metresPerSecond=carryPace({...u,energy},!!opts.run);
    const duration=1000*metres/Math.max(2,metresPerSecond);
    gate.current=true;onAnimating?.(true);setMotion({from,started:performance.now(),duration});
   }

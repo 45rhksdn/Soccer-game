@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {createElement} from 'react';
-import {createMatch,attributes,direction,emptyStats,recordTackle,defensiveRating,act,defend} from '../src/engine';
+import {createMatch,attributes,direction,emptyStats,recordTackle,defensiveRating,act,defend,carryPace} from '../src/engine';
 import {newCareer} from '../src/career';
 import {TodayPanel} from '../src/TodayPanel';
 import {encode,decode} from '../src/storage';
@@ -17,7 +17,7 @@ it('standing and sliding successes record critical defenses and survive saves',(
  for(const action of ['tackle','slide'] as const){let found=false;for(let seed=1;seed<30&&!found;seed++){const c=career(),m=createMatch(seed,{...c.player,a:attributes(99)});c.match=m;const p=m.players[m.userId],o=m.players.find(q=>q.team!==p.team&&q.pos!=='GK')!;p.x=direction(m,p.team)>0?8:97;p.y=34;o.x=p.x+.1;o.y=34;o.a=attributes(20);m.ball={x:o.x,y:o.y,owner:o.id,flight:null};m.defending=true;m.decision=false;defend(m,action);if(m.ball.owner===p.id){found=true;expect(p.stats.decisiveDefenses).toBe(1);expect(p.stats.duelAttempts).toBe(1);expect(decode(encode(c)).match!.players[m.userId].stats.decisiveDefenses).toBe(1);}}expect(found).toBe(true);}
 });
 it('long dribbles no longer compress distance into eight slices or teleport at half time',()=>{
- const m=createMatch(1,{name:'달리기',pos:'ST',a:attributes(99),energy:100}),p=m.players[m.userId],d=direction(m,p.team);p.x=52;p.y=34;for(const q of m.players)if(q.id!==p.id){q.x=10;q.y=2;}m.ball={x:p.x,y:p.y,owner:p.id,flight:null};m.decision=true;const before=structuredClone(m);act(m,'dribble',{vector:{x:d,y:0}});if(m.ball.owner===p.id){const metres=Math.abs(p.x-52),seconds=(m.clock-before.clock)/6;expect(metres/seconds).toBeLessThan(5);}
+ const m=createMatch(1,{name:'달리기',pos:'ST',a:attributes(99),energy:100}),p=m.players[m.userId],d=direction(m,p.team);p.x=52;p.y=34;for(const q of m.players)if(q.id!==p.id){q.x=10;q.y=2;}m.ball={x:p.x,y:p.y,owner:p.id,flight:null};m.decision=true;const before=structuredClone(m);act(m,'dribble',{vector:{x:d,y:0}});if(m.ball.owner===p.id){const metres=Math.abs(p.x-52),seconds=(m.clock-before.clock)/6;/* 0.15.2: carriers move 3× faster (CARRY.speed), still bounded by pace × time */const pace=carryPace(before.players[before.userId]);expect(metres/seconds).toBeLessThanOrEqual(pace+1e-9);expect(metres/seconds).toBeGreaterThan(pace/3);}
  const edge=structuredClone(before);edge.clock=2699;act(edge,'dribble',{vector:{x:d,y:0}});expect(edge.players[edge.userId].x).toBe(52);
 });
 it('today hides the lucky result while showing real league and tournament panels',()=>{

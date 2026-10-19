@@ -26,8 +26,9 @@ test('daily schedule → live action → growth/rival → reload mid-week and mi
  await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.locator('.career-hero')).not.toContainText('보유 특성');for(const t of ['컨디션','피로도','잔액'])await expect(page.locator('.today-help')).toContainText(t);await expect(page.locator('.today-help')).not.toContainText('확률');
  await nav(page,'오늘의 일정');await tapUntilMatch(page,['패스훈련','속력훈련','공격훈련','휴식하기','드리블훈련']);
  await page.screenshot({path:`reports/${info.project.name}-daily.png`,fullPage:true});
- await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'4×',exact:true}).click();
- // Match speeds are 1×, 2× and 4× (12× removed).
+ await page.getByRole('button',{name:'경기 진행'}).click();
+ // 0.15.2: match speeds are 1× and 2×; a match starts at 1×.
+ await expect(page.getByRole('button',{name:'1×',exact:true})).toHaveClass(/selected/);await expect(page.getByRole('button',{name:'4×',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'2×',exact:true}).click();
  await expect(page.getByRole('button',{name:'12×',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'2×',exact:true})).toBeVisible();
  await expect(page.getByRole('group',{name:'공격 선택'})).toBeVisible({timeout:60000});
  await page.getByRole('button',{name:'1×',exact:true}).click();
