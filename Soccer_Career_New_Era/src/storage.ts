@@ -1,3 +1,4 @@
+import {validConnections} from './careerMoments';
 import {expandWorld,expandTo8,migrateEconomy} from './world';
 import {WORLD_CLUB_COUNT} from './leagues';
 import {ensureDevelopment} from './development';
@@ -6,7 +7,7 @@ import {validScoutState,type ScoutState} from './scouting';
 import {validEquipment} from './equipment';
 import {emptyLegacy,recordRetirement,validLegacy,type Legacy} from './legacy';
 import {ATTRS,type Attributes} from "./engine";
-export const SAVE_VERSION=9;
+export const SAVE_VERSION=10;
 const NEW_ATTRIBUTES={longShot:"shooting",finishing:"composure",curve:"shooting",longPassing:"passing",sliding:"defending",marking:"defending",anticipation:"decisions"} as const;
 /** Recursively upgrade attribute snapshots, NPCs, live players, substitutes and insight bases. No RNG. */
 function migrateV6(value:unknown){
@@ -88,6 +89,8 @@ export function validate(raw: unknown): Career {
   // 0.15 v8 → v9: 8 clubs per pro league (existing ids kept), the user's school for the school competitions.
   // A season already running keeps its old rules (no calendar) until the next season starts.
   if((c as {version:number}).version===8&&c.world?.clubs){expandTo8(c.world);c.world.userSchool??={clubId:'c'+c.school,schoolId:c.schoolRef?.id};(c as {version:number}).version=9;}
+  if((c as {version:number}).version===9)(c as {version:number}).version=10;
+  if(!validConnections(c.connections))throw Error('커리어 사건 기록이 손상되었습니다.');
   if (c.version !== SAVE_VERSION) throw Error("지원되지 않는 저장 버전입니다.");
   if (
     !c.player ||
@@ -126,6 +129,10 @@ export function validate(raw: unknown): Career {
       c.match.userId > 21)
   )
     throw Error("경기 데이터가 손상되었습니다.");
+  if(c.match?.dynamics){const d=c.match.dynamics;
+    if(!d.habits||typeof d.habits!=='object'||Object.entries(d.habits).some(([id,list])=>!Number.isInteger(Number(id))||Number(id)<0||Number(id)>21||!Array.isArray(list)||list.length>6||list.some(h=>!h||!Number.isFinite(h.at)||!Number.isFinite(h.dx)||!Number.isFinite(h.dy)||!['dribble','pass'].includes(h.kind)||(h.target!==undefined&&(!Number.isInteger(h.target)||h.target<0||h.target>21)))))throw Error('경기 대응 기록이 손상되었습니다.');
+  }
+  if(c.match?.ball.flight?.through!==undefined&&typeof c.match.ball.flight.through!=='boolean')throw Error('스루패스 기록이 손상되었습니다.');
   if(!c.world || !Array.isArray(c.world.clubs) || c.world.clubs.length!==WORLD_CLUB_COUNT || !c.world.clubs.some(club=>club.id===c.world.clubId) || !Array.isArray(c.world.fixtures) || !Array.isArray(c.world.tables))throw Error('축구 세계 저장이 손상되었습니다.');
   if(!c.development || c.development.plan.length!==7 || !traitsValid(c.development.traits) || !traitsValid(c.development.rival?.traits) || [c.development.experienceBank,c.development.rival?.experienceBank].some(v=>v!==undefined&&!(Number.isFinite(v)&&v>=0)) || c.world.clubs.some(club=>club.roster.some(p=>p.traits!==undefined&&!traitsValid(p.traits))) || !validEquipment(c.development.equipment) || (c.id!==undefined&&(typeof c.id!=='string'||!c.id||c.id.length>80)) || (c.schoolRef!==undefined&&(typeof c.schoolRef?.id!=='string'||typeof c.schoolRef?.name!=='string')) ||!Number.isFinite(c.development.wallet) || c.development.wallet<0 || !c.development.rival?.player)throw Error('육성 저장 데이터가 손상되었습니다.');
   // 0.9.1: the agent planning panel (target club / priority) was removed; drop stale choices so they no longer steer offers.

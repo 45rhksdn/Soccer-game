@@ -77,3 +77,5 @@
 .cm-targets button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cm-targets button[aria-pressed=true]{border-color:#7ef0c4;background:rgba(126,240,196,.16)}
 .cm-targets button .cm-chance{grid-column:1/-1}
+
+.cm-pass-card button:nth-of-type(2){background:#d8b77b;color:#17201d;flex:1}.cm-through-note{width:100%;font-size:9px;color:#d8c7a5}.live-commentary>small{display:block;font-size:11px;color:#d8bd8c}.career-context{margin-block:12px}.career-context summary{cursor:pointer}.career-context p{font-size:13px;line-height:1.6}

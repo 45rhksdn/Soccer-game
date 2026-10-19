@@ -1,3 +1,6 @@
+# v0.16 Codex 작업
+최신 변경은 `HANDOFF_LIVING_FOOTBALL.md`를 먼저 확인하세요. Claude 86f3559 기반, 저장 v10.
+
 # 0.15 + Codex 통합 (2026-10-19, Claude)
 - `codex/v015-match-sidebar`(f9b26ad, `codex/compact-match-controls` 포함)를 `claude/v0.15-season-tournaments`에 병합했다. Codex 브랜치는 수정하지 않았다. 충돌은 TEST_REPORT 한 곳(양쪽 보존).
 - Codex 변경: 경기장 오른쪽 조작 레일(위치별 슛·크로스 버튼, 방향판, 동료 터치 패스 카드), 오늘의 일정 하단 순위표·토너먼트 현황판, 페널티 박스 안 성공 태클 = 결정적 수비(평점 3배 단위), 수비 평점 단위 상향, 긴 드리블을 속도대로 재생(8구간 압축 제거), 럭키 날은 결과칸 숨김.

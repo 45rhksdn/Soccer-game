@@ -1,3 +1,4 @@
+import {tacticalNote} from './matchDynamics';
 /** Pure action rules. Percentages shown by the UI are the exact engine probabilities. */
 import {clamp,direction,type Match,type Footballer,type Action,type Attr,type DefenseAction,type SignatureAction} from './engine';
 /** `run`: 0.12 치고 달리기 — the dribble is played as a long knock-on and a sprint (with `vector`). */
@@ -22,6 +23,27 @@ export function offside(m:Match,q:Footballer){
 }
 // ── 0.10 crosses, cut-backs, headers and volleys ─────────────────────────
 const lineDist=(m:Match,team:number,x:number)=>Math.abs((direction(m,team)>0?105:0)-x);
+export function throughEligible(m:Match,p:Footballer,q:Footballer){
+ const d=direction(m,p.team);return q.id!==p.id&&q.team===p.team&&active(q)&&q.pos!=='GK'&&!offside(m,q)&&(q.x-p.x)*d>-8&&distance(p,q)<48&&lineDist(m,p.team,q.x)>5;
+}
+/** Space pass preview: deterministic candidate search, no new attribute and no random draws. */
+export function throughPlan(m:Match,p:Footballer,q:Footballer){
+ const d=direction(m,p.team),speed=(r:Footballer)=>(2.6+r.a.speed/32)*(.55+r.energy/222)*1.65;
+ const defenders=m.players.filter(o=>o.team!==p.team&&active(o));
+ const read=(p.a.vision*.4+p.a.decisions*.3+p.a.anticipation*.3)/100;
+ let best={aim:{x:q.x,y:q.y},duration:1,margin:-9,score:-Infinity};
+ for(const lead of [4,7,10])for(const lateral of [-3,0,3]){
+  const aim={x:clamp(q.x+d*lead,2,103),y:clamp(q.y+lateral,2,66)},length=distance(p,aim);
+  const duration=Math.max(.65,length/14),run=distance(q,aim)/speed(q)+(1-q.a.positioning/100)*.2;
+  const enemy=Math.min(...defenders.map(o=>distance(o,aim)/speed(o)+(1-o.a.anticipation/100)*.2));
+  const margin=enemy-run,space=Math.min(...defenders.map(o=>distance(o,aim)));
+  const score=margin*(.5+read)+space*.04-Math.max(0,run-duration)*2-Math.abs(lateral)*.03;
+  if(score>best.score)best={aim,duration,margin,score};
+ }
+ const allowed=throughEligible(m,p,q);
+ const reason=offside(m,q)?'오프사이드 위치':!allowed?'침투 공간 부족':best.margin>.25?'동료의 침투 우위':best.margin<-.3?'상대의 선점 위험':'동료와 수비의 경합';
+ return {...best,allowed,reason,read};
+}
 /** Teammates in the box who can attack a cross (not offside). */
 export function boxMates(m:Match,p:Footballer){return m.players.filter(q=>q.team===p.team&&q.id!==p.id&&active(q)&&q.pos!=='GK'&&lineDist(m,p.team,q.x)<=16.5&&Math.abs(q.y-34)<=16&&!offside(m,q));}
 /** Teammates arriving at the penalty spot / edge of the box for a cut-back. */
@@ -44,7 +66,8 @@ export function attackAllowed(m:Match,a:Action,opts:AttackOptions={}){
  if(a==='longShot')return r>=16.5&&r<=55;
  if(a==='curl')return r>=12&&r<=28;
  if(a==='shoot')return r<=55;
- if(a==='pass'||a==='safe'||a==='forward'||a==='through')return opts.targetId===undefined?passTargets(m).length>0:passTargets(m).some(q=>q.id===opts.targetId&&!offside(m,q));
+ if(a==='through')return opts.targetId===undefined?passTargets(m).some(q=>throughEligible(m,p,q)):passTargets(m).some(q=>q.id===opts.targetId&&throughEligible(m,p,q));
+ if(a==='pass'||a==='safe'||a==='forward')return opts.targetId===undefined?passTargets(m).length>0:passTargets(m).some(q=>q.id===opts.targetId&&!offside(m,q));
  if(a==='dribble'&&opts.vector)return Number.isFinite(opts.vector.x)&&Number.isFinite(opts.vector.y)&&Math.hypot(opts.vector.x,opts.vector.y)>0;
  return a==='dribble'||a==='hold';
 }
@@ -287,7 +310,8 @@ export function attackOdds(m:Match,a:Action,opts:AttackOptions={}):Odds{
  else{
    const target=m.players.find(q=>q.id===opts.targetId)??(a==='cross'?crossTarget(m,p):a==='cutback'?cutbackTarget(m,p):undefined);
    if(!target||target.team!==p.team||target.id===p.id||!active(target))return {p:0,why:[]};
-   const aim=a==='cross'||a==='cutback'?target:runPoint(m,target),intoSpace=aim.x!==target.x||aim.y!==target.y;
+   const plan=a==='through'?throughPlan(m,p,target):undefined;
+   const aim=plan?.aim??(a==='pass'||a==='cross'||a==='cutback'?target:runPoint(m,target)),intoSpace=a==='through';
    const dist=distance(p,aim),longWeight=longPassWeight(dist),skill=p.a.passing*(1-longWeight)+p.a.longPassing*longWeight;
    if(a==='cross'){
      base=CROSS.base+CROSS.skill*(p.a.curve*.45+p.a.longPassing*.35+p.a.vision*.2)/100-Math.min(.18,markers(m,target,3)*CROSS.marker);
@@ -295,6 +319,7 @@ export function attackOdds(m:Match,a:Action,opts:AttackOptions={}):Odds{
    }else{
      // 0.7.1 pass base: an unpressured short pass is safe; length, a forward or through ball lower it.
      base=PASS.base+PASS.skill*skill/100+PASS.anticipation*p.a.anticipation/100-Math.max(0,dist-PASS.shortRange)*PASS.perMetre;
+     if(plan){base+=(plan.read-.5)*.10;reasons.push([.8,plan.reason]);}
      const ahead=(aim.x-p.x)*d;
      if(a!=='cutback')base-=a==='through'||intoSpace?PASS.through:a==='forward'||(a==='pass'&&ahead>PASS.forwardMetres)?PASS.forward:0;
      else base-=Math.min(.2,markers(m,target,3)*.07);
@@ -349,7 +374,7 @@ export function matchCommentary(m:Match){
    const count=nearbyOpponents(m,u).count;
    return `${zone}에서 ${from?`${from}의 패스를 받은 `:''}${u.name}! ${count>=2?'수비가 에워쌉니다. 빠른 판단이 필요합니다.':count?'상대 수비와 마주합니다.':'앞에 공간이 열렸습니다.'}`;
  }
- return m.log.at(-1)?.text??'선수들이 전술 대형을 정비하며 기회를 살핍니다.';
+ return tacticalNote(m)||m.occasion||m.log.at(-1)?.text||'선수들이 전술 대형을 정비하며 기회를 살핍니다.';
 }
 
 /** 0.8: in-game probabilities are shown as words, never as numbers. */

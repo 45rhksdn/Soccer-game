@@ -1,3 +1,6 @@
+# v0.16 추가 규칙
+최근 행동에 대응하는 수비 위치·점수/시간에 따른 팀 형태·발밑/스루패스 분리·실제 출전 기반 라이벌/구단 기록. 자세한 규칙과 제한은 HANDOFF_LIVING_FOOTBALL.md. 스루패스 전달 정확도와 실제 도착 경합은 별도 단계이며, 표시 문구에 구분한다.
+
 # v0.15 시즌·대회·신뢰·세부훈련 (현재 규칙, v0.14 위에 덧붙임)
 - 코드 위치: `src/season.ts`(35주 슬롯, 경기 요일, 리그 라운드, 토너먼트, 고교 대회, 스카우트 보너스), `world.ts`(`resetSeason`, `matchupFor`, `resolveWeek`, `transferWindow`, `assignPitches`, `expandTo8`), `career.ts`(`selection` 지위, `settleCalendarWeek`, `payWeeks`, `signOffer`, `completeCalendarSeason`, `ratingTrust`, `nextStatus`, `capTrust`), `development.ts`(`matchDayIndex`, `focusGrow`, `FOCUS_KEYS`, `focusPrice`, `vacationPrice`, `growthPace`), `SeasonPanel.tsx`.
 - 매주(`season.played` = 지난 주 수) 사용자 경기를 `matchupFor`가 정하고, 경기 후 `resolveWeek`가 그 주의 모든 리그·컵·대륙·대표·고교 경기를 한 번에 처리한다(사용자·라이벌 결과는 강제, 나머지는 간이 점수).

@@ -42,8 +42,10 @@ export function Pitch({
   selectedTarget = null,
   premium = false,
   motion = null,
+  throughAim,
 }: {
   selectedTarget?: number | null;
+  throughAim?:{x:number;y:number};
   premium?: boolean;
   motion?: PitchMotion|null;
   match?: Match | null;
@@ -157,6 +159,12 @@ export function Pitch({
           ctx.strokeText(match.players[p.id].name, x, y + 27); ctx.fillText(match.players[p.id].name, x, y + 27);
         }
       }
+      if(match&&selectable&&throughAim){
+        const u=match.players[match.userId],[ux,uy]=P(u.x,u.y),[ax,ay]=P(throughAim.x,throughAim.y);
+        ctx.save();ctx.strokeStyle='#ffd990';ctx.lineWidth=3;ctx.setLineDash([8,6]);
+        ctx.beginPath();ctx.moveTo(ux,uy);ctx.lineTo(ax,ay);ctx.stroke();ctx.setLineDash([]);
+        ctx.beginPath();ctx.arc(ax,ay,12,0,7);ctx.stroke();ctx.restore();
+      }
       // 0.10 the user's run in behind: a dashed arrow to where the through ball should go.
       if (match && match.userOnPitch !== false) {
         const u = match.players[match.userId];
@@ -188,7 +196,7 @@ export function Pitch({
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [match, ambient, selectable, dribble, selectedTarget, premium, motion, v.vertical, v.up]);
+  }, [match, ambient, selectable, dribble, selectedTarget, premium, motion, throughAim, v.vertical, v.up]);
   const clickable = (selectable || dribble) && !!match;
   return (
     <canvas

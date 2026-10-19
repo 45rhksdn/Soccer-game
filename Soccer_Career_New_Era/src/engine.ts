@@ -1,4 +1,5 @@
-import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, runPoint, crossTarget, cutbackTarget, boxMates, tackleEdge, ODDS, dribbleAdvance, dribbleMinimum, dribbleTargets, stopsCarry, paceDuel, attackOdds, type AttackOptions } from "./tactical";
+import {rememberPlay,adaptiveTarget,gamePlan,type MatchDynamics} from './matchDynamics';
+import { attackChance, attackAllowed, attackKeys, passInsightKeys, defenseChance, shotBlockAt, runPoint, crossTarget, cutbackTarget, boxMates, tackleEdge, ODDS, dribbleAdvance, dribbleMinimum, dribbleTargets, stopsCarry, paceDuel, attackOdds, throughPlan, throughEligible, type AttackOptions } from "./tactical";
 /** Weight of an open shooting lane when attackers pick their receiving spot near goal. */
 export const SHOT_LANE_WEIGHT = 3;
 /** Pure seeded football simulation. No DOM, timers, or external services. Pitch 105 x 68m. */
@@ -160,6 +161,7 @@ export type Ball = {
     assistFrom?: number;
     /** 0.10 a lofted cross: the receiver meets it in the air (header / volley). */
     aerial?: boolean;
+    through?:boolean;
   };
 };
 /**
@@ -168,6 +170,8 @@ export type Ball = {
  */
 export type Insight = {chance:number,gains:Partial<Record<Attr,number>>,events:{minute:number,key:Attr}[],base?:Partial<Record<Attr,number>>};
 export type Match = {
+  dynamics?:MatchDynamics;
+  occasion?:string;
   insight?:Insight;
   rivalInsight?:Insight & {playerId:number};
   traitBoost?:boolean;
@@ -598,7 +602,7 @@ function targets(m: Match, p: Footballer, act: Action) {
   const line = m.players.filter(q=>q.team!==p.team && active(q)).map(q=>q.x*d).sort((a,b)=>b-a)[1]??105;
   const offside = (q:Footballer) => q.x*d > p.x*d && q.x*d > line && q.x*d > 52.5*d;
   return m.players
-    .filter((q) => q.team === p.team && q.id !== p.id && active(q) && !offside(q))
+    .filter((q) => q.team === p.team && q.id !== p.id && active(q) && !offside(q) && (act!=="through"||throughEligible(m,p,q)))
     .map((q) => {
       // 0.10 a runner is judged where the ball will meet him (the end of his run).
       const aim = runPoint(m, q), ox = q.x, oy = q.y, running = aim.x !== ox || aim.y !== oy;
@@ -625,7 +629,7 @@ export function actionChance(m:Match,action:Action,options:AttackOptions={}) {
   return attackChance(m,action,{...options,targetId:target});
 }
 export function availableActions(m:Match):Action[]{
-  return (['header','volley','closeShot','longShot','curl','cross','cutback','dribble','pass'] as Action[]).filter(a=>attackAllowed(m,a));
+  return (['header','volley','closeShot','longShot','curl','cross','cutback','dribble','pass','through'] as Action[]).filter(a=>attackAllowed(m,a));
 }
 /**
  * 0.12 how the AI dribbles (pure, no RNG): forward, or the better diagonal; 치고 달리기 when the knock-on is
@@ -693,6 +697,7 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
   if (m.assistBoost?.to === p.id) m.assistBoost = null; // one action only, never stacks
   // 깨달음 grows exactly the attributes that decide this action (a pass: by its length).
   const passTo=["pass","safe","forward","through"].includes(action)?(options.targetId===undefined?targets(m,p,action)[0]?.p:m.players.find(q=>q.id===options.targetId)):undefined;
+  rememberPlay(m,p,action,options.vector,passTo?.id);
   insightAttempt(m,p,passTo?passInsightKeys(dist(p,passTo)):attackKeys(action==='shoot'&&Math.hypot((d>0?105:0)-p.x,34-p.y)>22?'longShot':action));
   m.decision = false;
   m.nextAI = 2.5;
@@ -798,7 +803,10 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
     return;
   }
   p.stats.passes++;
-  const aim = runPoint(m, q), intoSpace = aim.x !== q.x || aim.y !== q.y;
+  const plan = action==='through'?throughPlan(m,p,q):undefined;
+  if(plan&&!plan.allowed)return;
+  const aim = plan?.aim??(action==='pass'?{x:q.x,y:q.y}:runPoint(m,q)), intoSpace = action==='through';
+  if(plan)q.run={x:aim.x,y:aim.y,until:m.clock+plan.duration*6+9};
   if (m.oneTwo && m.oneTwo.to === q.id && m.clock <= m.oneTwo.until) event(m, `${p.name} ↔ ${q.name} 원투 패스!`);
   else if (intoSpace) event(m, `${p.name}, 수비 뒷공간으로 침투하는 ${q.name}에게 스루패스!`);
   else event(m,`${p.name}, ${q.name}을 향해 패스를 보냅니다.`);
@@ -808,11 +816,12 @@ export function act(m: Match, action: Action, options:AttackOptions={}) {
   m.ball.flight = {
     from: p.id,
     to: q.id,
-    x: clamp(intoSpace ? aim.x : q.x + (action === "through" ? 4 * d : 0), 2, 103),
-    y: clamp(intoSpace ? aim.y : q.y, 2, 66),
+    x: clamp(aim.x, 2, 103),
+    y: clamp(aim.y, 2, 66),
     kind: "pass",
     progress: 0,
-    duration: Math.max(0.5, dist(p, intoSpace ? aim : q) / 18),
+    duration: plan?.duration??Math.max(0.5, dist(p,aim) / 18),
+    through:intoSpace,
     startX: p.x,
     startY: p.y,
     success: random(m) < chance,
@@ -932,13 +941,17 @@ function moveTeams(m: Match, dt: number, owner: Footballer | null, attack: Footb
         }
       }
     }
+    const adjusted=adaptiveTarget(m,p,owner,tx,ty);tx=adjusted.x;ty=adjusted.y;
+    if(m.ball.flight?.through&&p.team!==m.players[m.ball.flight.from].team){
+      const f=m.ball.flight;if(dist(p,f)<18){tx=f.x;ty=f.y;}
+    }
     if (m.ball.flight && m.ball.flight.to === p.id) {
       tx = m.ball.flight.x;
       ty = m.ball.flight.y;
       p.mode = "support";
     }
     if (p.id === m.userId && m.userOnPitch !== false && owner?.id !== p.id) {
-      if (m.offball === "run") {
+      if (m.offball === "run" && m.ball.flight?.to !== p.id) {
         // 0.10 '공간 침투': a real run in behind whenever a teammate has the ball (offside is judged at the pass).
         if (owner && owner.team === p.team && !(p.run && p.run.until > m.clock)) startRun(m, p);
         if (p.run && p.run.until > m.clock) { tx = p.run.x; ty = p.run.y; }
@@ -1131,14 +1144,22 @@ export function step(m: Match, dt = 0.5, auto = false) {
         }
       } else {
         const target = m.players[f.to!];
+        if(f.through){
+          const defender=m.players.filter(q=>q.team!==from.team&&active(q)).sort((a,b)=>dist(a,f)-dist(b,f))[0];
+          const td=active(target)?dist(target,f):Infinity,dd=defender?dist(defender,f):Infinity;
+          if(td>2&&dd>2&&f.progress<1+1.5/f.duration)return;
+          if(dd<2&&dd<td+.25){f.success=false;f.interceptor=defender.id;}
+          if(td>2)f.success=false;
+          if(!f.success)event(m,dd<2?`${defender.name}, 스루패스 길에 먼저 도착합니다!`:'스루패스가 길었습니다. 상대가 공을 회수합니다.');
+        }
         if (f.success && active(target)) {
           from.stats.completed++;
           if ((f.x - f.startX) * direction(m, from.team) >= 10) {
             from.stats.progressivePasses = (from.stats.progressivePasses ?? 0) + 1;
           }
           m.lastPass = { from: from.id, to: target.id, time: m.clock };
-          target.x = f.x;
-          target.y = f.y;
+          if(!f.through){target.x = f.x;target.y = f.y;}
+          else {target.run=undefined;event(m,`${target.name}, 수비 뒷공간에서 스루패스를 받습니다!`);}
           own(m, target);
           if (f.aerial) { m.aerial = { to: target.id, until: m.clock + 9 }; m.nextAI = .5; event(m, `${target.name}, 박스 안에서 ${from.name}의 크로스를 맞이합니다!`); }
           else event(m,`${Math.abs((direction(m,target.team)>0?105:0)-target.x)<16.5&&Math.abs(target.y-34)<20?"페널티 박스 안에서":Math.abs((direction(m,target.team)>0?105:0)-target.x)<22?"페널티 박스 근처에서":"빈 공간에서"} ${from.name}의 패스를 받은 ${target.name}!`);
@@ -1173,7 +1194,7 @@ export function step(m: Match, dt = 0.5, auto = false) {
           (p) => p.team !== owner.team && active(p) && dist(p, owner) < 2.3,
         )
         .sort((a, b) => dist(a, owner) - dist(b, owner))[0];
-      if (near && random(m) < dt * (m.guard?.kind === "press" && near.id === m.userId ? 0.3 : 0.16)) {
+      if (near && random(m) < dt * (m.guard?.kind === "press" && near.id === m.userId ? 0.3 : 0.16) * gamePlan(m,near.team).press * (near.yellow?.65:1)) {
         near.stats.duelAttempts=(near.stats.duelAttempts??0)+1;
         insightAttempt(m,near,['defending']);
         const temper = near.fx?.temper ?? 1;

@@ -210,7 +210,7 @@ it('a v8 save with a live match: 72 → 94 clubs, ids/players/contract/match kep
  const text=readFileSync(new URL('./fixtures/v8-live-match.json',import.meta.url),'utf8'),raw=JSON.parse(JSON.parse(text).payload);
  expect(raw.version).toBe(8);expect(raw.world.clubs).toHaveLength(72);
  const c=decode(text);
- expect(c.version).toBe(9);expect(c.world.clubs).toHaveLength(94);expect(c.world.calendar).toBeUndefined();
+ expect(c.version).toBe(10);expect(c.world.clubs).toHaveLength(94);expect(c.world.calendar).toBeUndefined();
  expect(c.world.clubs.slice(0,72).map(x=>x.id)).toEqual(raw.world.clubs.map((x:{id:string})=>x.id));
  expect(c.world.clubs.slice(0,72).map(x=>x.roster)).toEqual(raw.world.clubs.map((x:{roster:unknown})=>x.roster));
  expect(c.world.clubId).toBe(raw.world.clubId);expect(clubOf(c.world).name).toBe(LEAGUE_DATA[1].clubs[0][0]);

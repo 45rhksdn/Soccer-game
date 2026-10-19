@@ -94,7 +94,7 @@ for(const file of ['v4-weeks.json','v4-live-match.json'])it(`real v4 save (${fil
   const old=JSON.parse(JSON.parse(text).payload);
   expect(old.version).toBe(4);
   const n=decode(text);
-  expect(n.version).toBe(9);
+  expect(n.version).toBe(10);
   expect(n.development.traits).toEqual([old.development.trait]);
   expect(n.development.rival.traits).toEqual([old.development.rival.trait]);
   expect('trait' in n.development).toBe(false);
@@ -104,5 +104,5 @@ for(const file of ['v4-weeks.json','v4-live-match.json'])it(`real v4 save (${fil
   expect(decode(text)).toEqual(n);expect(decode(encode(n))).toEqual(n);
   // The migrated career keeps playing.
   if(n.match){finishMatch(n.match);settle(n);}
-  expect(validate(n).version).toBe(9);
+  expect(validate(n).version).toBe(10);
 });

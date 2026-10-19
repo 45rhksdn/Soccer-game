@@ -19,7 +19,7 @@ it('old v7 world expands once, preserving active history, fixtures, contracts an
  delete w.calendar;delete w.season;w.fixtures=Array.from({length:10},()=>[]);for(let l=0;l<4;l++)legacyFixtures(w.clubs.filter(x=>x.league===l).map(x=>x.id)).forEach((r,i)=>w.fixtures[i].push(...r));
  for(let i=0;i<3;i++)advanceLeague(w,[1,0]);
  const oldPlayers=w.clubs.map(c=>structuredClone(c.roster)),oldFixtures=structuredClone(w.fixtures);(c as any).version=7;
- const a=validate(c),b=validate(c);expect(a).toEqual(b);expect(a.version).toBe(9);expect(a.world.round).toBe(3);expect(a.world.clubs).toHaveLength(94);expect(a.world.calendar).toBeUndefined();
+ const a=validate(c),b=validate(c);expect(a).toEqual(b);expect(a.version).toBe(10);expect(a.world.round).toBe(3);expect(a.world.clubs).toHaveLength(94);expect(a.world.calendar).toBeUndefined();
  expect(a.world.clubs.slice(0,24).map(c=>c.roster)).toEqual(oldPlayers);for(let i=0;i<10;i++)expect(a.world.fixtures[i].slice(0,oldFixtures[i].length)).toEqual(oldFixtures[i]);
  expect(a.world.tables.every(t=>t.played===3)).toBe(true);expect(decode(encode(a))).toEqual(a);expect(a.world.contract).toEqual(c.world.contract);
 });

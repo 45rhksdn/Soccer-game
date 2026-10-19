@@ -1,3 +1,6 @@
+# v0.16 모듈
+`matchDynamics.ts`는 경기 내 위치 반응, `tactical.throughPlan`은 순수 목적지 평가, engine flight는 실제 이동/도착 판정. `careerMoments.ts`는 실제 기록에서만 사건을 발행한다. 화면은 ConnectionsPanel 및 기존 CompactMatch/Pitch를 재사용. 저장 v10 이전 절차는 storage.ts.
+
 # v0.9 통합 구조 (2026-10-18)
 
 - Claude `22234e5`의 미션·시그니처·라이벌 비교·팝업을 통합했다. `engagement.ts`의 미션 난이도는 리그 ID가 아닌 `leagueLevel >= 70`으로 판정한다.

@@ -17,7 +17,7 @@ it('real v5 saves (0.4, daily week and live match) load as v6 without losing any
   expect(SAVE_VERSION).toBe(9);
   for(const name of ['v5-daily.json','v5-live-match.json']){
     const before=raw(name),c=decode(fixture(name));
-    expect(before.version).toBe(5);expect(c.version).toBe(9);expect(typeof c.id).toBe('string');
+    expect(before.version).toBe(5);expect(c.version).toBe(10);expect(typeof c.id).toBe('string');
     expect(c.player).toMatchObject(before.player);expect(c.development.traits).toMatchObject(before.development.traits);
     expect(c.development.rival.player).toMatchObject(before.development.rival.player);expect(c.development.rival.traits).toMatchObject(before.development.rival.traits);
     expect(c.development.rival.history).toMatchObject(before.development.rival.history);
@@ -41,7 +41,7 @@ it('a migrated v5 save continues: the daily schedule resumes and the live match 
 });
 
 it('older chains still work: v4 fixtures go v4 → v5 → v6',()=>{
-  for(const name of ['v4-weeks.json','v4-live-match.json']){const c=decode(fixture(name));expect(c.version).toBe(9);expect(c.id).toMatch(/^legacy-/);expect(c.player.name).toBe(raw(name).player.name);}
+  for(const name of ['v4-weeks.json','v4-live-match.json']){const c=decode(fixture(name));expect(c.version).toBe(10);expect(c.id).toMatch(/^legacy-/);expect(c.player.name).toBe(raw(name).player.name);}
 });
 
 it('round trip with every 0.5 field (equipment, injuries, id) is lossless',()=>{

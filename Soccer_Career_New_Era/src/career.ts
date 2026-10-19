@@ -1,3 +1,4 @@
+import {recordConnections,recordMove,matchOccasion,type CareerConnections} from './careerMoments';
 import {makeStory,recordAge,storySchool,type PlayerStory} from './origins';
 import {returnFromLoan,acceptOffer} from './world';
 import {growthPace,ensureDevelopment,configureTrait,applyInsights,playRival,afterScheduledMatch,announceOffers,ageRival,news,syncRival,finishWeek,type Development} from './development';
@@ -110,7 +111,8 @@ export type CareerPreset={a?:Attributes,potential?:number,learning?:number,trait
  /** Account-wide max-potential increase from retirements (legacy.ts); only raises the top of the random range. */
  potentialBonus?:number};
 export type Career = {
-  version: 9;
+  version: 10;
+  connections?:CareerConnections;
   /** Stable player id (0.5): same across backups/archives of this player, different for every new player. */
   id?: string;
   schoolRef?: SchoolRef;
@@ -177,7 +179,7 @@ export function newCareer(
     a.vision += 5;
   }
   const c = {
-    version: 9,
+    version: 10,
     id: preset.id ?? `p-${seedFrom(seed >>> 0, `${p.name}|${p.pos}|${school}`).toString(36)}`,
     world: newWorld(seed,school),
     seed: r.seed,
@@ -339,6 +341,7 @@ export function settle(c: Career):SettleResult {
     gain,
   });
   if(appeared&&r>=7.5)news(c,`${c.player.name} · 평점 ${r.toFixed(2)}의 맹활약!`,'rating');
+  recordConnections(c,m,!!week?.national||m.competition?.includes('초청'));
   const mission=settleMission(c,m),signatures=recordDeeds(c,p.stats);
   // A mission bonus never turns a poor match (≤ 6.5) into a net trust gain.
   c.player.trust=capTrust(trustBefore,c.player.trust,r,appeared);
@@ -416,7 +419,18 @@ export function startCareerMatch(c:Career){
  m.competition=competitionName(c);m.tactics=[own.coach.style,(mu?mu.club:other.club)?.coach.style??'역습'];
  if(mu&&w.season)w.season.pending={week:w.season.played,national:mu.national};
  m.mission=createMission(c);
- if(mu?.national||(!w.calendar&&w.phase==='national')){m.userOnPitch=!c.player.injuryWeeks;if(!m.userOnPitch)m.players[m.userId].name='대표팀 동료';configureTrait(c,m);c.match=m;return;}
+ if(mu?.national||(!w.calendar&&w.phase==='national')){
+  m.userOnPitch=!c.player.injuryWeeks;if(!m.userOnPitch)m.players[m.userId].name='대표팀 동료';
+  const rival=c.development.rival;
+  if(!rival.retired&&!rival.player.injuryWeeks&&rival.player.age>=19&&roleAbility(rival.player.a,rival.player.pos)>=66){
+   const slot=m.players.filter(p=>p.team===0&&p.id!==m.userId&&p.pos===rival.player.pos).sort((a,b)=>roleAbility(a.a,a.pos)-roleAbility(b.a,b.pos))[0];
+   if(slot&&roleAbility(rival.player.a,rival.player.pos)>=roleAbility(slot.a,slot.pos)){
+    m.rosterIds=m.players.map(p=>p.id===m.userId?'hero':'national-'+p.id);m.rosterIds[slot.id]=rival.id;
+    slot.name=rival.player.name;slot.a={...rival.player.a};slot.energy=rival.player.energy;
+   }
+  }
+  matchOccasion(c,m,undefined,true);configureTrait(c,m);c.match=m;return;
+ }
  const lineup=plan.lineup,oppClub=mu?mu.club:other.club;
  // 0.15 a real school without its own club in the world plays with a stand-in squad (copied ids, so no NPC record changes).
  const standIn=!!mu&&!!oppClub&&oppClub.league===0&&mu.opponentId!==oppClub.id;
@@ -442,6 +456,7 @@ export function startCareerMatch(c:Career){
  if(m.userOnPitch&&m.userId!==9)m.players[9].number=m.userId+1;
  if(m.ball.owner!==null){m.ball.x=m.players[m.ball.owner].x;m.ball.y=m.players[m.ball.owner].y;}
  m.decision=m.ball.owner===m.userId&&m.userOnPitch;
+ matchOccasion(c,m,mu?.opponentId??oppClub?.id);
  configureTrait(c,m);c.match=m;
 }
 /** 0.15 the calendar part of settle: this week everywhere (resolveWeek), titles, caps, school stats, guaranteed starts. */
@@ -484,6 +499,7 @@ export function signOffer(c:Career,clubId:string){
  if(c.match)throw Error('진행 중인 경기를 완료하세요.');
  const w=c.world,from=clubOf(w),offer=w.offers.find(o=>o.clubId===clubId&&o.status==='open');
  acceptOffer(w,clubId,c.player.name);
+ recordMove(c,from.id,w.clubId);
  if(w.clubId===from.id)return;
  w.trustLog=[...(w.trustLog??[]),{club:from.name,trust:Math.round(c.player.trust*10)/10,year:w.year}].slice(-20);
  const trust=initialTrust({...offer,trialMatches:w.contract.trialMatches});c.player.trust=trust;c.player.lastTrust=undefined;

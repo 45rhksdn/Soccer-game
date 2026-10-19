@@ -1,9 +1,10 @@
+import {tacticalNote} from './matchDynamics';
 import {Crosshair,Target,CornerUpRight,CornerDownLeft,Wind,ArrowUpRight,Goal} from 'lucide-react';
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {Pitch,screenToEngineVector,type PitchMotion} from './Pitch';
 import {carryPace,ACTIONS,DEFENSE_ACTIONS,PLAYER_DEFENSE_ACTIONS,availableActions,act,defend,type Match,type Action} from './engine';
 import {MissionStrip} from './EngagementPanels';
-import {attackOdds,defenseOdds,nearbyOpponents,distance,passTargets,matchCommentary,offside,chanceLabel,opponentDistanceLabel,dribbleAdvance,type AttackOptions} from './tactical';
+import {throughPlan,attackOdds,defenseOdds,nearbyOpponents,distance,passTargets,matchCommentary,offside,chanceLabel,opponentDistanceLabel,dribbleAdvance,type AttackOptions} from './tactical';
 import './compact-match.css';
 
 const DIRECTIONS=[['↖',-1,-1],['↑',0,-1],['↗',1,-1],['←',-1,0],null,['→',1,0],['↙',-1,1],['↓',0,1],['↘',1,1]] as const;
@@ -28,6 +29,7 @@ export function CompactMatch({m,onChange,toolbar,onAnimating}:{m:Match;onChange:
  const u=m.players[m.userId],owner=m.ball.owner===null?null:m.players[m.ball.owner],allowed=availableActions(m);
  const near=nearbyOpponents(m,u),gap=m.defending&&owner?distance(u,owner):near.distance;
  const targets=passTargets(m).sort((a,b)=>distance(u,a)-distance(u,b)||a.id-b.id),selected=targets.find(p=>p.id===target);
+ const through=selected?throughPlan(m,u,selected):undefined,throughP=selected?attackOdds(m,'through',{targetId:selected.id}).p:0;
  const validTarget=selected&&!offside(m,selected),passP=selected?attackOdds(m,'pass',{targetId:selected.id}).p:0;
  useEffect(()=>{root.current?.closest('.match-board')?.scrollIntoView({block:'start'});return()=>{onAnimating?.(false);};},[]);
  useEffect(()=>{if(!motion)return;const timer=setTimeout(()=>{setMotion(null);gate.current=false;onAnimating?.(false);},motion.duration);return()=>clearTimeout(timer);},[motion]);
@@ -47,11 +49,11 @@ export function CompactMatch({m,onChange,toolbar,onAnimating}:{m:Match;onChange:
  };
  const pickTarget=(id:number)=>{if(!busy&&m.decision&&targets.some(p=>p.id===id))setTarget(id);};
  return <div ref={root} className="match-layout cm-match cm-sidebar-layout">
-  <div className="live-commentary" aria-live="polite"><b>현장 중계</b><p>{busy?`${u.name}, 공을 몰고 전진합니다.`:matchCommentary(m)}</p></div>
+  <div className="live-commentary" aria-live="polite"><b>현장 중계</b><p>{busy?`${u.name}, 공을 몰고 전진합니다.`:matchCommentary(m)}</p>{!busy&&(tacticalNote(m)||m.occasion)&&<small>{tacticalNote(m)||m.occasion}</small>}</div>
   <div className="match-field"><div className="pitch-wrap interactive-pitch">
-   <Pitch match={m} selectable={m.decision&&!busy&&allowed.includes('pass')} onPlayer={pickTarget} selectedTarget={target} motion={motion} premium/>
+   <Pitch match={m} selectable={m.decision&&!busy&&allowed.includes('pass')} onPlayer={pickTarget} selectedTarget={target} throughAim={through?.allowed?through.aim:undefined} motion={motion} premium/>
    <span className="live-badge">{busy?'드리블 진행':m.ended?'FULL TIME':m.decision?'공격 선택':m.defending?'수비 선택':'LIVE'}</span>
-   {selected&&m.decision&&!busy&&<div className="cm-pass-card" role="status"><strong>#{selected.number} {selected.name}</strong><span>거리 {distance(u,selected).toFixed(1)}m · 성공 {validTarget?passBand(passP):'불가 · 오프사이드'}</span><button disabled={!validTarget} onClick={()=>execute('pass',{targetId:selected.id})}>패스하기</button><button aria-label="패스 선택 취소" onClick={()=>setTarget(null)}>×</button></div>}
+   {selected&&m.decision&&!busy&&<div className="cm-pass-card" role="status"><strong>#{selected.number} {selected.name}</strong><span>거리 {distance(u,selected).toFixed(1)}m · 성공 {validTarget?passBand(passP):'불가 · 오프사이드'}</span><button disabled={!validTarget} onClick={()=>execute('pass',{targetId:selected.id})}>패스하기</button><button disabled={!through?.allowed} title={through?.reason} onClick={()=>execute('through',{targetId:selected.id})}>스루패스 · {through?.allowed?passBand(throughP):'불가'}</button><small className="cm-through-note">{through?.reason} · 점선은 침투 목표 / 확률은 전달 정확도, 수신은 도착 경합</small><button aria-label="패스 선택 취소" onClick={()=>setTarget(null)}>×</button></div>}
   </div></div>
   <div className="match-side" inert={busy}>
    {!m.ended&&<section className="match-actions">
