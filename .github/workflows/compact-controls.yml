@@ -1,0 +1,29 @@
+name: Compact match controls QA
+on:
+  push:
+    branches: ['codex/compact-match-controls']
+defaults:
+  run:
+    working-directory: Soccer_Career_New_Era
+jobs:
+  controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Soccer_Career_New_Era/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run build
+      - run: WEBKIT=1 PWA_TEST=1 npx playwright test tests/e2e/compact-controls.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compact-controls-results
+          path: |
+            Soccer_Career_New_Era/reports/
+            Soccer_Career_New_Era/test-results/

@@ -89,7 +89,7 @@ it('creation: school + wished position gives one student of that position; deter
 });
 it('the scout’s forecast names leagues and levels, rises with the estimate, and never shows the number',()=>{
   const order=(t:string)=>[...LEAGUES].map((n,i)=>t.includes(n)?i:-1).filter(i=>i>0);
-  const text=potentialForecast([75,80]);expect(text).toContain('스카우트 평가');expect(text).not.toMatch(/\d/);expect(order(text).length).toBeGreaterThan(0);
+  const text=potentialForecast([75,80]);expect(text).toContain('스카우트 평가');expect(text.replaceAll('리그 1','리그')).not.toMatch(/\d/); /* the league name 'Ligue 1' is not a number */expect(order(text).length).toBeGreaterThan(0);
   expect(levelPhrase(90)).toContain('최정상');expect(levelPhrase(72)).toContain('주전급');
   // A better estimate never reads worse: the likely league's average level does not fall as the range rises.
   const avgOf=(phrase:string)=>Math.max(...LEAGUES.map((n,i)=>phrase.includes(n)?i:-1).filter(i=>i>0).map(i=>[0,59.3,71.8,80.7,63.7,70,69.3,78.5,79.3,71.5,75.5,78.2][i]));

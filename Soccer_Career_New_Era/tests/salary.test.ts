@@ -34,7 +34,7 @@ it('offers use the club and the role; budgets can afford them',()=>{
   const c=newCareer({name:'연봉',age:22,pos:'CM',secondary:'ST',foot:'오른',height:180,weight:72,style:'플레이메이커',curve:'꾸준한 성장형'},0,7,{traits:[]});
   c.world.phase='offseason';c.player.a=attributes(70);generateOffers(c.world,c.player,7);
   const ability=roleAbility(c.player.a,c.player.pos);expect(c.world.offers.length).toBeGreaterThan(0);
-  for(const o of c.world.offers){const club=c.world.clubs.find(x=>x.id===o.clubId)!;expect(o.salary).toBe(contractSalary(club,c.player.age,ability-clubLevel(club,c.player.pos)));expect(club.budget).toBeGreaterThanOrEqual(o.fee+o.salary*o.years);}
+  for(const o of c.world.offers){const club=c.world.clubs.find(x=>x.id===o.clubId)!;if(!o.pitch||o.pitch==='성장 환경'||o.pitch==='유망주 육성')expect(o.salary).toBe(contractSalary(club,c.player.age,ability-clubLevel(club,c.player.pos)));expect(club.budget).toBeGreaterThanOrEqual(o.fee+o.salary*o.years);}
 });
 
 it('older saves are re-priced once (budgets, running contract, open offers); new worlds start on the new scale',()=>{

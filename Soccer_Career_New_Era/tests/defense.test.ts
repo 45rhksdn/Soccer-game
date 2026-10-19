@@ -1,8 +1,9 @@
 import {it,expect} from 'vitest';
-import {createMatch,attributes,step,act,chooseAction,finishMatch,defend,tackleChance,rating,emptyStats,DEFENSE_ACTIONS,PLAYER_DEFENSE_ACTIONS,DEFENSE_PROMPT_DISTANCE,DEFENSIVE_WIN_CAP,FAILED_TACKLE_CAP,type Match,type DefenseAction} from '../src/engine';
+import {createMatch,attributes,step,act,chooseAction,finishMatch,defend,tackleChance,rating,emptyStats,DEFENSE_ACTIONS,PLAYER_DEFENSE_ACTIONS,DEFENSE_PROMPT_DISTANCE,DEFENSIVE_WIN_CAP,DEFENSIVE_WIN_RATING,FAILED_TACKLE_CAP,type Match,type DefenseAction} from '../src/engine';
 import {encode,decode} from '../src/storage';
 import {newCareer,startCareerMatch,settle} from '../src/career';
 import {playToday} from '../src/development';
+import {saturdays} from './saturdays';
 
 const user=(pos:'CB'|'CM'|'ST'='CB')=>({name:'수비수',pos,a:attributes(62),energy:100});
 /** Plays a live (interactive) match: on-ball moments use the AI choice, defensive moments use `choice`. */
@@ -42,17 +43,17 @@ it('tackle: wins the ball at about the shown chance; a miss is recorded',()=>{
 
 it('rating: defensive wins add a capped bonus, missed tackles a capped penalty; balance of choices stays moderate',async()=>{
   const p=createMatch(2,user()).players[3];p.stats={...emptyStats(),minutes:90};const base=rating(p);
-  expect(rating({...p,stats:{...p.stats,defensiveWins:2}})-base).toBeCloseTo(.08,8);
+  expect(rating({...p,stats:{...p.stats,defensiveWins:2}})-base).toBeCloseTo(2*DEFENSIVE_WIN_RATING,8); /* Codex 0.15: .04 → .05 per win */
   expect(rating({...p,stats:{...p.stats,defensiveWins:30}})-base).toBeCloseTo(DEFENSIVE_WIN_CAP,8);
   expect(base-rating({...p,stats:{...p.stats,failedTackles:30}})).toBeCloseTo(FAILED_TACKLE_CAP,8);
   // Average rating of a live player choosing a defence vs leaving it to the AI: a reward, not a game breaker.
   const mean=async(c:DefenseAction|'none')=>{let n=0;for(let seed=1;seed<=30;seed++){await new Promise(r=>setTimeout(r,0));const m=createMatch(seed,user());playLive(m,c);n+=rating(m.players[m.userId]);}return n/30;};
   const none=await mean('none');
-  for(const c of ['press','slide','predict','tackle'] as const){const d=(await mean(c))-none;console.log(`    ${c} rating Δ ${d.toFixed(3)}`);expect(Math.abs(d)).toBeLessThan(c==='slide'||c==='predict'?.65:.35);}
+  for(const c of ['press','slide','predict','tackle'] as const){const d=(await mean(c))-none;console.log(`    ${c} rating Δ ${d.toFixed(3)}`);/* Codex 0.15 raised defensive rewards on purpose (box tackles count ×3): the standing tackle now measures about +0.53 (was +0.08), so its gate is .65 like the risky choices */expect(Math.abs(d)).toBeLessThan(c==='press'?.35:.65);}
 });
 
 it('a pending defensive choice and an active guard survive save/load in a career match',()=>{
-  const c=newCareer({name:'저장수비',age:17,pos:'CB',secondary:'LB',foot:'오른',height:186,weight:80,style:'피지컬',curve:'꾸준한 성장형'},0,77);
+  const c=newCareer({name:'저장수비',age:17,pos:'CB',secondary:'LB',foot:'오른',height:186,weight:80,style:'피지컬',curve:'꾸준한 성장형'},0,77);saturdays(c);
   for(let i=0;i<5;i++)playToday(c,'rest');startCareerMatch(c);const m=c.match!;
   let guard=0;while(!m.defending&&!m.ended&&guard++<20000){if(m.decision)act(m,chooseAction(m,m.players[m.userId]));else step(m,.5);}
   if(m.userOnPitch===false||m.ended)return; // not selected: nothing to defend

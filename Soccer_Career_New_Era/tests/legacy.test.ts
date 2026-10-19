@@ -81,7 +81,7 @@ it('existing players are never changed by a later reward; potentials above 94 ar
 it('v5 saves get a stable id: the same old save always maps to the same id, different players differ',()=>{
   const old=(seed:number,name='예전선수')=>{const c=newCareer({...profile,name},0,seed);delete (c as {id?:string}).id;(c as {version:number}).version=5;return c;};
   const a1=validate(old(5)),a2=validate(structuredClone(old(5))),b=validate(old(6)),d=validate(old(5,'다른선수'));
-  expect(a1.version).toBe(8);expect(a1.id).toBe(a2.id);expect(a1.id).not.toBe(b.id);expect(a1.id).not.toBe(d.id);
+  expect(a1.version).toBe(9);expect(a1.id).toBe(a2.id);expect(a1.id).not.toBe(b.id);expect(a1.id).not.toBe(d.id);
   const bad=structuredClone(a1);(bad as {id:unknown}).id=42;expect(()=>validate(bad)).toThrow('손상');
 });
 
@@ -100,4 +100,4 @@ it('integration: scouted player → full career → retirement → reward → st
   expect(next.map(x=>x.name)).toEqual(generateCandidates(4242,'gyeonggi-maetan',0).map(x=>x.name));
   const gen2=careerFromCandidate(next[1],4242,undefined,'gen-2');expect(gen2.id).toBe('gen-2');
   retireNow(gen2);r=recordRetirement(legacy,gen2);expect(r.rewarded).toBe(true);expect(r.legacy.retired.map(x=>x.id)).toEqual(['gen-1','gen-2']);
-},300000);
+},900000); // 0.15: 35-week seasons (3.5× the matches per year)

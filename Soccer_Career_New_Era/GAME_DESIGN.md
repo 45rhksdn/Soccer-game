@@ -1,3 +1,12 @@
+# v0.15 시즌·대회·신뢰·세부훈련 (현재 규칙, v0.14 위에 덧붙임)
+- 코드 위치: `src/season.ts`(35주 슬롯, 경기 요일, 리그 라운드, 토너먼트, 고교 대회, 스카우트 보너스), `world.ts`(`resetSeason`, `matchupFor`, `resolveWeek`, `transferWindow`, `assignPitches`, `expandTo8`), `career.ts`(`selection` 지위, `settleCalendarWeek`, `payWeeks`, `signOffer`, `completeCalendarSeason`, `ratingTrust`, `nextStatus`, `capTrust`), `development.ts`(`matchDayIndex`, `focusGrow`, `FOCUS_KEYS`, `focusPrice`, `vacationPrice`, `growthPace`), `SeasonPanel.tsx`.
+- 매주(`season.played` = 지난 주 수) 사용자 경기를 `matchupFor`가 정하고, 경기 후 `resolveWeek`가 그 주의 모든 리그·컵·대륙·대표·고교 경기를 한 번에 처리한다(사용자·라이벌 결과는 강제, 나머지는 간이 점수).
+- 무승부 토너먼트: 사용자 경기는 기존처럼 50% 간이 승부차기, NPC는 전력 차에 따라 30~70%.
+- 실제 학교 상대(구단이 없는 학교)는 가상 학교 선수단을 복사한 대체 선수단(id 앞에 x)이 뛰며, NPC 기록에는 반영되지 않는다.
+- 중요 경기(빅매치 체질·큰 경기 울렁증): 국내 컵·대륙 컵·국가대표·고교 지역/전국 토너먼트. 리그·정규 고교·친선은 아니다.
+- 성장 속도 `GROWTH_PACE = 11/35`: 35주 시즌에서 주당 성장 요소에 곱한다(이전 시즌은 1).
+- 수치는 CHANGELOG 0.15.0에 정리했다.
+
 # v0.14 마무리 · 드리블 시간 · 도움 (현재 규칙, Codex v0.13 위에 덧붙임)
 
 - 도움: 슛 순간 `lastPass.to === 슈터`이고 패스한 선수가 같은 팀이면 그 선수를 `flight.assistFrom`에 기록하고 `lastPass`를 비운다. 골이 되면 assistFrom이 도움이다. 상대가 공을 잡으면(`own`) lastPass가 지워진다. 시간 제한은 없다.

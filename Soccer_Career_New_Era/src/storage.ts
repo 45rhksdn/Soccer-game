@@ -1,4 +1,4 @@
-import {expandWorld,migrateEconomy} from './world';
+import {expandWorld,expandTo8,migrateEconomy} from './world';
 import {WORLD_CLUB_COUNT} from './leagues';
 import {ensureDevelopment} from './development';
 import {isKnownTrait,npcTraits,normalizeTraits,TRAIT_LIMIT} from './traits';
@@ -6,7 +6,7 @@ import {validScoutState,type ScoutState} from './scouting';
 import {validEquipment} from './equipment';
 import {emptyLegacy,recordRetirement,validLegacy,type Legacy} from './legacy';
 import {ATTRS,type Attributes} from "./engine";
-export const SAVE_VERSION=8;
+export const SAVE_VERSION=9;
 const NEW_ATTRIBUTES={longShot:"shooting",finishing:"composure",curve:"shooting",longPassing:"passing",sliding:"defending",marking:"defending",anticipation:"decisions"} as const;
 /** Recursively upgrade attribute snapshots, NPCs, live players, substitutes and insight bases. No RNG. */
 function migrateV6(value:unknown){
@@ -83,9 +83,12 @@ export function validate(raw: unknown): Career {
   if((c as {version:number}).version===5)migrateV5(c);
   if((c as {version:number}).version===6){migrateV6(c);(c as {version:number}).version=7;}
   if((c as {version:number}).version===7){expandWorld(c.world);(c as {version:number}).version=8;}
-  if (c.version !== SAVE_VERSION) throw Error("지원되지 않는 저장 버전입니다.");
-  // 0.14 realistic money: re-price older saves once (budgets, running contract, open offers); keeps save version 8.
+  // 0.14 realistic money: re-price older saves once (budgets, running contract, open offers).
   if(c.world?.clubs&&c.player?.a&&c.world.economy!==2)migrateEconomy(c.world,c.player);
+  // 0.15 v8 → v9: 8 clubs per pro league (existing ids kept), the user's school for the school competitions.
+  // A season already running keeps its old rules (no calendar) until the next season starts.
+  if((c as {version:number}).version===8&&c.world?.clubs){expandTo8(c.world);c.world.userSchool??={clubId:'c'+c.school,schoolId:c.schoolRef?.id};(c as {version:number}).version=9;}
+  if (c.version !== SAVE_VERSION) throw Error("지원되지 않는 저장 버전입니다.");
   if (
     !c.player ||
     typeof c.player.name !== "string" ||

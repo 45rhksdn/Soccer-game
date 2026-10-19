@@ -26,11 +26,12 @@ async function play(pos:keyof typeof SECOND,seed:number,seasons:number){
   return {rate:done/Math.max(1,tried),tried,firstSeasonSigs,c};
 }
 for(const pos of ['ST','CM','CB','GK'] as const)
-  it(`감독 미션 success stays between 25 % and 70 % (${pos}), no signature in the first season`,async()=>{
+  it(`감독 미션 success stays between 25 % and 70 % (${pos}), at most one signature in the first (35-match) season`,async()=>{
     const r=await play(pos,23,3);
     console.log(`    ${pos}: ${(r.rate*100).toFixed(0)}% of ${r.tried} missions · signatures after season 1: ${r.firstSeasonSigs} · deeds ${JSON.stringify(deedsOf(r.c))}`);
     expect(r.tried).toBeGreaterThan(15);
     expect(r.rate).toBeGreaterThan(.25);expect(r.rate).toBeLessThan(.7);
-    expect(r.firstSeasonSigs).toBe(0);
+    // 0.15: a season is 35 matches (was ~10), so at most one signature may already come in the first season
+    expect(r.firstSeasonSigs).toBeLessThanOrEqual(1);
   },600000);
 

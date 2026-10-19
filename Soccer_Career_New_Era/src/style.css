@@ -2292,3 +2292,53 @@ td strong {
 /* 0.14 records: 출전 · 골 · 도움 · 드리블 성공 · 평균 평점 */
 @media (min-width:901px){.metrics.five{grid-template-columns:repeat(5,1fr)}}
 .distance-strip .beat-badge{display:inline-block;margin-top:6px;padding:4px 10px;border-radius:999px;background:#111;color:#fff;font-style:normal;font-size:12px;font-weight:700}
+
+/* ── 0.15 season calendar, brackets, focused training, offer pitches ── */
+.today-cell{display:flex;flex-direction:column;gap:4px;min-width:0}
+.today-cell .today-tile{flex:1}
+.focus-expander{font-size:11px;color:#41543f}
+.focus-expander summary{cursor:pointer;text-align:center;padding:4px;border-radius:8px;border:1px dashed #b9c7b4;list-style:none;font-weight:700;min-height:28px;display:flex;align-items:center;justify-content:center}
+.focus-expander summary::-webkit-details-marker{display:none}
+.focus-expander[open] summary{background:#eef5ea;border-style:solid}
+.focus-options{display:flex;flex-direction:column;gap:4px;margin:6px 0 4px}
+.focus-options button{font-size:11px;padding:6px 4px;border-radius:8px;border:1px solid #cfd8cc;background:white;cursor:pointer;min-height:30px}
+.focus-options button:hover:not(:disabled){border-color:var(--green);background:#f4f1df}
+.focus-options button:disabled{opacity:.45;cursor:not-allowed}
+.focus-expander small{display:block;line-height:1.35;color:#667366}
+.season-tabs{margin-bottom:12px}
+.season-calendar ol{list-style:none;margin:8px 0;padding:0;display:grid;gap:4px}
+.season-calendar li{display:grid;grid-template-columns:42px 24px minmax(0,1.4fr) minmax(0,1fr) 52px;gap:8px;align-items:center;padding:6px 8px;border:1px solid #e3e8df;border-radius:10px;font-size:13px;background:white}
+.season-calendar li.done{background:#f3f7f0}
+.season-calendar li.today{border:2px solid var(--green);background:#f4f1df}
+.season-calendar .wk{font-weight:700}
+.season-calendar .wd{color:#667366}
+.season-calendar .what,.season-calendar .vs{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.season-calendar .sc{text-align:right}
+.window-tag{font-style:normal;font-size:10px;margin-left:6px;padding:1px 6px;border-radius:999px;background:#fbe6d6;color:#8a4a22}
+.bracket-list{display:grid;gap:16px}
+.bracket-rounds{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px}
+.bracket-round{min-width:150px;display:flex;flex-direction:column;gap:6px}
+.bracket-round h4{margin:0 0 2px;font-size:12px;color:#667366}
+.tie{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:4px;align-items:center;font-size:12px;padding:6px;border:1px solid #e3e8df;border-radius:8px;background:white}
+.tie span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tie span:last-child{text-align:right}
+.tie .win{font-weight:700;color:#14633b}
+.tie.mine{border-color:var(--green);background:#f4f1df}
+.bracket-round.champion .tie{grid-template-columns:1fr}
+tr.mine{background:#f4f1df}
+.pill.pitch{margin:4px 0;display:inline-block;background:#e7f0ff;color:#1f4f8a}
+.pill.pitch-1{background:#e2f3e6;color:#14633b}
+.pill.pitch-2{background:#fbe6d6;color:#8a4a22}
+.pill.pitch-3{background:#efe6fb;color:#5b2f8a}
+@media(max-width:600px){
+ .season-calendar li{grid-template-columns:34px 18px minmax(0,1fr) 44px;font-size:12px;gap:6px}
+ .season-calendar .vs{grid-column:3;grid-row:2;color:#667366}
+ .season-calendar .sc{grid-row:1/3;grid-column:4}
+}
+.today-cell.training{grid-column:span 1}.today-cell.recovery{grid-column:span 3}
+.today-cell .today-tile.training,.today-cell .today-tile.recovery{grid-column:auto;width:100%}
+@media(max-width:1000px){.today-cell.training{grid-column:span 2}}
+@media(max-width:600px){.today-cell.training{grid-column:span 2}.today-cell.recovery{grid-column:span 3}}
+.focus-options button.picked{border-color:var(--green);background:#e3ecdf;font-weight:700}
+.focus-expander .focus-plan{margin-top:4px;color:#14633b}
+.focus-expander .focus-go{width:100%;margin-top:6px;font-size:11px;padding:7px 4px;min-height:32px}

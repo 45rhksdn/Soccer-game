@@ -17,7 +17,7 @@ it('offers follow the current position ability: every bidding club is within the
     const inWindow=fits.filter(f=>f>=OFFER_FIT.min&&f<=OFFER_FIT.max).length;
     // Either all bidders fit, or (no club fits) only the two closest-level fallback clubs bid.
     if(inWindow)expect(inWindow).toBe(clubs.length);else expect(clubs.length).toBeLessThanOrEqual(2);
-    for(const o of c.world.offers.filter(o=>o.clubId!==c.world.clubId)){const f=ability-clubLevel(c.world.clubs.find(x=>x.id===o.clubId)!,pos);expect(o.role).toBe(offerDetails(c.world.clubs.find(x=>x.id===o.clubId)!,p).role);}
+    for(const o of c.world.offers.filter(o=>o.clubId!==c.world.clubId&&!o.pitch)){ /* 0.15 pitched offers (prospect / guaranteed start) set their own role */const f=ability-clubLevel(c.world.clubs.find(x=>x.id===o.clubId)!,pos);expect(o.role).toBe(offerDetails(c.world.clubs.find(x=>x.id===o.clubId)!,p).role);}
   }
 });
 

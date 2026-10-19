@@ -1,0 +1,79 @@
+/* Scoped match skin; no changes to career pages or simulation rules. */
+.match-layout.cm-match{--cm-bg:#101c29;--cm-panel:#162432;--cm-line:#ffffff16;--cm-muted:#a3b5bf;--cm-mint:#79dfb8;background:var(--cm-bg);color:#edf6f5;grid-template-columns:minmax(0,1fr) minmax(260px,300px);align-items:start}
+.cm-match .match-field{background:#102529;padding:12px;position:sticky;top:12px}
+.cm-match .match-side{background:var(--cm-bg)}
+.cm-match .live-commentary{background:#142631;border:0;border-bottom:1px solid var(--cm-line);padding:8px 12px;display:flex;gap:10px;align-items:center;min-height:38px}
+.cm-match .live-commentary b{color:var(--cm-mint);white-space:nowrap;font-size:10px;letter-spacing:0}
+.cm-match .live-commentary p{font-size:12px;line-height:1.5;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cm-match .match-actions{padding:8px 12px;background:var(--cm-bg)}
+.cm-match button{font:inherit;touch-action:manipulation;cursor:pointer;box-shadow:none;border:1px solid var(--cm-line);color:#e5efef;background:var(--cm-panel);border-radius:10px}
+.cm-match button:focus-visible{outline:2px solid var(--cm-mint);outline-offset:3px}
+.cm-match button:disabled{opacity:.4;cursor:default}
+.cm-match button:hover:not(:disabled){background:#223b46}
+.cm-match button[aria-pressed=true]{background:#24443f;color:#a1f4d3;border-color:#79dfb85c}
+.cm-distance{display:flex;align-items:center;gap:10px;color:var(--cm-muted);font-size:11px;margin-bottom:10px;position:relative}
+.cm-distance strong{color:#eff8f4;font-weight:600}
+.cm-distance details{margin-left:auto}.cm-distance summary{cursor:pointer;list-style:none}
+.cm-distance details p{position:absolute;z-index:4;right:0;top:20px;width:240px;padding:14px;background:#233747;border:1px solid var(--cm-line);border-radius:10px;box-shadow:0 6px 25px #0005}
+.cm-mode{display:flex;gap:4px;justify-content:center;margin-bottom:8px}
+.cm-mode button{padding:4px 10px;font-size:11px;min-height:28px}
+.cm-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;width:164px;margin:auto}
+.cm-pad button{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 9px;min-height:36px;gap:4px}
+.cm-pad b{font-size:19px;line-height:1;font-weight:500}.cm-center{display:grid;place-items:center;color:var(--cm-mint);font-size:12px}
+.cm-warning{position:absolute;right:5px;top:2px;color:#f0bc73;font-size:11px;font-weight:800;font-style:normal}
+.cm-chance{display:flex;align-items:center;gap:8px;width:100%}.cm-track{display:block;height:3px;min-width:25px;flex:1;background:#ffffff20;border-radius:4px;overflow:hidden}.cm-track i{display:block;height:100%;background:var(--cm-mint)}
+.cm-chance small{font-size:10px;color:var(--cm-muted);white-space:nowrap}
+.cm-legend{font-size:10px;color:var(--cm-muted);text-align:center;margin:5px 0}.cm-legend span{margin-left:10px;color:#e5bb81}
+.cm-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;border-top:1px solid var(--cm-line);padding-top:6px;margin-top:6px}
+.cm-tabs button{padding:6px;font-size:12px;min-height:36px}
+.cm-control-body{min-height:174px}
+.cm-instruction{font-size:11px;color:var(--cm-muted);margin:0 0 8px}
+.cm-targets{display:grid;grid-template-columns:1fr 1fr;gap:5px;max-height:112px;overflow:auto;scrollbar-width:thin}
+.cm-targets button{padding:8px;text-align:left;display:grid;gap:4px;font-size:11px;min-height:40px}.cm-targets small{color:var(--cm-muted);font-size:10px}
+.cm-match .cm-confirm{width:100%;background:var(--cm-mint);color:#102c28;border:0;font-size:12px;font-weight:700;padding:10px;margin-top:8px;min-height:40px}
+.cm-match .cm-confirm:hover:not(:disabled){background:#a0f1d2}
+.cm-shots{display:grid;gap:6px}.cm-shots button{display:flex;align-items:center;gap:16px;padding:8px;min-height:36px}.cm-shots strong{font-size:12px;white-space:nowrap}.cm-shots small{font-size:10px;color:var(--cm-muted)}
+.cm-special{display:flex;gap:6px;margin-top:6px}.cm-special button{flex:1;padding:6px;font-size:10px}.cm-special .cm-chance{margin-top:4px}
+.cm-defense{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cm-defense button{padding:10px 8px;text-align:left}.cm-defense strong{font-size:12px}.cm-defense .cm-chance{margin-top:8px}
+.cm-match .offball{padding:0;display:flex;flex-wrap:wrap;gap:6px}.cm-match .offball button{font-size:11px;padding:10px;min-height:40px}
+.cm-match .beat-badge{font-size:10px;margin:0 0 8px;background:#1c3834;color:#9bdfc5;padding:6px 8px;border:0}
+.cm-match .match-side .match-toolbar{background:var(--cm-bg);border-top:1px solid var(--cm-line);padding:7px 12px;gap:6px}.cm-match .match-side .match-toolbar button{font-size:11px;padding:8px;min-height:36px}
+.cm-mission{padding:7px 12px;border-top:1px solid var(--cm-line);font-size:11px;color:var(--cm-muted)}.cm-mission summary{cursor:pointer}
+.cm-match .pitch-hint{background:#101c29e8;color:#bcefdc;border:1px solid #ffffff25;border-radius:20px;font-size:10px;padding:6px 12px;box-shadow:none}
+.cm-match .live-badge{background:#101c29da;color:#9ce4c8;border:1px solid #ffffff1c;border-radius:20px;letter-spacing:1px;font-size:9px;padding:5px 8px}
+.match-board:has(.cm-match){border:1px solid #ffffff12;border-radius:18px;overflow:hidden;box-shadow:0 12px 40px #00191920;background:#101c29}
+.match-board:has(.cm-match) .scoreboard{background:#101c29;color:#edf6f5;border:0;padding:8px 12px}.match-board:has(.cm-match) .scoreboard .score{font-size:26px}
+@media(max-width:900px){
+ .match-layout.cm-match{grid-template-columns:1fr}.cm-match .match-field{position:static;padding:6px}
+ .match-board .cm-match .interactive-pitch .pitch.vertical{width:min(100%,max(240px,calc((100dvh - 390px)*.65)));min-height:0;height:auto}
+ .cm-match .live-commentary{padding:7px 12px;min-height:36px}.cm-match .match-actions{padding:7px 12px}.cm-control-body{min-height:174px}.cm-tabs{margin-top:6px;padding-top:8px}.cm-distance{margin-bottom:8px}
+}
+@media(prefers-reduced-motion:reduce){.cm-match *{scroll-behavior:auto}}
+
+/* Keep the smaller buttons comfortable on touchscreens without enlarging the full panel. */
+@media(pointer:coarse){.cm-pad button{min-height:40px}.cm-tabs button,.cm-shots button{min-height:40px}}
+.today-competitions{margin-top:24px;border-top:1px solid #dce3df;padding-top:16px}.today-competitions h3{margin:12px 0}.today-competitions .table-wrap{max-height:320px;overflow:auto}.today-competitions .mine{background:#e8f2eb}.today-bracket{margin:10px 0;padding:12px;border:1px solid #dde3df;border-radius:10px}.today-bracket summary{cursor:pointer;font-size:13px;font-weight:600}.today-bracket .bracket-rounds{overflow:auto;margin-top:10px}
+/* Pitch left, persistent black control rail right on every screen size. */
+.match-layout.cm-match.cm-sidebar-layout{grid-template-columns:minmax(0,1fr) 192px;gap:0;background:#090e14;align-items:stretch}
+.cm-sidebar-layout>.live-commentary,.cm-sidebar-layout>.cm-bottom{grid-column:1/-1}
+.cm-sidebar-layout .match-field{position:static;padding:6px 0 6px 6px;background:#0c181b;display:flex;align-items:flex-start}
+.match-board .cm-sidebar-layout .interactive-pitch .pitch.vertical{width:min(100%,calc((100dvh - 200px)*.65));max-height:none;height:auto;object-fit:contain}
+.cm-sidebar-layout .match-side{background:#090e14;display:flex}
+.cm-sidebar-layout .match-actions{background:#090e14;padding:8px;flex:1;display:flex;flex-direction:column}
+.cm-sidebar-layout .cm-distance{display:flex;flex-direction:column;align-items:flex-start;font-size:10px;gap:3px}.cm-sidebar-layout .cm-distance small{color:#80939d;font-size:9px}
+.cm-attack-stack{display:flex;flex-direction:column;flex:1;gap:8px}.cm-location-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.cm-location-actions button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 4px;min-height:56px;color:#83dfbd;background:#17352e;border:1px solid #52977955}
+.cm-location-actions button span{font-size:10px}.cm-location-actions button:disabled{background:#1c2228;color:#7f878d;border-color:#ffffff0b;opacity:1;filter:grayscale(1)}
+.cm-sidebar-layout .cm-pad{width:100%;gap:4px}.cm-sidebar-layout .cm-pad button{padding:3px;min-height:40px}.cm-sidebar-layout .cm-pad b{font-size:19px}
+.cm-dribble-dock{margin-top:auto;padding-top:8px;border-top:1px solid #ffffff14}.cm-sidebar-layout .cm-mode{gap:3px}.cm-sidebar-layout .cm-mode button{font-size:9px;padding:4px;flex:1;min-height:30px;white-space:nowrap}
+.cm-tap-help{font-size:10px;color:#829aa4;text-align:center;margin:0}.cm-sidebar-layout .cm-legend{display:block;font-size:9px}
+.cm-pass-card{position:absolute;left:8px;right:8px;bottom:12px;background:#0c1824ef;color:#e7f6f0;padding:10px;border:1px solid #77dcb55c;border-radius:10px;display:flex;gap:6px;flex-wrap:wrap;font-size:12px;z-index:3}.cm-pass-card strong,.cm-pass-card span{flex-basis:100%}.cm-pass-card button{padding:7px 12px;font-size:12px}.cm-pass-card button:first-of-type{background:#70d4af;color:#102c22;flex:1}.cm-pass-card span{font-size:11px;color:#acccbd}
+.cm-sidebar-layout .cm-defense{grid-template-columns:1fr}.cm-sidebar-layout .cm-defense button{padding:10px 6px}.cm-sidebar-layout .cm-defense strong{font-size:11px}.cm-sidebar-layout .offball button{width:100%;font-size:10px}
+.cm-bottom .match-toolbar{background:#101c29;padding:8px 12px;gap:5px}.cm-bottom .match-toolbar button{padding:6px;font-size:11px}
+@media(max-width:600px){.match-layout.cm-match.cm-sidebar-layout{grid-template-columns:minmax(0,1fr) 124px}.cm-sidebar-layout .match-actions{padding:6px}.cm-location-actions{gap:4px}.cm-location-actions button{min-height:49px;padding:5px 2px}.cm-location-actions button span{font-size:9px}.cm-sidebar-layout .cm-pad button{min-height:36px}.cm-sidebar-layout .cm-mode{flex-wrap:wrap}.cm-sidebar-layout .cm-mode button{font-size:8px}.cm-sidebar-layout .cm-distance{font-size:9px}.cm-pass-card{font-size:10px;padding:6px;left:4px;right:4px}.cm-pass-card span{font-size:10px}}
+/* 0.15 integration: a keyboard / screen-reader friendly list of pass targets next to touch selection */
+.cm-targets{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.cm-targets button{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px;min-height:32px;padding:3px 6px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;font-size:11px;flex:1 1 46%;min-width:0}
+.cm-targets button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-targets button[aria-pressed=true]{border-color:#7ef0c4;background:rgba(126,240,196,.16)}
+.cm-targets button .cm-chance{grid-column:1/-1}

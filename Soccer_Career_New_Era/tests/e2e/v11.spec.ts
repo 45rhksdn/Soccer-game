@@ -15,28 +15,12 @@ function setup(defending=false,opp:{dx:number,dy:number}[]=[{dx:3,dy:0}]){
   if(defending){m.ball={x:field[0].x,y:field[0].y,owner:field[0].id,flight:null};m.defending=true;m.decision=false;}else{m.ball={x:u.x,y:u.y,owner:u.id,flight:null};m.decision=true;}
   return c;
 }
-test('attack: 상대와의 거리 with one decimal, the pressure note, reasons, and provisional pass/dribble bars',async({page})=>{
-  await load(page,setup(false,[{dx:3,dy:0},{dx:2,dy:4}]));
-  const strip=page.locator('.distance-strip');await expect(strip).toContainText('상대와의 거리 3.0m');
-  await expect(strip).toContainText('6m 이내 상대 2명');await expect(strip).toContainText('상대 위치에 따라 압박 영향이 달라집니다');
-  await expect(strip).toContainText('상대와의 거리·위치 및 능력 차이가 성공률에 영향을 줍니다.');
-  const attack=page.getByRole('group',{name:'공격 선택'});
-  await expect(attack.getByRole('button',{name:/^패스/})).toContainText('동료를 고르면 확정');await expect(attack.getByRole('button',{name:/^패스/}).locator('.chance-bar.preview')).toHaveCount(1);
-  await expect(attack.getByRole('button',{name:/드리블/})).toContainText('방향을 고르면 확정');
-  // Choosing teammates shows a final band and a reason for each.
-  await attack.getByRole('button',{name:/^패스/}).click();
-  const rows=page.locator('.target-options button:not(:disabled)');await expect(rows.first().locator('.chance-bar .label')).toContainText('확률');
-  await expect(rows.first().locator('.chance-bar .why')).not.toHaveText('');
-  await attack.getByRole('button',{name:/^패스/}).click();
-  // The dribble pad gives each direction its own band and reason (front is blocked, back is not).
-  await attack.getByRole('button',{name:/드리블/}).click();
-  const up=await page.getByRole('button',{name:'드리블 ↑',exact:true}).getAttribute('title'),down=await page.getByRole('button',{name:'드리블 ↓',exact:true}).getAttribute('title');
-  expect(up).not.toBe(down);expect(up).toMatch(/확률/);
-});
-test('no opponent nearby: 6m 이상 / 주변 상대 없음; defence shows the distance to the ball carrier and reasons',async({page})=>{
-  await load(page,setup(false,[{dx:20,dy:0}]));
-  await expect(page.locator('.distance-strip')).toContainText('상대와의 거리 6m 이상');
-  await load(page,setup(true,[{dx:2.5,dy:0}]));
-  await expect(page.locator('.distance-strip')).toContainText('상대와의 거리 2.5m');await expect(page.locator('.distance-strip')).not.toContainText('6m 이내 상대');
-  const defense=page.getByRole('group',{name:'수비 선택'});await expect(defense.locator('.chance-bar .why').first()).not.toHaveText('');
+test('relative distance and per-direction odds survive the compact UI',async({page})=>{
+ await load(page,setup(false,[{dx:3,dy:0},{dx:2,dy:4}]));
+ await expect(page.locator('.cm-distance')).toContainText('상대와의 거리 3.0m');
+ await expect(page.locator('.cm-distance')).toContainText('주변 상대 2명');
+ /* 0.15 sidebar: the explanation is always shown under the distance */await expect(page.locator('.cm-distance')).toContainText('능력 차이 반영');
+ const up=await page.getByRole('button',{name:'드리블 ↑',exact:true}).getAttribute('title'),down=await page.getByRole('button',{name:'드리블 ↓',exact:true}).getAttribute('title');expect(up).not.toBe(down);
+ await load(page,setup(true,[{dx:2.5,dy:0}]));await expect(page.locator('.cm-distance')).toContainText('상대와의 거리 2.5m');
+ await expect(page.getByRole('group',{name:'수비 선택'}).getByRole('button').first()).toHaveAttribute('title',/.+/);
 });

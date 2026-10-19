@@ -2,11 +2,17 @@ import {test,expect,type Page} from '@playwright/test';
 async function nav(page:Page,name:string){if((page.viewportSize()?.width??1440)<900)await page.getByRole('button',{name:'메뉴',exact:true}).click();await page.getByRole('button',{name,exact:true}).click();}
 async function create(page:Page,age='16'){await page.goto('/');await page.getByRole('button',{name:'새로운 커리어 시작'}).click();await page.getByRole('tab',{name:'직접 만들기'}).click();await page.getByLabel('선수 이름').fill('테스트선수');await page.getByLabel('입학 나이').selectOption(age);await page.getByLabel('주 포지션',{exact:true}).selectOption('ST');await page.getByRole('button',{name:'입단하고 커리어 시작'}).click();}
 /** Plays one day per tap until match day, plays the match, then Sunday (skipped when the season just ended). */
-async function playWeek(page:Page){await nav(page,'오늘의 일정');
- for(let i=0;i<7&&!(await page.getByRole('button',{name:'경기 진행'}).count());i++)await page.getByRole('button',{name:'오늘 휴식하기'}).click();
+async function playWeek(page:Page){await nav(page,'커리어 홈');
+ await tapUntilMatch(page,['휴식하기'],14);const week=await weekNo(page);
  await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();
  if(await page.getByRole('heading',{name:'시즌을 마쳤습니다.'}).count())return;
- await nav(page,'오늘의 일정');await page.getByRole('button',{name:'오늘 휴식하기'}).click();await nav(page,'커리어 홈');}
+ await nav(page,'커리어 홈');await restUntilWeek(page,week+1);}
+/** 0.15: the match weekday comes from the season calendar, so days are played until the match / the next week. */
+const WD=['월','화','수','목','금','토','일'];
+const matchNow=async(page:Page)=>(await page.getByRole('button',{name:'경기 진행'}).count())>0;
+async function weekNo(page:Page){const t=await page.locator('.page-heading').innerText();return Number(/WEEK (\d+)/.exec(t)?.[1]??0);}
+async function tapUntilMatch(page:Page,acts:string[],max=7){let n=0;for(;n<max&&!(await matchNow(page));n++)await page.getByRole('button',{name:`오늘 ${acts[n%acts.length]}`}).click();return n;}
+async function restUntilWeek(page:Page,week:number,act='휴식하기'){const label=`WEEK ${String(week).padStart(2,'0')}`;for(let i=0;i<7&&!(await page.locator('.page-heading').innerText()).includes(label);i++)await page.getByRole('button',{name:`오늘 ${act}`}).click();await expect(page.locator('.page-heading')).toContainText(label);}
 // 럭키 / 깨달음 popups can appear at random (training lucky, insight during a match); close them whenever they block a step.
 test.beforeEach(async({page})=>{await page.addLocatorHandler(page.locator('.growth-popup'),async()=>{await page.locator('.growth-popup').getByRole('button',{name:'확인'}).click();});});
 async function tapDays(page:Page,acts:string[]){for(const a of acts)await page.getByRole('button',{name:`오늘 ${a}`}).click();}
@@ -18,27 +24,28 @@ test('daily schedule → live action → growth/rival → reload mid-week and mi
  const defense=page.getByRole('group',{name:'수비 선택'});
  await page.addLocatorHandler(defense,async()=>{await defense.getByRole('button',{name:'수비 압박하기',exact:true}).click();});
  await expect(page.getByRole('heading',{name:'지난주 주요 뉴스'})).toBeVisible();await expect(page.locator('.career-hero')).not.toContainText('보유 특성');for(const t of ['컨디션','피로도','잔액'])await expect(page.locator('.today-help')).toContainText(t);await expect(page.locator('.today-help')).not.toContainText('확률');
- await nav(page,'오늘의 일정');await tapDays(page,['패스훈련','속력훈련','공격훈련','휴식하기','드리블훈련']);
+ await nav(page,'오늘의 일정');await tapUntilMatch(page,['패스훈련','속력훈련','공격훈련','휴식하기','드리블훈련']);
  await page.screenshot({path:`reports/${info.project.name}-daily.png`,fullPage:true});
- await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'4×',exact:true}).click();
- // Match speeds are 1×, 2× and 4× (12× removed).
+ await page.getByRole('button',{name:'경기 진행'}).click();
+ // 0.15.2: match speeds are 1× and 2×; a match starts at 1×.
+ await expect(page.getByRole('button',{name:'1×',exact:true})).toHaveClass(/selected/);await expect(page.getByRole('button',{name:'4×',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'2×',exact:true}).click();
  await expect(page.getByRole('button',{name:'12×',exact:true})).toHaveCount(0);await expect(page.getByRole('button',{name:'2×',exact:true})).toBeVisible();
  await expect(page.getByRole('group',{name:'공격 선택'})).toBeVisible({timeout:60000});
  await page.getByRole('button',{name:'1×',exact:true}).click();
- const before=await page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL());await page.getByRole('button',{name:'일시정지',exact:true}).click();await page.getByRole('group',{name:'공격 선택'}).getByRole('button',{name:/^패스/}).click();await page.locator('.target-options button:not(:disabled)').first().click();await expect(page.locator('.offball')).toBeVisible();await page.getByRole('button',{name:'계속',exact:true}).click();await expect.poll(()=>page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL())).not.toBe(before);
- await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();await tapDays(page,['휴양하기']);await expect(page.locator('.page-heading')).toContainText('WEEK 02');await expect(page.getByRole('heading',{name:'이번주 성장노트'})).toBeVisible();await expect(page.locator('.save-state')).toHaveText('저장 완료');
+ const before=await page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL());await page.getByRole('button',{name:'일시정지',exact:true}).click();/* 0.15 sidebar: pick a teammate from the list, then confirm on the pass card */await page.locator('.cm-targets button:not(:disabled)').first().click();await page.locator('.cm-pass-card').getByRole('button',{name:'패스하기',exact:true}).click();await expect(page.locator('.offball')).toBeVisible();await page.getByRole('button',{name:'계속',exact:true}).click();await expect.poll(()=>page.locator('canvas').evaluate((n:HTMLCanvasElement)=>n.toDataURL())).not.toBe(before);
+ await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();await restUntilWeek(page,2,'휴양하기');await expect(page.getByRole('heading',{name:'이번주 성장노트'})).toBeVisible();await expect(page.locator('.save-state')).toHaveText('저장 완료');
  await nav(page,'라이벌');await expect(page.getByRole('heading',{name:/평생의 라이벌/})).toBeVisible();await expect(page.getByRole('heading',{name:'라이벌 최근 경기'})).toBeVisible();await page.screenshot({path:`reports/${info.project.name}-rival.png`,fullPage:true});
  // Daily progress survives reloads, including a match in progress.
- await page.reload();await nav(page,'오늘의 일정');await tapDays(page,['패스훈련','휴식하기']);await expect.poll(()=>savedDay(page)).toBe(2);await page.reload();await nav(page,'오늘의 일정');await expect(page.locator('.week-strip li.today')).toContainText('수');
- await tapDays(page,['속력훈련','휴식하기','패스훈련']);await page.getByRole('button',{name:'경기 진행'}).click();await expect(page.locator('.save-state')).toHaveText('저장 완료');await page.reload();await expect(page.locator('canvas')).toBeVisible();await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();await tapDays(page,['휴식하기']);await expect(page.locator('.page-heading')).toContainText('WEEK 03');
- await nav(page,'저장 관리');await page.locator('.save-card').nth(1).getByRole('button',{name:'여기에 저장'}).click();await expect(page.locator('.save-card').nth(1)).toContainText('현재 슬롯');const download=page.waitForEvent('download');await page.getByRole('button',{name:'내보내기',exact:true}).click();await(await download).saveAs(`reports/${info.project.name}-save.json`);await page.reload();await nav(page,'저장 관리');await expect(page.locator('.save-card').nth(1)).toContainText('현재 슬롯');page.on('dialog',d=>d.accept());await page.locator('input[type=file]').setInputFiles(`reports/${info.project.name}-save.json`);await expect(page.getByRole('status')).toContainText('저장 파일을 가져왔습니다.');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
+ await page.reload();await nav(page,'오늘의 일정');const tapped=await matchNow(page)?0:1;if(tapped)await tapDays(page,['패스훈련']);await expect.poll(()=>savedDay(page)).toBe(tapped);await page.reload();await nav(page,'오늘의 일정');await expect(page.locator('.week-strip li.today')).toContainText(WD[tapped]);
+ await tapUntilMatch(page,['속력훈련','휴식하기','패스훈련']);await page.getByRole('button',{name:'경기 진행'}).click();await expect(page.locator('.save-state')).toHaveText('저장 완료');await page.reload();await expect(page.locator('canvas')).toBeVisible();await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();await restUntilWeek(page,3);
+ await nav(page,'저장 관리');await page.locator('.save-card').nth(1).getByRole('button',{name:'여기에 저장'}).click();await expect(page.locator('.save-card').nth(1)).toContainText('현재 슬롯');const download=page.waitForEvent('download');await page.getByRole('button',{name:'내보내기',exact:true}).click();await(await download).saveAs(`reports/${info.project.name}-save.json`);await page.reload();await nav(page,'저장 관리');await expect(page.locator('.save-card').nth(1)).toContainText('현재 슬롯');page.on('dialog',d=>d.accept());await page.locator('input[type=file]').setInputFiles(`reports/${info.project.name}-save.json`);await expect(page.locator('.toast[role=status]')).toContainText('저장 파일을 가져왔습니다.');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
 test('production PWA runs weekly training and match offline',async({page,context})=>{test.skip(!process.env.PWA_TEST);await create(page);await expect(page.locator('.save-state')).toHaveText('저장 완료');await page.evaluate(async()=>{await navigator.serviceWorker.ready;});await expect.poll(()=>page.evaluate(()=>!!navigator.serviceWorker.controller)).toBe(true);await context.setOffline(true);await page.reload();await playWeek(page);await expect(page.locator('.page-heading')).toContainText('WEEK 02');await expect(page.locator('.save-state')).toHaveText('저장 완료');await page.reload();await expect(page.locator('.page-heading')).toContainText('WEEK 02');await context.setOffline(false);});
-test('corrupted primary slot recovers backup',async({page})=>{await create(page);await playWeek(page);/* 0.14 records show successful dribbles */await nav(page,'경기 기록');await expect(page.locator('.metrics.five')).toContainText('드리블 성공');await expect(page.locator('.table-wrap thead')).toContainText('드리블');await expect(page.locator('.save-state')).toHaveText('저장 완료');await page.evaluate(()=>new Promise<void>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const t=q.result.transaction('saves','readwrite');t.objectStore('saves').put('{broken','slot1');t.oncomplete=()=>{q.result.close();resolve();};};}));await page.reload();await expect(page.getByRole('status')).toContainText('자동 저장을 읽을 수 없습니다.');await nav(page,'저장 관리');await page.locator('.save-card').first().getByRole('button',{name:'직전 백업 복원'}).click();await expect(page.getByRole('status')).toContainText('직전 백업을 복원했습니다.');});
+test('corrupted primary slot recovers backup',async({page})=>{await create(page);await playWeek(page);/* 0.14 records show successful dribbles */await nav(page,'경기 기록');await expect(page.locator('.metrics.five')).toContainText('드리블 성공');await expect(page.locator('.table-wrap thead')).toContainText('드리블');await expect(page.locator('.save-state')).toHaveText('저장 완료');await page.evaluate(()=>new Promise<void>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const t=q.result.transaction('saves','readwrite');t.objectStore('saves').put('{broken','slot1');t.oncomplete=()=>{q.result.close();resolve();};};}));await page.reload();await expect(page.locator('.toast[role=status]')).toContainText('자동 저장을 읽을 수 없습니다.');await nav(page,'저장 관리');await page.locator('.save-card').first().getByRole('button',{name:'직전 백업 복원'}).click();await expect(page.locator('.toast[role=status]')).toContainText('직전 백업을 복원했습니다.');});
 test('two school seasons, rival aging, offer expiry and renewed professional contract',async({page})=>{
- test.setTimeout(150000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());await create(page,'17');
+ test.setTimeout(900000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());await create(page,'17');
  for(let season=0;season<2;season++){
-  for(let match=0;match<18;match++){if(await page.getByRole('heading',{name:'시즌을 마쳤습니다.'}).count())break;await playWeek(page);}
+  for(let match=0;match<40;match++){if(await page.getByRole('heading',{name:'시즌을 마쳤습니다.'}).count())break;await playWeek(page);}
   // The last result of the season opens the season summary automatically.
   await expect(page.getByRole('heading',{name:'시즌을 마쳤습니다.'})).toBeVisible();await expect(page.locator('.season-review')).toContainText('시즌');
   if(season===1){await nav(page,'이적 · 계약');await expect(page.getByRole('button',{name:'계약 수락',exact:true}).first()).toBeVisible();
@@ -53,7 +60,7 @@ test('backup stays readable and distinct after restoring from a corrupted slot',
  const read=()=>page.evaluate(()=>new Promise<{slot:string,backup:string}>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const s=q.result.transaction('saves').objectStore('saves');const a=s.get('slot1'),b=s.get('backup1');a.transaction.oncomplete=()=>{q.result.close();resolve({slot:String(a.result),backup:String(b.result)});};};}));
  await create(page);await playWeek(page);await expect(page.locator('.save-state')).toHaveText('저장 완료');
  await page.evaluate(()=>new Promise<void>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const t=q.result.transaction('saves','readwrite');t.objectStore('saves').put('{broken','slot1');t.oncomplete=()=>{q.result.close();resolve();};};}));
- await page.reload();await nav(page,'저장 관리');await page.locator('.save-card').first().getByRole('button',{name:'직전 백업 복원'}).click();await expect(page.getByRole('status')).toContainText('직전 백업을 복원했습니다.');await expect(page.locator('.save-state')).toHaveText('저장 완료');
+ await page.reload();await nav(page,'저장 관리');await page.locator('.save-card').first().getByRole('button',{name:'직전 백업 복원'}).click();await expect(page.locator('.toast[role=status]')).toContainText('직전 백업을 복원했습니다.');await expect(page.locator('.save-state')).toHaveText('저장 완료');
  // The corrupted slot must not have been rotated into the backup.
  const first=await read();expect(first.backup.startsWith('{"format":"SCNE"')).toBe(true);
  // After real progress, an idle autosave tick (5 s) must not replace the backup with an identical copy of the slot.
@@ -104,19 +111,20 @@ test('player switching keeps up to three careers independent; replaced players c
  await page.getByRole('tab',{name:'직접 만들기'}).click();await page.getByLabel('선수 이름').fill('교체선수');await page.getByRole('button',{name:'입단하고 커리어 시작'}).click();
  await expect.poll(async()=>(await db()).slot2).toBe('교체선수@0');state=await db();expect(state.slot2).toBe('교체선수@0');expect(state.archive2).toBe(`${scouted}@0`);expect(state.slot1).toBe('테스트선수@1');
  await nav(page,'선수 변경하기');await page.getByRole('button',{name:`교체 전 선수 복원 · ${scouted}`}).click();
- await expect(page.getByRole('status')).toContainText('교체 전 선수를 복원했습니다');await expect.poll(async()=>(await db()).slot2).toBe(`${scouted}@0`);state=await db();expect(state.slot2).toBe(`${scouted}@0`);expect(state.archive2).toBe('교체선수@0');expect(state.slot1).toBe('테스트선수@1');
+ await expect(page.locator('.toast[role=status]')).toContainText('교체 전 선수를 복원했습니다');await expect.poll(async()=>(await db()).slot2).toBe(`${scouted}@0`);state=await db();expect(state.slot2).toBe(`${scouted}@0`);expect(state.archive2).toBe('교체선수@0');expect(state.slot1).toBe('테스트선수@1');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });
-test('오늘의 일정: one tap per day, match-day screen, then Sunday ends the week',async({page},info)=>{
+test('오늘의 일정: one tap per day, match-day screen (calendar weekday), then the rest of the week',async({page},info)=>{
  test.setTimeout(90000);const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await create(page);
  await expect(page.getByRole('heading',{name:'오늘의 일정 진행'})).toBeVisible();await expect(page.getByRole('button',{name:'이번주 일정 진행',exact:true})).toHaveCount(0);
- const days=['월','화','수','목','금'],acts=['패스훈련','속력훈련','공격훈련','휴식하기','드리블훈련'];
- for(let i=0;i<5;i++){await page.getByRole('button',{name:`오늘 ${acts[i]}`}).click();await expect(page.locator('.today-result')).toContainText(`${days[i]}요일 · `);}
+ const acts=['패스훈련','속력훈련','공격훈련','휴식하기','드리블훈련','휴식하기'];let md=0;
+ for(;md<7&&!(await matchNow(page));md++){await page.getByRole('button',{name:`오늘 ${acts[md]}`}).click();/* a lucky day shows only the popup (Codex 0.15) */if(await page.locator('.today-result').count())await expect(page.locator('.today-result')).toContainText(`${WD[md]}요일 · `);}
  await page.screenshot({path:`reports/${info.project.name}-today-match.png`,fullPage:true});
  await expect(page.getByText('오늘은 경기가 있는 날입니다')).toBeVisible();await expect(page.getByRole('button',{name:'오늘 패스훈련'})).toHaveCount(0);
  await page.getByRole('button',{name:'경기 진행'}).click();await page.getByRole('button',{name:'빠른 시뮬레이션'}).click();await page.getByRole('button',{name:'결과 반영',exact:true}).click();
- await expect(page.getByRole('heading',{name:'오늘의 일정 진행'})).toBeVisible();await expect(page.locator('.week-strip li.today')).toContainText('일');
- await page.getByRole('button',{name:'오늘 휴식하기'}).click();await expect(page.locator('.page-heading')).toContainText('WEEK 02');await expect(page.locator('.today-result')).toContainText('한 주가 끝났습니다');
+ await expect(page.getByRole('heading',{name:'오늘의 일정 진행'})).toBeVisible();
+ if(md<6){await expect(page.locator('.week-strip li.today')).toContainText(WD[md+1]);await restUntilWeek(page,2);await expect(page.locator('.today-result')).toContainText('한 주가 끝났습니다');}
+ else await expect(page.locator('.page-heading')).toContainText('WEEK 02'); /* a Sunday match closes the week */
  await page.screenshot({path:`reports/${info.project.name}-today.png`,fullPage:true});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
 });

@@ -23,13 +23,14 @@ test('럭키 opens a popup; it is not shown as news and the growth note keeps th
   await create(page);
   // Pick an RNG state whose next draw is a 럭키 for a 16-year-old (4.5 %), then put it into the saved career.
   let seed=0;for(;;seed++)if(random({seed})<.04)break;
-  await editDb(page,`${fnv}const r=store.get('slot1');r.onsuccess=()=>{const env=JSON.parse(r.result);const c=JSON.parse(env.payload);c.seed=arg;c.development.traits=[];const payload=JSON.stringify(c);store.put(JSON.stringify({format:'SCNE',checksum:fnv(payload),payload}),'slot1');};`,seed);
+  await editDb(page,`${fnv}const r=store.get('slot1');r.onsuccess=()=>{const env=JSON.parse(r.result);const c=JSON.parse(env.payload);c.seed=arg;c.development.traits=[];if(c.world.season)c.world.season.matchDays.fill(5);const payload=JSON.stringify(c);store.put(JSON.stringify({format:'SCNE',checksum:fnv(payload),payload}),'slot1');};`,seed);
   await page.goto('/');await nav(page,'오늘의 일정');
   await page.getByRole('button',{name:'오늘 패스훈련'}).click();
   const popup=page.getByRole('dialog');await expect(popup).toBeVisible();await expect(popup).toContainText('놀라운 성장!');await expect(popup).toContainText('훈련 중 무언가를 느꼈다!');
   await page.screenshot({path:`reports/${info.project.name}-lucky-popup.png`});
   await popup.getByRole('button',{name:'확인'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.locator('.today-result')).toContainText('럭키! ×10 · 패스훈련 · OVR +');
+  /* Codex 0.15: a lucky day shows only the popup; the day's result box is hidden (the amount stays in the growth history) */
+  await expect(page.locator('.today-result')).toHaveCount(0);
   // 0.9.1: 럭키 is no longer shown as news (popup only); the stat and amount never appear on home.
   await nav(page,'커리어 홈');const headlines=page.locator('.headline-news');await expect(headlines).toBeVisible();
   await expect(headlines).not.toContainText('느꼈다');await expect(page.locator('.feed')).not.toContainText('느꼈다');
@@ -65,12 +66,12 @@ test('slot delete: removes only that player and its backup; the archive and othe
   await expect.poll(async()=>(await dbKeys(page)).includes('archive2')).toBe(true);
   // Delete the slot-1 player (not active).
   await nav(page,'선수 변경하기');await page.getByRole('button',{name:'슬롯 1 첫선수 선수 삭제'}).click();
-  await expect(page.getByRole('status')).toContainText('삭제했습니다');await expect(page.locator('.player-slot').nth(0)).toContainText('빈 슬롯');
+  await expect(page.locator('.toast[role=status]')).toContainText('삭제했습니다');await expect(page.locator('.player-slot').nth(0)).toContainText('빈 슬롯');
   await expect(page.locator('.player-slot').nth(1)).toContainText('셋째선수');
   let keys=await dbKeys(page);expect(keys.includes('slot1')).toBe(false);expect(keys.includes('backup1')).toBe(false);expect(keys.includes('slot2')).toBe(true);expect(keys.includes('archive2')).toBe(true);
   // Delete the active player: the archived player can still be restored afterwards.
   await page.getByRole('button',{name:'슬롯 2 셋째선수 선수 삭제'}).click();
-  await expect(page.getByRole('status')).toContainText('삭제했습니다');
+  await expect(page.locator('.toast[role=status]')).toContainText('삭제했습니다');
   await page.waitForTimeout(6000);keys=await dbKeys(page);expect(keys.includes('slot2')).toBe(false);expect(keys.includes('archive2')).toBe(true);
   await page.goto('/');await expect(page.getByRole('button',{name:'새로운 커리어 시작'})).toBeVisible();
   expect(errors).toEqual([]);
@@ -87,14 +88,14 @@ test('retirement reward: shared by all slots, granted once even after reloads, r
   await page.goto('/');await nav(page,'선수 변경하기');
   await expect(page.locator('.legacy')).toContainText('보존된 은퇴 선수 0명');
   await page.locator('.player-slot').nth(1).getByRole('button',{name:'이 선수로 전환'}).click();
-  await expect(page.getByRole('status')).toContainText('은퇴 누적 보상');
+  await expect(page.locator('.toast[role=status]')).toContainText('은퇴 누적 보상');
   await nav(page,'선수 변경하기');await expect(page.locator('.legacy')).toContainText('보존된 은퇴 선수 1명 · 새 선수 후보의 잠재력 최대 상한 +1');
   // Switch away and back, reload, and restore the same player from the slot-3 archive: still one reward.
   await page.locator('.player-slot').nth(0).getByRole('button',{name:'이 선수로 전환'}).click();
   await nav(page,'선수 변경하기');await page.locator('.player-slot').nth(1).getByRole('button',{name:'이 선수로 전환'}).click();
   await page.reload();await nav(page,'선수 변경하기');
   page.on('dialog',d=>d.accept());await page.getByRole('button',{name:'교체 전 선수 복원 · 은퇴선수'}).click();
-  await expect(page.getByRole('status')).toContainText('교체 전 선수를 복원했습니다');
+  await expect(page.locator('.toast[role=status]')).toContainText('교체 전 선수를 복원했습니다');
   await page.waitForTimeout(1500);await nav(page,'선수 변경하기');await expect(page.locator('.legacy')).toContainText('보존된 은퇴 선수 1명');
   const legacy=await page.evaluate(()=>new Promise<unknown>(resolve=>{const q=indexedDB.open('soccer-career-new-era');q.onsuccess=()=>{const r=q.result.transaction('saves').objectStore('saves').get('legacy');r.onsuccess=()=>{q.result.close();resolve(r.result);};};})) as {retired:{id:string}[]};
   expect(legacy.retired.map(x=>x.id).join(',')).toBe('e2e-retired');

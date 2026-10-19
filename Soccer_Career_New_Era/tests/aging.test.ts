@@ -71,4 +71,4 @@ it('long career (16 → 35): the peak is reached around 32 and is not far above 
   expect(byAge[peak]).toBeLessThan(Math.max(...top)+3);
   // the world itself does not inflate over 20 years (mean of the top league's best five)
   expect(top5.at(-1)!-top5[0]).toBeLessThan(4);
-},300000);
+},900000); // 0.15: 35-week seasons

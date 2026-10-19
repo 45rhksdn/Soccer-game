@@ -5,9 +5,10 @@ import {playToday,syncRival,playRival} from '../src/development';
 import {chooseLineup,npcInjuryWeek,matchInjury,npcRecovery,NPC_WEEKLY_INJURY,clubOf,type RosterPlayer} from '../src/world';
 import {TRAIT_DEFS,RARITY_CHANCE,rollTraits} from '../src/traits';
 import {encode,decode} from '../src/storage';
+import {saturdays} from './saturdays';
 
 const profile={name:'부상검증',age:17,pos:'CM' as const,secondary:'ST' as const,foot:'오른',height:178,weight:70,style:'플레이메이커',curve:'꾸준한 성장형'};
-const career=(seed=61)=>newCareer(profile,0,seed);
+const career=(seed=61)=>saturdays(newCareer(profile,0,seed));
 
 it('rarity: strong or harsh traits (incl. 유리몸) appear at half the common chance; trait-free players remain common',()=>{
   const rare=TRAIT_DEFS.filter(d=>d.rarity==='rare').map(d=>d.id);

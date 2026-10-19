@@ -4,6 +4,7 @@ import {attributes,createMatch,finishMatch,step,actionChance,act,rating,turnover
 import {applyDaily,prepareWeek,releaseExperience} from '../src/development';
 import {encode,decode} from '../src/storage';
 import {matchFx,trainingFatigueMultiplier,injuryChanceMultiplier,restRecoveryMultiplier} from '../src/traits';
+import {GROWTH_PACE} from '../src/season';
 
 const profile={name:'신특성',age:16,pos:'CM' as const,secondary:'ST' as const,foot:'오른',height:178,weight:70,style:'플레이메이커',curve:'꾸준한 성장형'};
 const career=(seed=41)=>newCareer(profile,0,seed);
@@ -92,8 +93,8 @@ it('대기만성: banks 30 % of young training growth, releases it weekly from a
   const gained=c.player.a.passing-before+0;expect(c.development.experienceBank!).toBeGreaterThan(0);
   expect(c.development.experienceBank!).toBeLessThanOrEqual(60);void gained;
   c.development.experienceBank=10;expect(releaseExperience(c,false)).toBe(0);
-  c.player.age=28;const role=c.player.a.passing;expect(releaseExperience(c,false)).toBeCloseTo(.8,8);
-  expect(c.player.a.passing).toBeGreaterThan(role);expect(c.development.experienceBank).toBeCloseTo(9.2,8);
-  expect(decode(encode(c)).development.experienceBank).toBeCloseTo(9.2,8);
-  c.development.experienceBank=.2;expect(releaseExperience(c,false)).toBeCloseTo(.2,8);expect(c.development.experienceBank).toBe(0);
+  c.player.age=28;const role=c.player.a.passing;expect(releaseExperience(c,false)).toBeCloseTo(.8*GROWTH_PACE,8);
+  expect(c.player.a.passing).toBeGreaterThan(role);expect(c.development.experienceBank).toBeCloseTo(10-.8*GROWTH_PACE,8);
+  expect(decode(encode(c)).development.experienceBank).toBeCloseTo(10-.8*GROWTH_PACE,8);
+  c.development.experienceBank=.05;expect(releaseExperience(c,false)).toBeCloseTo(.05,8);expect(c.development.experienceBank).toBe(0);
 });

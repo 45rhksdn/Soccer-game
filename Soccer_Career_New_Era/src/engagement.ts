@@ -28,7 +28,7 @@ const POOL:Record<'striker'|'wing'|'mid'|'centre'|'full'|'keeper',MissionDef[]>=
  striker:[['shots',3,L.shots],['onTarget',2,L.onTarget],['keyPasses',1,L.keyPasses],['ballWins',6,L.ballWins]],
  wing:[['shots',2,L.shots],['keyPasses',1,L.keyPasses],['completed',10,L.completed],['attackPoints',1,L.attackPoints]],
  mid:[['progressivePasses',4,L.progressivePasses],['completed',7,L.completed],['ballWins',4,L.ballWins]],
- centre:[['ballWins',3,L.ballWins],['progressivePasses',3,L.progressivePasses],['completed',5,L.completed]],
+ centre:[['ballWins',4,L.ballWins], /* 0.15: 3 → 4 (more duels with the longer carries and the 35-week season) */['progressivePasses',3,L.progressivePasses],['completed',5,L.completed]],
  full:[['ballWins',2,L.ballWins],['progressivePasses',1,L.progressivePasses],['completed',2,L.completed]],
  keeper:[['saves',5,L.saves],['goalsConceded',1,L.goalsConceded,'max'],['completed',6,L.completed]],
 };

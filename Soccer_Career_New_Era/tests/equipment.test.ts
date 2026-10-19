@@ -4,9 +4,10 @@ import {attributes,createMatch,finishMatch,insightAttempt,ATTRS} from '../src/en
 import {playToday,applyDaily} from '../src/development';
 import {buyEquipment,equip,unequip,effectiveAttributes,equipmentBonus,matchAttributesOf,EQUIPMENT} from '../src/equipment';
 import {encode,decode,validate} from '../src/storage';
+import {saturdays} from './saturdays';
 
 const profile={name:'장비선수',age:17,pos:'ST' as const,secondary:'LW' as const,foot:'오른',height:180,weight:72,style:'테크니션',curve:'꾸준한 성장형'};
-function career(seed=51){const c=newCareer(profile,0,seed);c.development.traits=[];c.development.wallet=1000;return c;}
+function career(seed=51){const c=saturdays(newCareer(profile,0,seed));c.development.traits=[];c.development.wallet=1000;return c;}
 const toMatchDay=(c:ReturnType<typeof career>)=>{for(let i=0;i<5;i++)playToday(c,'rest');};
 
 it('buy, equip, swap and unequip: wallet, inventory and bonus; base attributes never change',()=>{
