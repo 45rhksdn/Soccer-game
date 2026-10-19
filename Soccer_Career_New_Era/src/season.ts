@@ -62,7 +62,8 @@ export function drawMatchDays(seed:number,year:number){
  for(let k=0;k<SEASON_WEEKS;k++){
   const r=rng(seed,`day:${year}:${k}`);let day=6;
   for(let tries=0;tries<20;tries++){let x=random(r),d=0;for(;d<6&&x>=MATCH_DAY_ODDS[d];d++)x-=MATCH_DAY_ODDS[d];
-   if(!k||d+7-days[k-1]>=MIN_REST_DAYS){day=d;break;}}
+   // the season never opens on its first day (Monday of week 1): a new player always gets a training day first
+   if(!k?d>0:d+7-days[k-1]>=MIN_REST_DAYS){day=d;break;}}
   if(k&&day+7-days[k-1]<MIN_REST_DAYS)day=days[k-1]+MIN_REST_DAYS-7; // never closer than the minimum rest
   days.push(day);
  }
